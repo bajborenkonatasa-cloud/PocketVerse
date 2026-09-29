@@ -281,3 +281,46 @@ export function updatePhoneInjection() {
         setExtensionPrompt(CHAT_KEY, prompt, extension_prompt_types.IN_CHAT, depth, false, extension_prompt_roles.USER);
     } catch (e) { /* тихо: инжект не критичен */ }
 }
+
+// PocketVerse Brain Inspector — read-only snapshot for the in-phone diagnostics UI.
+// It never calls the model and never changes the active injection.
+export function getPhoneBrainSnapshot() {
+    const ctx = (() => { try { return SillyTavern.getContext?.() || {}; } catch (e) { return {}; } })();
+    const prompt = (() => { try { return buildPrompt(); } catch (e) { return ''; } })();
+    const chat = Array.isArray(ctx.chat) ? ctx.chat : [];
+    const rpText = chat.slice(-24).map(m => `${m?.is_user ? 'USER' : 'CHAR'}: ${String(m?.mes || '')}`).join('\n');
+    let cardText = '';
+    try {
+        const cid = ctx.characterId;
+        const ch = (Array.isArray(ctx.characters) && cid != null) ? ctx.characters[cid] : null;
+        if (ch) {
+            const parts = [ch.name, ch.description, ch.personality, ch.scenario, ch.first_mes, ch.mes_example, ch.creator_notes]
+                .filter(Boolean).map(String);
+            cardText = parts.join('\n\n');
+        }
+    } catch (e) { /* diagnostic only */ }
+    let personaText = '';
+    try {
+        personaText = String(ctx?.powerUserSettings?.persona_description || ctx?.persona_description || '');
+    } catch (e) { /* diagnostic only */ }
+    const chars = s => String(s || '').length;
+    const tokens = s => Math.max(0, Math.round(chars(s) / 4)); // deliberately labelled estimate in UI
+    return {
+        phoneTurn: phoneTurnState() || 'normal',
+        compactRules: !!getSettings().compactRules,
+        injectionEnabled: !!(getSettings().isEnabled && getSettings().injectPrompt),
+        depth: Number(getSettings().injectDepth) || 0,
+        prompt,
+        rpText,
+        cardText,
+        personaText,
+        counts: {
+            phone: tokens(prompt),
+            rp: tokens(rpText),
+            card: tokens(cardText),
+            persona: tokens(personaText),
+            phoneChars: chars(prompt),
+        },
+        note: 'PocketVerse can show its own injection exactly. SillyTavern preset/system prompt and provider-side tokenization are outside PocketVerse, so their exact token count is not claimed here.'
+    };
+}

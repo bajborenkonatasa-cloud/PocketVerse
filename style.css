@@ -4362,3 +4362,12 @@ img[data-zoom] { cursor: zoom-in; }
 .gp-pending-dot{font-size:13px!important;margin-left:5px!important}
 .gp-sms-attach{padding:5px 7px!important;min-height:40px!important;border-radius:11px!important}
 .gp-sms-attach img{width:30px!important;height:30px!important;border-radius:7px!important}
+
+/* PocketVerse Brain Inspector */
+.gp-app-brain{background:linear-gradient(145deg,#302b36,#1f1d23);border-color:rgba(196,154,190,.42)!important}
+.gp-brain{height:100%;display:flex;flex-direction:column;background:var(--gp-bg,#151515);color:var(--gp-text,#e9e7e8)}
+.gp-brain-head{display:grid;grid-template-columns:42px 1fr 42px;gap:8px;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.gp-brain-head button{border:0;background:rgba(255,255,255,.06);color:inherit;border-radius:50%;width:38px;height:38px;font-size:25px}.gp-brain-head b{display:block;font-size:17px}.gp-brain-head small{display:block;opacity:.55;font-size:11px;margin-top:2px}
+.gp-brain-scroll{overflow:auto;padding:12px 14px 28px}.gp-brain-status{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.gp-brain-status span{font-size:10px;padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.07)}
+.gp-brain-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gp-brain-grid>div{padding:10px;border-radius:14px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.07)}.gp-brain-grid b,.gp-brain-grid small{display:block;font-size:10px;opacity:.7}.gp-brain-grid strong{display:block;font-size:22px;margin:4px 0}
+.gp-brain-warning,.gp-brain-note{font-size:10px;line-height:1.4;opacity:.62;padding:9px 3px}.gp-brain-details{margin-top:8px;border-radius:13px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);overflow:hidden}.gp-brain-details summary{padding:10px 12px;font-size:12px;cursor:pointer}.gp-brain-details pre{margin:0;padding:11px;max-height:310px;overflow:auto;white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.18);font:10px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}

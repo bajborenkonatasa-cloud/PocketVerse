@@ -7,7 +7,7 @@ import {
     addGroup, delGroup, updateGroupMembers, renameContact, banAccount,
     isSmsBlocked, blockSmsContact, unblockSmsContact, saveMeta, invalidateChatCache, getMeta,
 } from './state.js';
-import { updatePhoneInjection } from './prompts.js';
+import { updatePhoneInjection, getPhoneBrainSnapshot } from './prompts.js';
 import {
     getBank, fmtMoney, addTransaction, deleteTransaction, takeLoan, payLoanInstallment, deleteLoan,
     totalDebt, monthlyLoanPayment, addRecurring, delRecurring, payRecurring, monthlyObligations,
@@ -697,6 +697,7 @@ export function render() {
     else if (currentScreen === 'mystream') renderMyStream(screen);
     else if (currentScreen === 'notes') renderNotes(screen);
     else if (currentScreen === 'appearance') renderAppearance(screen);
+    else if (currentScreen === 'brain') renderBrain(screen);
     else renderHome(screen);
     // Возвращаем набранный текст: перерисовка (генерация картинки, публикация,
     // новое сообщение) больше не стирает то, что юзер печатает
@@ -1172,6 +1173,34 @@ function renderLock(screen) {
     lock?.addEventListener('wheel', (e) => { if (e.deltaY > 0) unlock(); }, { passive: true });
 }
 
+// ── Brain Inspector: ничего не генерирует, только показывает текущую начинку ──
+function renderBrain(screen) {
+    currentScreen = 'brain';
+    const b = getPhoneBrainSnapshot();
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const mode = b.phoneTurn === 'now' ? '📱 PHONE-ONLY' : b.phoneTurn === 'justEnded' ? '↩ после телефона' : '💬 обычный RP';
+    screen.innerHTML = `
+      <div class="gp-brain">
+        <div class="gp-brain-head"><button class="gp-back">‹</button><div><b>🧠 Мозг PocketVerse</b><small>Ничего не отправляет модели</small></div><button class="gp-brain-refresh" title="Обновить">↻</button></div>
+        <div class="gp-brain-scroll">
+          <div class="gp-brain-status"><span>${b.injectionEnabled ? '🟢 Инжект включён' : '⚪ Инжект выключен'}</span><span>${mode}</span><span>depth ${b.depth}</span></div>
+          <div class="gp-brain-grid">
+            <div><b>📱 PocketVerse</b><strong>≈ ${b.counts.phone}</strong><small>токенов · ${b.counts.phoneChars} знаков</small></div>
+            <div><b>🎭 Character Card</b><strong>≈ ${b.counts.card}</strong><small>видимая оценка</small></div>
+            <div><b>👤 Persona</b><strong>≈ ${b.counts.persona}</strong><small>если доступна расширению</small></div>
+            <div><b>📖 последние 24 хода</b><strong>≈ ${b.counts.rp}</strong><small>диагностический срез</small></div>
+          </div>
+          <div class="gp-brain-warning">≈ — оценка по тексту, не счётчик провайдера. PocketVerse не притворяется, что знает скрытый system/preset SillyTavern.</div>
+          <details class="gp-brain-details" open><summary>📱 Точный инжект PocketVerse</summary><pre>${esc(b.prompt)}</pre></details>
+          <details class="gp-brain-details"><summary>🎭 Что удалось прочитать из Character Card</summary><pre>${esc(b.cardText || 'Недоступно в текущем контексте.')}</pre></details>
+          <details class="gp-brain-details"><summary>📖 RP-срез (последние 24 хода)</summary><pre>${esc(b.rpText || 'История пуста.')}</pre></details>
+          <div class="gp-brain-note">${esc(b.note)}</div>
+        </div>
+      </div>`;
+    screen.querySelector('.gp-back')?.addEventListener('click', () => goto('home'));
+    screen.querySelector('.gp-brain-refresh')?.addEventListener('click', () => renderBrain(screen));
+}
+
 // ── Домашний экран ──
 function renderHome(screen) {
     currentScreen = 'home';
@@ -1238,6 +1267,10 @@ function renderHome(screen) {
                 <div class="gp-app" data-app="appearance">
                     <div class="gp-app-icon gp-app-appearance">${ic('fa-palette')}</div>
                     <div class="gp-app-name">Оформление</div>
+                </div>
+                <div class="gp-app" data-app="brain">
+                    <div class="gp-app-icon gp-app-brain">${ic('fa-brain')}</div>
+                    <div class="gp-app-name">Мозг</div>
                 </div>
             </div>
         </div>`;
