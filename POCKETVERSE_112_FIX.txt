@@ -1,0 +1,1 @@
+v1.1.2: GIPHY up to 30 results per search; smaller media; larger picker; unread cursor fix; explicit phone-brain runtime gate; Lite/Balanced/Deep now materially different.

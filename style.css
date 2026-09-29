@@ -4392,3 +4392,15 @@ img[data-zoom] { cursor: zoom-in; }
 #gp-phone .gp-gif-grid button{min-height:92px!important;}
 #gp-phone .gp-gif-grid img{max-height:145px!important;}
 #gp-phone .gp-gif-search input{font-size:14px!important;padding:11px!important;}
+
+/* PocketVerse 1.1.2 — compact media + roomy picker */
+#gp-phone .gp-giphy{max-width:min(27vw,138px)!important;margin-top:3px!important;}
+#gp-phone .gp-giphy img{max-height:122px!important;max-width:100%!important;width:auto!important;border-radius:8px!important;}
+#gp-phone .gp-sticker{max-width:min(23vw,118px)!important;}
+#gp-phone .gp-sticker img{max-height:108px!important;}
+#gp-phone .gp-giphy small{font-size:6px!important;padding:2px 2px 0!important;}
+#gp-phone .gp-gif-picker{max-height:74vh!important;min-height:58vh!important;margin:0 5px 5px!important;padding:9px!important;border-radius:14px!important;}
+#gp-phone .gp-gif-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:5px!important;}
+#gp-phone .gp-gif-grid button{min-height:78px!important;max-height:105px!important;}
+#gp-phone .gp-gif-grid img{height:100%!important;max-height:105px!important;object-fit:cover!important;}
+#gp-phone .gp-gif-hint{text-align:center;font-size:8px;opacity:.5;padding:6px 0 1px;}

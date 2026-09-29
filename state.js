@@ -5,7 +5,7 @@ import { extension_settings, saveMetadataDebounced } from '../../../extensions.j
 export const EXT_NAME = 'pocketverse_foundation';
 // Версия для сверки инстансов (ПК ↔ айфон): видна в настройках и в консоли.
 // БАМПАТЬ при каждом коммите вместе с manifest.json!
-export const GP_VERSION = '2.35.0-pocketverse.9';
+export const GP_VERSION = '2.35.0-pocketverse.10';
 const META_KEY = 'pocketverse_foundation';
 
 // ── Глобальные настройки ──
@@ -1338,7 +1338,7 @@ export function markRead(key) {
     const meta = getMeta();
     const incoming = t.messages.filter(m => m.dir === 'in');
     const last = incoming[incoming.length - 1];
-    const cursor = last ? (last.eventId || `${last.idx}:${last.tagStart || 0}`) : 0;
+    const cursor = last ? `${last.idx}:${last.tagStart || 0}` : 0;
     if ((meta.lastRead[key] || 0) !== cursor) {
         meta.lastRead[key] = cursor;
         saveMeta();

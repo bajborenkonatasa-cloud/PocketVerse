@@ -13,26 +13,20 @@ import { pendingConsequences } from './social-events.js';
 const CHAT_KEY = EXT_NAME;
 const SYS_KEY = EXT_NAME + '_sys';
 
+// Explicit phone-only runtime gate. Local PocketVerse messages no longer live in ST chat[],
+// so phone mode must never be inferred from old RP markers.
+let _pvPhoneTurnActive = false;
+export function setPhoneTurnActive(v) { _pvPhoneTurnActive = !!v; updatePhoneInjection(); }
+
+
 // Телефонный ход: последнее сообщение юзера — смс/голосовое из телефона.
 // Полные правила «phone-only mode» (самый жирный блок директивы) нужны ТОЛЬКО
 // в этот момент; в обычном ходе они балласт. 'now' — отвечать тегами,
 // 'justEnded' — прошлый ход был смс, надо вплести переписку в сцену.
 function phoneTurnState() {
-    try {
-        const chat = SillyTavern.getContext()?.chat || [];
-        const isPhoneMsg = (m) => !!m && m.is_user
-            && /<!--\s*tel:out|\[(?:СМС|SMS|Голосовое|Voice)\s*(?:→|в\s+чат|to\s+chat)/i.test(String(m.mes || ''));
-        for (let i = chat.length - 1, seen = 0; i >= 0 && seen < 3; i--) {
-            const m = chat[i];
-            if (!m || !m.mes || m.is_system) continue;
-            if (m.is_user) {
-                if (!isPhoneMsg(m)) return null;      // обычная проза — правила режима не нужны
-                return seen === 0 ? 'now' : 'justEnded';
-            }
-            seen++;
-        }
-    } catch (e) { /* ignore */ }
-    return null;
+    // Since v1.0.2 phone traffic is isolated from SillyTavern chat[].
+    // Only an explicit quiet-phone request may wake the full phone brain.
+    return _pvPhoneTurnActive ? 'now' : null;
 }
 
 // Соцсети/группы подаются только когда реально используются
@@ -288,18 +282,34 @@ function buildIdleBridge() {
     return p;
 }
 
+function buildPhoneOnlyPrompt(mode = 'balanced') {
+    const s = getSettings();
+    const { contacts } = scanChat();
+    const names = [...contacts.values()].map(c => c?.name).filter(Boolean).slice(0, mode === 'lite' ? 12 : 30);
+    let p = `<phone_directive>PRIVATE PHONE MODE for {{user}}. Output phone data only; no visible narration. `;
+    if (names.length) p += `Known contacts: ${names.join(', ')}. `;
+    p += `Reply with 1-3 hidden tags only: <!--tel:sms:{"from":"X","text":"..."}-->. Keep messages natural, short and in character. Never expose NPC→NPC or NPC→character private messages. `;
+    if (s.phoneGroups !== false) p += `For a group containing {{user}}, add "chat":"Group name" and the real sender in "from". `;
+    if (s.phonePhotos !== false) p += `When a photo is natural, add "photo":"short visual description". `;
+    if (s.phoneMemes) p += `When a reaction/meme/GIF is natural, add "meme":"short English GIPHY search phrase". Do not force media every turn. `;
+    if (mode === 'balanced') p += `You may return up to 4 short bubbles when emotion or group flow calls for it. Respect the character card, current relationship and immediately relevant RP facts already supplied by SillyTavern. `;
+    const custom = String(s.phoneCustomInstructions || '').trim();
+    if (custom) p += `User phone preferences: ${custom.slice(0, mode === 'lite' ? 260 : 700)} `;
+    p += `If the character would not answer, output <!--tel:silent-->. Never output technical state, HeartPulse blocks, reasoning or prose.</phone_directive>`;
+    return p;
+}
+
 function buildActivePrompt() {
     const s = getSettings();
     const turn = phoneTurnState();
     if (!turn) return buildIdleBridge();
-    // Lite/Balanced use compact rules during an actual phone turn; Deep uses full rules.
+    const mode = String(s.brainMode || 'balanced');
+    if (mode === 'lite') return buildPhoneOnlyPrompt('lite');
+    if (mode === 'balanced') return buildPhoneOnlyPrompt('balanced');
+    // Deep deliberately keeps the complete legacy Phone-ST directive.
     const oldCompact = s.compactRules;
-    try {
-        s.compactRules = String(s.brainMode || 'balanced') !== 'deep';
-        return buildPrompt();
-    } finally {
-        s.compactRules = oldCompact;
-    }
+    try { s.compactRules = false; return buildPrompt(); }
+    finally { s.compactRules = oldCompact; }
 }
 
 export function updatePhoneInjection() {

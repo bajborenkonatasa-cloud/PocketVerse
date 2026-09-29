@@ -7,7 +7,7 @@ import {
     addGroup, delGroup, updateGroupMembers, renameContact, banAccount,
     isSmsBlocked, blockSmsContact, unblockSmsContact, saveMeta, invalidateChatCache, getMeta, addLocalSms, updateLocalSms, ingestQuietPhoneReply,
 } from './state.js';
-import { updatePhoneInjection, getPhoneBrainSnapshot } from './prompts.js';
+import { updatePhoneInjection, getPhoneBrainSnapshot, setPhoneTurnActive } from './prompts.js';
 import {
     getBank, fmtMoney, addTransaction, deleteTransaction, takeLoan, payLoanInstallment, deleteLoan,
     totalDebt, monthlyLoanPayment, addRecurring, delRecurring, payRecurring, monthlyObligations,
@@ -1216,9 +1216,9 @@ function renderBrain(screen) {
             <div><b>📱 Сейчас добавляет PocketVerse</b><strong>≈ ${b.counts.phone}</strong><small>${b.counts.phoneChars} знаков</small></div>
             <div><b>🎭 Character Card</b><strong>≈ ${b.counts.card}</strong><small>диагностика, управляет ST</small></div>
             <div><b>👤 Persona</b><strong>≈ ${b.counts.persona}</strong><small>диагностика</small></div>
-            <div><b>📖 последние 24 хода</b><strong>≈ ${b.counts.rp}</strong><small>не добавляются PocketVerse повторно</small></div>
+            <div><b>📖 ST: последние 24 хода</b><strong>≈ ${b.counts.rp}</strong><small>диагностика · НЕ расход PocketVerse</small></div>
           </div>
-          <div class="gp-brain-warning">Важно: число 📱 — именно текущий текст PocketVerse. Card/Persona/RP показаны для понимания контекста, но PocketVerse не дублирует их этим экраном.</div>
+          <div class="gp-brain-warning"><b>Режимы теперь реально разные:</b> Lite = только Messages; Balanced = Messages + медиа/группы; Deep = полный старый Phone-ST слой. Число 📱 показывает только собственный payload PocketVerse. Большая цифра RP ниже — диагностика истории ST, а не автоматически +16k от телефона.</div>
           <details class="gp-brain-details" open><summary>📱 Что PocketVerse добавляет прямо сейчас</summary><pre>${esc(b.prompt)}</pre></details>
           <details class="gp-brain-details"><summary>🎭 Character Card</summary><pre>${esc(b.cardText || 'Недоступно в текущем контексте.')}</pre></details>
           <details class="gp-brain-details"><summary>📖 RP-срез</summary><pre>${esc(b.rpText || 'История пуста.')}</pre></details>
@@ -2054,7 +2054,7 @@ function renderThread(screen) {
             ${typing}
         </div>
         ${_smsDraftImage ? `<div class="gp-sms-attach"><img src="${esc(_smsDraftImage)}" alt=""><span>Фото приложено</span><button class="gp-iconbtn gp-danger" id="gp-attach-clear">${ic('fa-xmark')}</button></div>` : ''}
-        ${_gifPickerOpen ? `<div class="gp-gif-picker"><div class="gp-gif-head"><button class="${_gifPickerKind==='gif'?'active':''}" data-gifkind="gif">GIF · мемы</button><button class="${_gifPickerKind==='sticker'?'active':''}" data-gifkind="sticker">Стикеры</button><button class="gp-iconbtn" id="gp-gif-close">${ic('fa-xmark')}</button></div><div class="gp-gif-search"><input id="gp-gif-q" placeholder="Поиск реакции, мема, GIF…"><button id="gp-gif-go">${ic('fa-magnifying-glass')}</button></div><div class="gp-gif-grid">${_gifPickerBusy ? `<div class="gp-gif-status">${ic('fa-spinner fa-spin')} Ищу…</div>` : (_gifPickerResults.length ? _gifPickerResults.map((g,i)=>`<button data-gifpick="${i}" title="${esc(g.title||'GIF')}"><img src="${esc(g.url)}" loading="lazy"></button>`).join('') : '<div class="gp-gif-status">Напиши, что хочешь найти ✨</div>')}</div><small class="gp-giphy-credit">Powered by GIPHY</small></div>` : ''}
+        ${_gifPickerOpen ? `<div class="gp-gif-picker"><div class="gp-gif-head"><button class="${_gifPickerKind==='gif'?'active':''}" data-gifkind="gif">GIF · мемы</button><button class="${_gifPickerKind==='sticker'?'active':''}" data-gifkind="sticker">Стикеры</button><button class="gp-iconbtn" id="gp-gif-close">${ic('fa-xmark')}</button></div><div class="gp-gif-search"><input id="gp-gif-q" placeholder="Поиск реакции, мема, GIF…"><button id="gp-gif-go">${ic('fa-magnifying-glass')}</button></div><div class="gp-gif-grid">${_gifPickerBusy ? `<div class="gp-gif-status">${ic('fa-spinner fa-spin')} Ищу…</div>` : (_gifPickerResults.length ? _gifPickerResults.map((g,i)=>`<button data-gifpick="${i}" title="${esc(g.title||'GIF')}"><img src="${esc(g.url)}" loading="lazy"></button>`).join('') : '<div class="gp-gif-status">Напиши, что хочешь найти ✨</div>')}</div>${_gifPickerResults.length ? '<div class="gp-gif-hint">Показано до 30 результатов за 1 API-запрос</div>' : ''}<small class="gp-giphy-credit">Powered by GIPHY</small></div>` : ''}
         <div class="gp-inputbar">
             ${t.messages.length > 0 && t.messages[t.messages.length - 1].dir === 'in'
                 ? `<button class="gp-iconbtn gp-regen" id="gp-regen" title="Другой ответ" ${sending ? 'disabled' : ''}>${ic('fa-rotate-right')}</button>` : ''}
@@ -2134,7 +2134,7 @@ function renderThread(screen) {
     const runGifSearch = async () => {
         const q = String(screen.querySelector('#gp-gif-q')?.value || '').trim(); if (!q || _gifPickerBusy) return;
         _gifPickerBusy=true; render();
-        try { _gifPickerResults = await searchGiphyChoices(q, _gifPickerKind, 12); }
+        try { _gifPickerResults = await searchGiphyChoices(q, _gifPickerKind, 30); }
         catch(e){ toast(`GIPHY: ${String(e?.message||e).slice(0,80)}`, 'fa-triangle-exclamation'); _gifPickerResults=[]; }
         finally { _gifPickerBusy=false; render(); }
     };
@@ -7242,11 +7242,14 @@ async function flushPending(key) {
         const quietPrompt = isGroup
             ? `The group chat «${name}» (members: ${(t.members || []).join(', ')}) just received ${items.length} phone item(s) from ${ctx?.name1 || 'User'}, in this exact order:\n${ladder}\nReact naturally as group members. Keep it like real texting: usually 1-3 short bubbles, no narration. Reply ONLY with hidden tel:sms tags with the "chat" field. No visible prose.`
             : `${name} just received ${items.length} phone item(s) from ${ctx?.name1 || 'User'}, in this exact order:\n${ladder}\nReact naturally in character like a real private chat. Usually 1-3 short bubbles; do not narrate. Reply ONLY with hidden tel:sms tags. No visible prose.`;
-        const rawReply = await generateQuietPrompt(quietPrompt, false, false);
+        setPhoneTurnActive(true);
+        let rawReply = '';
+        try { rawReply = await generateQuietPrompt(quietPrompt, false, false); }
+        finally { setPhoneTurnActive(false); }
         if (rawReply && rawReply.trim()) await insertGhostReply(name, rawReply.trim(), isGroup ? name : '');
     } catch(e) {
         console.error('[PocketVerse] ladder send failed:', e); toast('Не удалось отправить лесенку', 'fa-circle-exclamation');
-    } finally { _pvThreadRenderFrozen=false; sending=false; typingKey=null; render(); updateFabBadge(); applyChatHiding(); }
+    } finally { setPhoneTurnActive(false); _pvThreadRenderFrozen=false; sending=false; typingKey=null; render(); updateFabBadge(); applyChatHiding(); }
 }
 
 async function doSend(key, opts = {}) {

@@ -2532,12 +2532,12 @@ export async function searchGiphyMeme(query, kind = 'gif') {
 export async function searchGiphyChoices(query, kind = 'gif', limit = 12) {
     const key = String(getSettings().giphyApiKey || '').trim();
     if (!key) throw new Error('GIPHY API key не задан');
-    const q = String(query || '').trim().slice(0, 60);
+    const q = String(query || '').trim().slice(0, 50);
     if (!q) return [];
     const resource = kind === 'sticker' ? 'stickers' : 'gifs';
     const u = new URL(`https://api.giphy.com/v1/${resource}/search`);
     u.searchParams.set('api_key', key); u.searchParams.set('q', q);
-    u.searchParams.set('limit', String(Math.max(1, Math.min(20, limit))));
+    u.searchParams.set('limit', String(Math.max(1, Math.min(50, limit))));
     u.searchParams.set('rating', 'pg-13');
     if (resource === 'gifs') u.searchParams.set('bundle', 'messaging_non_clips');
     const r = await fetch(u.toString());
