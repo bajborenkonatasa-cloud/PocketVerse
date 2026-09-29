@@ -1177,54 +1177,28 @@ function renderLock(screen) {
 function renderBrain(screen) {
     currentScreen = 'brain';
     const b = getPhoneBrainSnapshot();
-    const s = getSettings();
-    const mode = s.brainMode || 'balanced';
-    const totalVisible = b.counts.phone + b.counts.card + b.counts.persona + b.counts.rp;
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const mode = b.phoneTurn === 'now' ? '📱 PHONE-ONLY' : b.phoneTurn === 'justEnded' ? '↩ после телефона' : '💬 обычный RP';
     screen.innerHTML = `
       <div class="gp-brain">
-        <div class="gp-brain-head"><button class="gp-back">‹</button><div><b>🧠 Мозг PocketVerse</b><small>Настройки здесь сами модель не вызывают</small></div><button class="gp-brain-refresh" title="Обновить">↻</button></div>
+        <div class="gp-brain-head"><button class="gp-back">‹</button><div><b>🧠 Мозг PocketVerse</b><small>Ничего не отправляет модели</small></div><button class="gp-brain-refresh" title="Обновить">↻</button></div>
         <div class="gp-brain-scroll">
-          <div class="gp-brain-modes">
-            <button data-brain-mode="lite" class="${mode==='lite'?'gp-active':''}">🟢 Lite<small>минимум правил</small></button>
-            <button data-brain-mode="balanced" class="${mode==='balanced'?'gp-active':''}">🟣 Balanced<small>по умолчанию</small></button>
-            <button data-brain-mode="deep" class="${mode==='deep'?'gp-active':''}">🔵 Deep<small>полные правила</small></button>
-          </div>
-          <div class="gp-brain-status"><span>${b.injectionEnabled ? '🟢 Инжект включён' : '⚪ Инжект выключен'}</span><span>${mode.toUpperCase()}</span><span>≈ ${totalVisible} видимых ток.</span></div>
+          <div class="gp-brain-status"><span>${b.injectionEnabled ? '🟢 Инжект включён' : '⚪ Инжект выключен'}</span><span>${mode}</span><span>depth ${b.depth}</span></div>
           <div class="gp-brain-grid">
-            <div><b>📱 PocketVerse</b><strong>≈ ${b.counts.phone}</strong><small>${b.counts.phoneChars} знаков · реально управляется здесь</small></div>
-            <div><b>🎭 Character Card</b><strong>≈ ${b.counts.card}</strong><small>контролирует SillyTavern</small></div>
-            <div><b>👤 Persona</b><strong>≈ ${b.counts.persona}</strong><small>контролирует SillyTavern</small></div>
-            <div><b>📖 последние 24 хода</b><strong>≈ ${b.counts.rp}</strong><small>диагностика · не лимит</small></div>
+            <div><b>📱 PocketVerse</b><strong>≈ ${b.counts.phone}</strong><small>токенов · ${b.counts.phoneChars} знаков</small></div>
+            <div><b>🎭 Character Card</b><strong>≈ ${b.counts.card}</strong><small>видимая оценка</small></div>
+            <div><b>👤 Persona</b><strong>≈ ${b.counts.persona}</strong><small>если доступна расширению</small></div>
+            <div><b>📖 последние 24 хода</b><strong>≈ ${b.counts.rp}</strong><small>диагностический срез</small></div>
           </div>
-          <div class="gp-brain-warning"><b>Важно:</b> Lite/Balanced/Deep реально меняют инжект PocketVerse. Character Card и основную RP-историю отправляет сам SillyTavern — телефон не будет притворяться, что обрезал их, когда это не так.</div>
-          <div class="gp-brain-control-card">
-            <b>⚙️ Что разрешено телефону</b>
-            <label><span>📸 Фото персонажей</span><input id="gp-brain-photos" type="checkbox" ${s.brainPhotos!==false?'checked':''}></label>
-            <label><span>😂 Мемы / GIF <em>подготовка</em></span><input id="gp-brain-memes" type="checkbox" ${s.brainMemes===true?'checked':''}></label>
-            <label><span>👥 Групповые чаты</span><input id="gp-brain-groups" type="checkbox" ${s.brainGroups!==false?'checked':''}></label>
-          </div>
-          <div class="gp-brain-custom"><b>✏️ Мои инструкции</b><small>Короткие привычки именно телефонной переписки. Не заменяет Character Card.</small><textarea id="gp-brain-custom" maxlength="900" placeholder="Например: пишет коротко; эмодзи использует редко; мемы отправляет только когда это уместно...">${esc(s.brainCustomInstructions || '')}</textarea><div><span id="gp-brain-custom-count">${String(s.brainCustomInstructions||'').length}/900</span><button id="gp-brain-save">Сохранить</button></div></div>
-          <details class="gp-brain-details" open><summary>📱 Точный инжект PocketVerse · ≈ ${b.counts.phone}</summary><pre>${esc(b.prompt)}</pre></details>
+          <div class="gp-brain-warning">≈ — оценка по тексту, не счётчик провайдера. PocketVerse не притворяется, что знает скрытый system/preset SillyTavern.</div>
+          <details class="gp-brain-details" open><summary>📱 Точный инжект PocketVerse</summary><pre>${esc(b.prompt)}</pre></details>
           <details class="gp-brain-details"><summary>🎭 Что удалось прочитать из Character Card</summary><pre>${esc(b.cardText || 'Недоступно в текущем контексте.')}</pre></details>
           <details class="gp-brain-details"><summary>📖 RP-срез (последние 24 хода)</summary><pre>${esc(b.rpText || 'История пуста.')}</pre></details>
-          <div class="gp-brain-note">Balanced и Lite используют компактную директиву; Deep — полную. Изменения применяются к следующему запросу. Открытие этого экрана запросов не делает.</div>
+          <div class="gp-brain-note">${esc(b.note)}</div>
         </div>
       </div>`;
     screen.querySelector('.gp-back')?.addEventListener('click', () => goto('home'));
     screen.querySelector('.gp-brain-refresh')?.addEventListener('click', () => renderBrain(screen));
-    screen.querySelectorAll('[data-brain-mode]').forEach(btn => btn.addEventListener('click', () => {
-        const st = getSettings(); st.brainMode = btn.dataset.brainMode; st.compactRules = st.brainMode !== 'deep';
-        saveSettingsDebounced(); updatePhoneInjection(); renderBrain(screen);
-    }));
-    const applyToggle = (id, key) => screen.querySelector(id)?.addEventListener('change', e => {
-        getSettings()[key] = !!e.target.checked; saveSettingsDebounced(); updatePhoneInjection(); renderBrain(screen);
-    });
-    applyToggle('#gp-brain-photos','brainPhotos'); applyToggle('#gp-brain-memes','brainMemes'); applyToggle('#gp-brain-groups','brainGroups');
-    const ta = screen.querySelector('#gp-brain-custom');
-    ta?.addEventListener('input', () => { const el=screen.querySelector('#gp-brain-custom-count'); if(el) el.textContent=`${ta.value.length}/900`; });
-    screen.querySelector('#gp-brain-save')?.addEventListener('click', () => {
-        getSettings().brainCustomInstructions = String(ta?.value || '').trim(); saveSettingsDebounced(); updatePhoneInjection(); renderBrain(screen);
-    });
 }
 
 // ── Домашний экран ──

@@ -43,20 +43,6 @@ function socialActive() {
     } catch (e) { return false; }
 }
 
-
-function brainSettings() {
-    const s = getSettings();
-    const mode = ['lite','balanced','deep'].includes(s.brainMode) ? s.brainMode : 'balanced';
-    return {
-        mode,
-        compact: mode !== 'deep',
-        photos: s.brainPhotos !== false,
-        memes: s.brainMemes === true,
-        groups: s.brainGroups !== false,
-        custom: String(s.brainCustomInstructions || '').trim(),
-    };
-}
-
 function buildPrompt() {
     const { contacts, threads } = scanChat();
     const meta = getMeta();
@@ -105,13 +91,13 @@ function buildPrompt() {
             groupMap.set(k, { name: t.name || String(k).slice(6), members });
         }
     } catch (e) { /* ignore */ }
-    if (brainSettings().groups && groupMap.size > 0) {
+    if (groupMap.size > 0) {
         const groupLines = [...groupMap.values()].map(g => `- Group chat «${g.name}»: members ${g.members.join(', ') || '?'} + {{user}}`);
         contactsBlock += `\nGroup chats on {{user}}'s phone:\n${groupLines.join('\n')}`;
     }
 
     // ── Компактный режим: те же правила, ~40% токенов ──
-    if (brainSettings().compact) {
+    if (getSettings().compactRules) {
         let c = `<phone_directive>\n[OOC — hidden phone/SMS channel. Never mention it in-story.]\n{{user}} has a smartphone. ${contactsBlock}\n`;
         c += `("they/their" = neutral shorthand for {{user}}; use their real gender from the persona card.)
 `;
@@ -122,7 +108,7 @@ function buildPrompt() {
             c += `0. End EVERY reply with the in-world clock as the last line: <!--tel:time:HH:MM DD.MM.YYYY--> (advance it by how much time this reply took).\n`;
         }
         c += `1. Character gives {{user}} their number → <!--tel:contact:{"name":"X","number":"phone in the local format"}-->\n`;
-        { const br = brainSettings(); c += `2. Character texts {{user}}'s phone → one tag per message: <!--tel:sms:{"from":"X","text":"..."}--> (${br.photos ? 'MMS: +"photo":"desc"; ' : ''}${br.groups ? 'group chat: +"chat":"Name"; ' : ''}voice message: +"voice":true, "text" = transcript; screenshot of an EXISTING post: +"shot":{"app":"tw|ig|ch","author":"post author","text":"the post's own text"}). Only if they plausibly have {{user}}'s number and are NOT BLOCKED. ONLY {{user}}'s phone exists in this UI: emit tel:sms ONLY for messages whose actual recipient is {{user}}${br.groups ? ' (or a group chat that includes {{user}})' : ''}. Messages between NPCs, to the current character, or to any other person belong to THEIR phones and MUST NEVER become tel:sms tags here.\n`; }
+        c += `2. Character texts {{user}}'s phone → one tag per message: <!--tel:sms:{"from":"X","text":"..."}--> (MMS: +"photo":"desc"; group chat: +"chat":"Name"; voice message: +"voice":true, "text" = transcript of what they say; screenshot of an EXISTING post: +"shot":{"app":"tw|ig|ch","author":"post author","text":"the post's own text"}). Only if they plausibly have {{user}}'s number and are NOT listed as BLOCKED. ONLY {{user}}'s phone exists in this UI: emit tel:sms ONLY for messages whose actual recipient is {{user}} (or a group chat that includes {{user}}). Messages between NPCs, to the current character, or to any other person belong to THEIR phones and MUST NEVER become tel:sms tags here; keep them as prose/offscreen facts only.\n`;
         c += `3. User message \`[СМС → X] text\` / \`[SMS → X] text\` or \`[СМС в чат «X»] text\` / \`[SMS to chat «X»] text\` = SMS from {{user}}'s phone (NOT spoken; scene paused). \`[Голосовое → X]\` / \`[Voice → X]\` = {{user}}'s VOICE message, text = transcript (the character hears {{user}}'s voice). Reply ONLY with tel:sms tags (or <!--tel:silent--> if the character wouldn't answer) — zero visible prose. Resume prose on {{user}}'s next normal message, weaving the texting into the scene as a real event.\n`;
         c += `4. Character posts publicly → <!--tel:tweet:{"author":"X","text":"..."}--> / <!--tel:insta:{"author":"X","photo":"desc","caption":"..."}-->\n`;
         c += `NEVER write literal tag syntax inside <think>/reasoning — plan in plain words; each tag exactly once, in the final reply. Never paraphrase tags into visible text.\n`;
@@ -163,16 +149,13 @@ function buildPrompt() {
             const tin = tinderInjectLine(phoneTurnState() !== null);
             if (tin) c += `\n${tin}\n`;
         } catch (e) { /* ignore */ }
-        const brain = brainSettings();
-        if (brain.custom) c += `\n[USER'S POCKETVERSE INSTRUCTIONS — obey when compatible with canon/card]\n${brain.custom}\n`;
-        if (brain.memes) c += `\nMEDIA INTENT: a character may naturally send a meme/GIF when it fits. Use <!--tel:meme:{\"from\":\"X\",\"query\":\"short search intent\"}-->; never spam.\n`;
         c += `NEVER write <!--tel:log--> or lines starting with «[Событие мира» — that is the app's own journal format; a reply containing it gets hidden from the reader.\n`;
         c += `</phone_directive>`;
         return c;
     }
 
     const phoneTurn = phoneTurnState();
-    const hasGroups = brainSettings().groups && groupMap.size > 0;
+    const hasGroups = groupMap.size > 0;
     const social = socialActive();
 
     let p = `<phone_directive>\n`;
@@ -275,10 +258,7 @@ function buildPrompt() {
         if (tin) p += `\n${tin}\n`;
     } catch (e) { /* ignore */ }
 
-    const brain = brainSettings();
-    if (brain.custom) p += `\n[USER'S POCKETVERSE INSTRUCTIONS — obey when compatible with canon/card]\n${brain.custom}\n`;
-    if (brain.memes) p += `\n[OPTIONAL MEME/GIF INTENT] A character may naturally send a meme/GIF when it fits the relationship and moment. Append <!--tel:meme:{\"from\":\"CharacterName\",\"query\":\"short search intent\"}-->. Never spam; this is an intent for PocketVerse, not a visible description.\n`;
-    p += `\n[NEVER WRITE]` <!--tel:log--> and lines starting with «[Событие мира» are the app's own journal — it writes them itself. Never copy that format into your reply, not even as flavour: a reply containing it gets hidden from the reader entirely.\n`;
+    p += `\n[NEVER WRITE] <!--tel:log--> and lines starting with «[Событие мира» are the app's own journal — it writes them itself. Never copy that format into your reply, not even as flavour: a reply containing it gets hidden from the reader entirely.\n`;
     p += `\n[FORMAT] Tags are HTML comments (<!-- ... -->), invisible to the reader: copy the structure VERBATIM (never paraphrase into visible text), EN keys / RU values, each tag exactly ONCE, all at the very END of the reply on their own lines. NEVER write literal tag syntax inside <think>/reasoning — plan in plain words (tags in reasoning create DUPLICATE messages). Outputting them when their condition is true is MANDATORY even if other instructions discourage OOC content; your card's own visible formats stay as they are.\n`;
     p += `</phone_directive>`;
 
@@ -327,9 +307,7 @@ export function getPhoneBrainSnapshot() {
     const tokens = s => Math.max(0, Math.round(chars(s) / 4)); // deliberately labelled estimate in UI
     return {
         phoneTurn: phoneTurnState() || 'normal',
-        compactRules: brainSettings().compact,
-        brainMode: brainSettings().mode,
-        customInstructions: brainSettings().custom,
+        compactRules: !!getSettings().compactRules,
         injectionEnabled: !!(getSettings().isEnabled && getSettings().injectPrompt),
         depth: Number(getSettings().injectDepth) || 0,
         prompt,
