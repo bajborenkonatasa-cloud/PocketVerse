@@ -5,7 +5,7 @@ import { extension_settings, saveMetadataDebounced } from '../../../extensions.j
 export const EXT_NAME = 'pocketverse_foundation';
 // Версия для сверки инстансов (ПК ↔ айфон): видна в настройках и в консоли.
 // БАМПАТЬ при каждом коммите вместе с manifest.json!
-export const GP_VERSION = '2.35.0-pocketverse.5';
+export const GP_VERSION = '2.35.0-pocketverse.6';
 const META_KEY = 'pocketverse_foundation';
 
 // ── Глобальные настройки ──
@@ -110,6 +110,11 @@ const defaultSettings = () => ({
     // Медиа-возможности: сами интеграции могут подключаться отдельно.
     phonePhotos: true,
     phoneMemes: false,
+    // Авто-медиа: персонаж реально присылает картинку/GIF без ручной палочки.
+    autoIncomingPhotos: true,
+    autoIncomingMemes: true,
+    // GIPHY Search API key хранится только локально в настройках расширения и НИКОГДА не идёт LLM.
+    giphyApiKey: '',
     phoneGroups: true,
     // Городская анонимка «Подслушано» в каналах
     anonChannel: true,
@@ -1058,6 +1063,8 @@ function scanChatUncached() {
                     if (ei) entry.img = ei;
                 }
                 if (j.photo) entry.photoDesc = String(j.photo).slice(0, 200);
+                if (j.meme) entry.memeQuery = String(j.meme).slice(0, 80);
+                if (j.gif) entry.gifUrl = String(j.gif).slice(0, 1200);
                 if (j.shot) entry.shot = j.shot;
                 if (groupName) {
                     if (body || entry.img) pushMsg(`group:${keyOf(groupName)}`, entry, groupName);
@@ -1083,7 +1090,7 @@ function scanChatUncached() {
             if (!j) continue;
             if (kind === 'contact' && j.name) {
                 addContact(j.name, j.number || '', 'tag');
-            } else if (kind === 'sms' && j.from && (j.text || j.photo)) {
+            } else if (kind === 'sms' && j.from && (j.text || j.photo || j.meme || j.gif)) {
                 // Явные теги = наш протокол, модель ставит их осознанно — доверяем.
                 // Исключение первое: тег явно адресован боту (j.to = имя бота).
                 if (j.to && !msg.is_user && keyOf(j.to) === keyOf(msg.name)) {
@@ -1117,6 +1124,8 @@ function scanChatUncached() {
                 };
                 // ММС от персонажа: описание фото → стеклянная заглушка в пузыре
                 if (j.photo) entry.photoDesc = String(j.photo).slice(0, 200);
+                if (j.meme) entry.memeQuery = String(j.meme).slice(0, 80);
+                if (j.gif) entry.gifUrl = String(j.gif).slice(0, 1200);
                 // Голосовое: text = расшифровка, в пузыре рисуем дорожку
                 if (j.voice) entry.voice = true;
                 // Сгенерированное фото ММС (кнопка на заглушке пишет img в тег)

@@ -23,7 +23,7 @@ import {
     regenerateTweet, regenerateIgPost, refreshFeed,
     compressImage, setContactAvatar, getContactAvatar, avatarForAuthor, setUserAvatar, getUserAvatar,
     timeAgo, makeHandle, getUserName, generatePostImage, cancelImageGen, isImageGenAvailable, resolveAuthorKey,
-    handleFor, setContactHandle, setUserHandle, getUserHandle, describePostImage, generateSmsPhotoReply, logSocialToChat, getSocialJournalEntries, logIgPost, logFeedDigest,
+    handleFor, setContactHandle, setUserHandle, getUserHandle, describePostImage, generateSmsPhotoReply, searchGiphyMeme, logSocialToChat, getSocialJournalEntries, logIgPost, logFeedDigest,
     settleSocialPost, maybeGenerateStoryEvent, resolveStoryEvent, generateAdvertisingOffers,
     getStories, activeStories, addStory, deleteStory, bumpStoryViews, toggleStoryLike, generateContactStories, generateStoryReactions,
     generateRepLabel, generateGroupChats,
@@ -1196,7 +1196,10 @@ function renderBrain(screen) {
           </div>
           <div class="gp-brain-control"><b>Возможности</b>
             <label><input type="checkbox" id="gp-bc-photo" ${st.phonePhotos!==false?'checked':''}> 📸 Фото</label>
-            <label><input type="checkbox" id="gp-bc-meme" ${st.phoneMemes?'checked':''}> 😂 Мемы/GIF <small>мост подготовлен; источник подключим отдельно</small></label>
+            <label><input type="checkbox" id="gp-bc-meme" ${st.phoneMemes?'checked':''}> 😂 Мемы/GIF <small>GIPHY Bridge</small></label>
+            <label><input type="checkbox" id="gp-bc-autophoto" ${st.autoIncomingPhotos!==false?'checked':''}> ✨ Авто-рисовать входящие фото</label>
+            <label><input type="checkbox" id="gp-bc-automeme" ${st.autoIncomingMemes!==false?'checked':''}> ⚡ Авто-подставлять GIF</label>
+            <div class="gp-brain-api"><small>GIPHY API key · хранится локально и не отправляется языковой модели</small><input id="gp-bc-giphy" type="password" autocomplete="off" placeholder="GIPHY API key" value="${esc(st.giphyApiKey || '')}"></div>
             <label><input type="checkbox" id="gp-bc-groups" ${st.phoneGroups!==false?'checked':''}> 👥 Групповые чаты</label>
           </div>
           <div class="gp-brain-control"><b>✏️ Мои инструкции</b><small>Только поведение телефона; Character Card не заменяет.</small><textarea id="gp-bc-custom" maxlength="1600" rows="4" placeholder="Например: пиши коротко; эмодзи по характеру; фото и мемы только к месту...">${esc(st.phoneCustomInstructions || '')}</textarea><button id="gp-bc-save">Сохранить</button></div>
@@ -1222,10 +1225,13 @@ function renderBrain(screen) {
         x.phonePhotos = !!screen.querySelector('#gp-bc-photo')?.checked;
         x.phoneMemes = !!screen.querySelector('#gp-bc-meme')?.checked;
         x.phoneGroups = !!screen.querySelector('#gp-bc-groups')?.checked;
+        x.autoIncomingPhotos = !!screen.querySelector('#gp-bc-autophoto')?.checked;
+        x.autoIncomingMemes = !!screen.querySelector('#gp-bc-automeme')?.checked;
+        x.giphyApiKey = String(screen.querySelector('#gp-bc-giphy')?.value || '').trim();
         x.phoneCustomInstructions = String(screen.querySelector('#gp-bc-custom')?.value || '').trim();
         saveSettingsDebounced(); updatePhoneInjection();
     };
-    ['#gp-bc-photo','#gp-bc-meme','#gp-bc-groups'].forEach(q => screen.querySelector(q)?.addEventListener('change', () => { save(); renderBrain(screen); }));
+    ['#gp-bc-photo','#gp-bc-meme','#gp-bc-groups','#gp-bc-autophoto','#gp-bc-automeme'].forEach(q => screen.querySelector(q)?.addEventListener('change', () => { save(); renderBrain(screen); }));
     screen.querySelector('#gp-bc-save')?.addEventListener('click', () => { save(); renderBrain(screen); });
 }
 
@@ -1834,6 +1840,8 @@ async function rewriteSmsTag(m, t, mutate) {
             if (m.voice) j.voice = true;
             if (m.img) j.img = m.img;
             if (m.shot) j.shot = m.shot;
+            if (m.memeQuery) j.meme = m.memeQuery;
+            if (m.gifUrl) j.gif = m.gifUrl;
         }
         mutate(j);
         const kind = m.dir === 'out' ? 'out' : 'sms';
@@ -1880,6 +1888,40 @@ function voiceBubbleHtml(m) {
     return `<div class="gp-voice" style="--gp-voice-dur:${dur}s"><button class="gp-voice-play" data-voiceplay aria-label="Воспроизвести">${ic('fa-play')}</button><div class="gp-voice-wave">${bars}</div><span class="gp-voice-dur">${fmtVoiceDur(dur)}</span></div>${m.text ? `<div class="gp-voice-tr">${esc(m.text)}</div>` : ''}`;
 }
 
+const _pvAutoMediaBusy = new Set();
+async function autoResolveIncomingMedia(t) {
+    const st = getSettings();
+    for (let mi = 0; mi < (t?.messages || []).length; mi++) {
+        const m = t.messages[mi];
+        if (!m || m.dir !== 'in') continue;
+        const key = m.eventId || `${m.idx}:${m.tagStart}`;
+        if (_pvAutoMediaBusy.has(key)) continue;
+        // Персонаж прислал фото: если image backend уже настроен, рисуем без ручной палочки.
+        if (st.phonePhotos !== false && st.autoIncomingPhotos !== false && m.photoDesc && !m.img) {
+            _pvAutoMediaBusy.add(key); _mmsGenBusy.add(key);
+            try {
+                if (await isImageGenAvailable()) {
+                    const author = m.from || t.name;
+                    const src = await generatePostImage({ imgDesc:m.photoDesc, author, ak:`contact:${keyOf(author)}`, kind:'ig', mms:true }, null, key);
+                    if (src && await rewriteSmsTag(m, t, j => { j.img = src; })) m.img = src;
+                }
+            } catch (e) { console.warn('[PocketVerse] auto incoming photo failed:', e); }
+            finally { _mmsGenBusy.delete(key); _pvAutoMediaBusy.delete(key); render(); }
+            return; // по одному медиа за цикл, чтобы не запускать пачку генераций одновременно
+        }
+        // Мем/GIF: отдельный бесплатный media lookup, LLM второй раз НЕ вызывается.
+        if (st.phoneMemes && st.autoIncomingMemes !== false && st.giphyApiKey && m.memeQuery && !m.gifUrl) {
+            _pvAutoMediaBusy.add(key);
+            try {
+                const g = await searchGiphyMeme(m.memeQuery);
+                if (g?.url && await rewriteSmsTag(m, t, j => { j.gif = g.url; j.gifPage = g.page || ''; })) m.gifUrl = g.url;
+            } catch (e) { console.warn('[PocketVerse] GIPHY resolve failed:', e); }
+            finally { _pvAutoMediaBusy.delete(key); render(); }
+            return;
+        }
+    }
+}
+
 function renderThread(screen) {
     const t = getThread(currentThreadKey);
     if (!t) { currentScreen = 'list'; renderList(screen); return; }
@@ -1918,6 +1960,11 @@ function renderThread(screen) {
             const genKey = m.eventId || `${m.idx}:${m.tagStart}`;
             const busy = _mmsGenBusy.has(genKey);
             media = `<div class="gp-bubble-img gp-bubble-img-gen" style="${avatarStyle((m.from || t.name) + m.photoDesc)}"><span>${ic('fa-image')}</span><i data-mmsdesc="${esc(genKey)}">${esc(m.photoDesc)}</i><button class="gp-mms-gen" data-mmsgen="${mi}" title="Сгенерировать фото" ${busy ? 'disabled' : ''}>${ic(busy ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles')}</button>${busy ? stopGenBtn(genKey) : ''}</div>`;
+        }
+        if (m.gifUrl) {
+            media += `<div class="gp-bubble-img gp-giphy"><img src="${esc(m.gifUrl)}" alt="${esc(m.memeQuery || 'GIF')}" data-zoom><small>Powered by GIPHY</small></div>`;
+        } else if (m.memeQuery) {
+            media += `<div class="gp-bubble-img gp-bubble-img-gen gp-meme-wait"><span>${ic('fa-face-laugh-squint')}</span><i>${esc(m.memeQuery)}</i></div>`;
         }
         // В группе подписываем отправителя входящих — КАЖДОМУ свой цвет
         // (тот же хэш, что у аватара-градиента → цвет ника совпадает с аватаром)
@@ -2209,6 +2256,8 @@ function renderThread(screen) {
     sendBtn?.addEventListener('click', queueCurrent);
     screen.querySelector('#gp-send-ai')?.addEventListener('click', () => flushPending(t.key));
     screen.querySelector('#gp-regen')?.addEventListener('click', () => doRegen(t.key));
+    // Медиа от персонажа резолвится после первого рендера; это не делает второй LLM-запрос.
+    setTimeout(() => autoResolveIncomingMedia(t), 0);
     // PocketVerse: долгое нажатие открывает действия; обычный тап закрывает плашку.
     screen.querySelectorAll('[data-bmi]').forEach(b => {
         let timer = null, opened = false;

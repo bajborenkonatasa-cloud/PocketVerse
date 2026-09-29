@@ -2502,6 +2502,32 @@ export async function generateCommentAvatar(comment) {
     }
 }
 
+// ═══ PocketVerse Meme/GIF Bridge — GIPHY ═══
+// API key остаётся локально в extension_settings; в LLM-промпты не попадает.
+export async function searchGiphyMeme(query) {
+    const key = String(getSettings().giphyApiKey || '').trim();
+    if (!key) throw new Error('GIPHY API key не задан');
+    const q = String(query || '').trim().slice(0, 50);
+    if (!q) throw new Error('Пустой запрос мема');
+    const u = new URL('https://api.giphy.com/v1/gifs/search');
+    u.searchParams.set('api_key', key);
+    u.searchParams.set('q', q);
+    u.searchParams.set('limit', '8');
+    u.searchParams.set('rating', 'pg-13');
+    u.searchParams.set('bundle', 'messaging_non_clips');
+    const r = await fetch(u.toString());
+    if (!r.ok) throw new Error(`GIPHY HTTP ${r.status}`);
+    const j = await r.json();
+    const a = Array.isArray(j?.data) ? j.data : [];
+    if (!a.length) throw new Error('GIPHY ничего не нашёл');
+    // Не всегда брать один и тот же первый GIF: выбираем среди первых результатов.
+    const it = a[Math.floor(Math.random() * Math.min(5, a.length))];
+    const images = it?.images || {};
+    const url = images.fixed_width?.url || images.downsized?.url || images.original?.url || '';
+    if (!url) throw new Error('У результата GIPHY нет GIF URL');
+    return { url, page: it.url || '', title: it.title || q, id: it.id || '' };
+}
+
 // ═══ Генерация картинок — через установленное картинко-расширение ═══
 // АВТООПРЕДЕЛЕНИЕ: перебираем установленные third-party расширения (ST
 // extensionNames) и ищем то, у кого есть src/pipeline.js с
