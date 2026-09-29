@@ -1,5 +1,5 @@
 
-import { sendMessageAsUser, Generate, generateQuietPrompt, saveSettingsDebounced, saveChatConditional } from '../../../../script.js';
+import { sendMessageAsUser, Generate, generateQuietPrompt, generateRaw, saveSettingsDebounced, saveChatConditional } from '../../../../script.js';
 import { saveBase64AsFile } from '../../../utils.js';
 import {
     getSettings, getThreadList, getThread, markRead, addManualContact, hideContact,
@@ -1198,9 +1198,9 @@ function renderBrain(screen) {
           <div class="gp-brain-control">
             <b>Режим телефонного мозга</b><small>В обычной RP-сцене во всех режимах работает только маленький мост. Полные правила просыпаются при телефонном ходе.</small>
             <div class="gp-brain-modes">
-              <button data-brain="lite" class="${brain==='lite'?'on':''}">Lite<small>минимум</small></button>
-              <button data-brain="balanced" class="${brain==='balanced'?'on':''}">Balanced<small>рекомендуется</small></button>
-              <button data-brain="deep" class="${brain==='deep'?'on':''}">Deep<small>полные правила</small></button>
+              <button data-brain="lite" class="${brain==='lite'?'on':''}">Lite<small>≈1–1.5k</small></button>
+              <button data-brain="balanced" class="${brain==='balanced'?'on':''}">Balanced<small>≈2.5–4k</small></button>
+              <button data-brain="deep" class="${brain==='deep'?'on':''}">Deep<small>≈5–7k</small></button>
             </div>
           </div>
           <div class="gp-brain-control"><b>Возможности</b>
@@ -1218,7 +1218,7 @@ function renderBrain(screen) {
             <div><b>👤 Persona</b><strong>≈ ${b.counts.persona}</strong><small>диагностика</small></div>
             <div><b>📖 ST: последние 24 хода</b><strong>≈ ${b.counts.rp}</strong><small>диагностика · НЕ расход PocketVerse</small></div>
           </div>
-          <div class="gp-brain-warning"><b>Режимы теперь реально разные:</b> Lite = только Messages; Balanced = Messages + медиа/группы; Deep = полный старый Phone-ST слой. Число 📱 показывает только собственный payload PocketVerse. Большая цифра RP ниже — диагностика истории ST, а не автоматически +16k от телефона.</div>
+          <div class="gp-brain-warning"><b>Phone Context Budget:</b> ✨ теперь использует изолированный generateRaw-контекст вместо полного RP-чата. Lite ≈ до 1–1.5k входа · Balanced ≈ 2.5–4k · Deep ≈ 5–7k (оценка зависит от карточки/истории). Большая цифра RP ниже остаётся только диагностикой ST и целиком в телефонный запрос не копируется.</div>
           <details class="gp-brain-details" open><summary>📱 Что PocketVerse добавляет прямо сейчас</summary><pre>${esc(b.prompt)}</pre></details>
           <details class="gp-brain-details"><summary>🎭 Character Card</summary><pre>${esc(b.cardText || 'Недоступно в текущем контексте.')}</pre></details>
           <details class="gp-brain-details"><summary>📖 RP-срез</summary><pre>${esc(b.rpText || 'История пуста.')}</pre></details>
@@ -2134,7 +2134,7 @@ function renderThread(screen) {
     const runGifSearch = async () => {
         const q = String(screen.querySelector('#gp-gif-q')?.value || '').trim(); if (!q || _gifPickerBusy) return;
         _gifPickerBusy=true; render();
-        try { _gifPickerResults = await searchGiphyChoices(q, _gifPickerKind, 30); }
+        try { _gifPickerResults = await searchGiphyChoices(q, _gifPickerKind, 50); }
         catch(e){ toast(`GIPHY: ${String(e?.message||e).slice(0,80)}`, 'fa-triangle-exclamation'); _gifPickerResults=[]; }
         finally { _gifPickerBusy=false; render(); }
     };
@@ -7216,6 +7216,63 @@ async function sendUserGiphy(key, g) {
     render(); updateFabBadge();
 }
 
+function pvPhoneRawPrompt(t, items, isGroup = false) {
+    const st = getSettings();
+    const mode = String(st.brainMode || 'balanced');
+    const ctx = SillyTavern.getContext?.() || {};
+    const user = String(ctx?.name1 || 'User');
+    const charName = String(t?.name || ctx?.name2 || 'Character');
+    const esc = v => String(v ?? '').replace(/\s+/g, ' ').trim();
+
+    // Controlled phone context. Unlike generateQuietPrompt, generateRaw receives only
+    // the context we deliberately assemble here; the whole RP transcript is not copied in.
+    let card = '';
+    try {
+        const cid = ctx.characterId;
+        const ch = (Array.isArray(ctx.characters) && cid != null) ? ctx.characters[cid] : null;
+        if (ch) card = [ch.name, ch.description, ch.personality, ch.scenario, ch.mes_example]
+            .filter(Boolean).map(String).join('\n\n');
+    } catch(e) {}
+
+    const cfg = mode === 'lite'
+        ? { card: 1400, rpMsgs: 0, rpEach: 0, sms: 8, smsChars: 1800, out: 320 }
+        : mode === 'deep'
+            ? { card: 9000, rpMsgs: 10, rpEach: 1100, sms: 24, smsChars: 5200, out: 700 }
+            : { card: 5000, rpMsgs: 5, rpEach: 900, sms: 14, smsChars: 3400, out: 480 };
+
+    card = card.slice(0, cfg.card);
+    const rp = cfg.rpMsgs ? (Array.isArray(ctx.chat) ? ctx.chat.slice(-cfg.rpMsgs) : [])
+        .map(m => `${m?.is_user ? user : (ctx?.name2 || charName)}: ${esc(m?.mes).slice(0,cfg.rpEach)}`)
+        .join('\n') : '';
+    const sms = (Array.isArray(t?.messages) ? t.messages.slice(-cfg.sms) : [])
+        .map(m => `${m?.dir === 'out' ? user : (m?.from || charName)}: ${esc(m?.text || m?.memeQuery || (m?.gifUrl ? '[GIF]' : ''))}`)
+        .join('\n').slice(-cfg.smsChars);
+    const custom = esc(st.phoneCustomInstructions || '').slice(0, mode === 'lite' ? 260 : 700);
+    const mediaRule = st.phoneMemes ? 'You may naturally add "meme":"short English GIPHY search phrase" when a GIF/meme reaction fits; do not force it.' : '';
+    const photoRule = st.phonePhotos !== false ? 'You may add "photo":"short visual description" when a photo is genuinely natural.' : '';
+    const groupRule = st.phoneGroups !== false ? 'For groups, every tag must contain "chat":"Group name" and the real sender in "from".' : '';
+    const incoming = items.map((x,i)=>`${i+1}. ${x}`).join('\n');
+
+    const prompt = `PRIVATE PHONE GENERATION. This is an isolated PocketVerse request, not prose RP.\n`+
+        `User: ${user}\nContact: ${charName}${isGroup ? `\nGroup members: ${(t?.members||[]).join(', ')}` : ''}\n`+
+        (card ? `\nCHARACTER CARD EXCERPT:\n${card}\n` : '')+
+        (rp ? `\nRECENT RELEVANT RP EXCERPT:\n${rp}\n` : '')+
+        (sms ? `\nRECENT PHONE CHAT:\n${sms}\n` : '')+
+        `\nNEW ITEMS FROM ${user}:\n${incoming}\n\n`+
+        `Reply naturally in character like real texting. Usually 1-3 short bubbles; maximum 4. No narration. `+
+        `Output ONLY hidden tags: <!--tel:sms:{"from":"Name","text":"..."}-->. `+
+        `${groupRule} ${mediaRule} ${photoRule} `+
+        `Never output NPC-to-NPC private messages unless this is a group containing ${user}. Never output HeartPulse/state/reasoning. `+
+        (custom ? `Phone preference: ${custom}` : '');
+    return { prompt, responseLength: cfg.out, mode };
+}
+
+async function pvGeneratePhoneReply(t, items, isGroup = false) {
+    const req = pvPhoneRawPrompt(t, items, isGroup);
+    console.info('[PocketVerse] controlled phone request', { mode:req.mode, chars:req.prompt.length, approxTokens:Math.round(req.prompt.length/4), responseLength:req.responseLength });
+    return await generateRaw({ prompt:req.prompt, responseLength:req.responseLength, trimNames:false });
+}
+
 async function flushPending(key) {
     if (sending) return;
     const pending = pvPending(key);
@@ -7236,15 +7293,10 @@ async function flushPending(key) {
         pvClear(key);
         applyChatHiding(); typingKey = key; render(); updatePhoneInjection();
         _pvThreadRenderFrozen = true;
-        const ctx = SillyTavern.getContext();
         const items = [...batch.map(x => `text: ${x}`), ...mediaBatch];
-        const ladder = items.map((x,i)=>`${i+1}. ${x}`).join('\n');
-        const quietPrompt = isGroup
-            ? `The group chat «${name}» (members: ${(t.members || []).join(', ')}) just received ${items.length} phone item(s) from ${ctx?.name1 || 'User'}, in this exact order:\n${ladder}\nReact naturally as group members. Keep it like real texting: usually 1-3 short bubbles, no narration. Reply ONLY with hidden tel:sms tags with the "chat" field. No visible prose.`
-            : `${name} just received ${items.length} phone item(s) from ${ctx?.name1 || 'User'}, in this exact order:\n${ladder}\nReact naturally in character like a real private chat. Usually 1-3 short bubbles; do not narrate. Reply ONLY with hidden tel:sms tags. No visible prose.`;
         setPhoneTurnActive(true);
         let rawReply = '';
-        try { rawReply = await generateQuietPrompt(quietPrompt, false, false); }
+        try { rawReply = await pvGeneratePhoneReply(t, items, isGroup); }
         finally { setPhoneTurnActive(false); }
         if (rawReply && rawReply.trim()) await insertGhostReply(name, rawReply.trim(), isGroup ? name : '');
     } catch(e) {
@@ -7334,7 +7386,7 @@ async function doSend(key, opts = {}) {
         const quietPrompt = isGroup
             ? `Continue the roleplay. The group chat «${name}» (members: ${(t.members || []).join(', ')}) just received this ${msgKind} from ${ctx?.name1 || 'User'}: "${text}"${draftImg ? ' (with a photo attached)' : ''}${shot ? ` (with a forwarded screenshot — ${shotLabel(shot)})` : ''}. Reply as the group members — ONLY hidden tel:sms tags with the "chat" field (RULE 3 — PHONE-ONLY MODE), one tag per message, several members may text. No visible prose.`
             : `Continue the roleplay. ${name} just received this ${asVoice ? msgKind : 'SMS'} from ${ctx?.name1 || 'User'}: "${text}"${draftImg ? ' (with a photo attached)' : ''}${shot ? ` (with a forwarded screenshot — ${shotLabel(shot)}; react to what is IN it)` : ''}. Reply in-character with ONLY hidden tel:sms tags (RULE 3 — PHONE-ONLY MODE). No visible prose.`;
-        const rawReply = await generateQuietPrompt(quietPrompt, false, false);
+        const rawReply = await pvGeneratePhoneReply(t, [`${msgKind}: ${text}${draftImg ? ' [photo attached]' : ''}${shot ? ` [forwarded screenshot: ${shotLabel(shot)}]` : ''}`], isGroup);
         if (rawReply && rawReply.trim()) {
             await insertGhostReply(name, rawReply.trim(), isGroup ? name : '');
         }
