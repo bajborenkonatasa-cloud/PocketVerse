@@ -5,7 +5,7 @@ import { extension_settings, saveMetadataDebounced } from '../../../extensions.j
 export const EXT_NAME = 'pocketverse_foundation';
 // Версия для сверки инстансов (ПК ↔ айфон): видна в настройках и в консоли.
 // БАМПАТЬ при каждом коммите вместе с manifest.json!
-export const GP_VERSION = '2.35.0-foundation.1';
+export const GP_VERSION = '2.35.0-pocketverse.4';
 const META_KEY = 'pocketverse_foundation';
 
 // ── Глобальные настройки ──
@@ -101,8 +101,15 @@ const defaultSettings = () => ({
     // сдвигает телефон и кнопку из-под неё. Определяется автоматически,
     // здесь — ручной оверрайд, если обёртка не отдала безопасные отступы.
     forceSafeArea: false,
-    // Компактные правила в инжекте (экономия ~60% токенов директивы)
-    compactRules: false,
+    // PocketVerse Brain Control. Эти настройки управляют ИМЕННО инжектом телефона;
+    // Character Card / основная RP-история принадлежат SillyTavern и здесь не обрезаются.
+    brainMode: 'balanced', // lite | balanced | deep
+    brainCustomInstructions: '',
+    brainPhotos: true,
+    brainMemes: false,
+    brainGroups: true,
+    // Компактные правила в инжекте (экономия токенов директивы). Синхронизируется с brainMode.
+    compactRules: true,
     // Городская анонимка «Подслушано» в каналах
     anonChannel: true,
     // Тиндер: анкеты, колода и мэтчи
