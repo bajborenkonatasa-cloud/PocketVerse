@@ -1,59 +1,575 @@
-import { getContext } from '../../../extensions.js';
-import { generateRaw, getThumbnailUrl } from '../../../../script.js';
 
-const VERSION='0.5.0', ID='pocketverse-root', STORE='pocketverse.v0.1', SETTINGS='pocketverse.settings.v0.4';
-const state={screen:'home',chatId:null,replyTo:null,generating:false,showReactions:null,profileId:null};
-const DEFAULTS={contextMode:'deep',history:14};
-const loadJson=(k,d={})=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
-const saveJson=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
-const esc=(s='')=>String(s).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const approx=s=>Math.ceil(String(s||'').length/4);
-function settings(){return {...DEFAULTS,...loadJson(SETTINGS,{})}}
-function ctx(){return getContext?.()||SillyTavern?.getContext?.()||{}}
-function chatKey(){const c=ctx();return String(c.chatId??c.chat_metadata?.chat_id??c.groupId??c.characterId??location.pathname)}
-function currentChar(){const c=ctx(),ch=c.characters?.[c.characterId];return {c,ch,name:ch?.name||c.name2||c.characterName||'Персонаж',avatar:ch?.avatar||''}}
-function avatarUrl(av){if(!av||av==='none')return '';try{return getThumbnailUrl('avatar',av)}catch{return `/characters/${av}`}}
-function store(){const all=loadJson(STORE,{}),k=chatKey();const cc=currentChar();all[k]??={threads:{}};all[k].threads??={};all[k].registry??={};const id=cc.avatar?`char:${cc.avatar}`:'demo';all[k].registry[id]={id,type:'character',name:cc.name,avatar:cc.avatar};all[k].threads[id]??={id,name:cc.name,avatar:cc.avatar,handle:id,phone:'+PV '+String(Math.abs([...id].reduce((a,c)=>((a<<5)-a+c.charCodeAt(0))|0,0))).padStart(8,'0').slice(0,8),isGroup:false,participants:[id],messages:[]};all[k].threads[id].name=cc.name;all[k].threads[id].avatar=cc.avatar;return {all,k,box:all[k],defaultId:id}}
-function persist(all){saveJson(STORE,all)}
-function cleanText(v=''){return String(v).replace(/<span[^>]*class=["']?nova-hidden-context["']?[^>]*>[\s\S]*?<\/span>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()}
-function cleanRp(v=''){
- let s=String(v); s=s.replace(/\[Scene image:[\s\S]*?(?=(?:\n[A-ZА-ЯЁ][^\n]{0,40}:)|$)/gi,' ');
- s=s.replace(/(?:^|\n)\s*(?:Scene image|Image prompt|Negative prompt)\s*:[\s\S]*?(?=\n\S+\s*:|$)/gi,' ');
- s=s.replace(/\((?:ooc|OOC)[\s\S]*?\)/g,' ').replace(/<[^>]+>/g,' ');
- return s.replace(/\b(?:masterpiece|best quality|highres|very aesthetic|detailed face|artist\s*:\s*[^,\n]+)(?:\s*,\s*)?/gi,' ').replace(/\s+/g,' ').trim();
+import { eventSource, event_types, saveSettingsDebounced } from '../../../../script.js';
+import { getSettings, GP_VERSION, invalidateChatCache, factoryReset, wipePhoneTraces } from './state.js';
+import { updatePhoneInjection } from './prompts.js';
+import { initUI, checkNewIncoming, resetIncomingCounters, updateFabBadge, render, isPhoneOpen, closePhone, applySkin, applyWallpaper, applyChatHiding, toast, notifyBankReminders, notifyDeliveries, deliverScamSms } from './ui.js';
+import { harvestSocialTags, setUserHandle, getUserHandle, listIigProfiles, listIigStyles, listImageBuckets, currentExtModel, stripFakeJournal } from './social.js';
+import { harvestBankTags } from './bank.js';
+import { harvestPlanTags } from './plans.js';
+import { harvestChannelTags, harvestAnonTags, harvestAnonBust, ANON_NAME } from './channels.js';
+import { maybeScamSms } from './scam.js';
+import { trDom } from './i18n.js';
+import { buildReport, clearLog } from './debug-log.js';
+
+// ── CSS ──
+const cssId = 'glassphone-css';
+if (!document.getElementById(cssId)) {
+    const link = document.createElement('link');
+    link.id = cssId;
+    link.rel = 'stylesheet';
+    // Путь берём от самого модуля: папку расширения можно переименовать,
+    // стили всё равно найдутся (жёсткий путь ломался после переименования)
+    link.href = new URL('./style.css', import.meta.url).href + '?t=' + Date.now();
+    document.head.appendChild(link);
 }
-function cardContext(){const {ch,name}=currentChar();if(!ch)return `Name: ${name}`;const parts=[`Name: ${name}`];for(const [lab,val] of [['Personality',ch.personality],['Description',ch.description],['Scenario',ch.scenario],['Examples',ch.mes_example||ch.message_example]]){const x=cleanText(val);if(x)parts.push(`${lab}: ${x}`)}return parts.join('\n')}
-function rpContext(){const c=ctx(), chat=Array.isArray(c.chat)?c.chat:[], mode=settings().contextMode, count=mode==='economy'?6:mode==='balanced'?12:20, budget=mode==='economy'?1800:mode==='balanced'?3600:5600;let rows=chat.slice(-count).map(m=>{const x=cleanRp(m.mes||'');if(!x)return '';return `${m.is_user?(c.name1||'User'):(m.name||c.name2||'Character')}: ${x}`}).filter(Boolean).join('\n');return rows.length>budget?rows.slice(-budget):rows}
-function phoneHistory(t){return (t?.messages||[]).slice(-settings().history).map(m=>`${m.from==='user'?'User':(m.senderName||t.name)}: ${m.text}`).join('\n')}
-function contactCard(t){const {box}=store();if(!t)return cardContext();if(!t.isGroup&&t.type==='character')return cardContext();if(!t.isGroup){const r=box.registry?.[t.id]||{};return [`Name: ${t.name}`,r.persona?`Persona: ${r.persona}`:'',`Phone: ${t.phone||''}`,`Handle: ${t.handle||''}`].filter(Boolean).join('\n')}return (t.participants||[]).map(id=>{const r=box.registry?.[id]||{};return `Name: ${r.name||id}\nPersona: ${r.persona||'Use recent RP context and established characterization.'}`}).join('\n\n')}
-function brainInfo(t){const card=contactCard(t),rp=rpContext(),phone=phoneHistory(t);return {card,rp,phone,tokens:{card:approx(card),rp:approx(rp),phone:approx(phone)}}}
-function parseJson(text){const raw=String(text??'').trim();if(!raw)return null;const tries=[raw,raw.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]].filter(Boolean);for(const q of tries){try{return JSON.parse(q.replace(/,\s*([}\]])/g,'$1'))}catch{}}
- const start=Math.min(...[raw.indexOf('{'),raw.indexOf('[')].filter(x=>x>=0));if(Number.isFinite(start)){let stack=[],str=false,escp=false;for(let i=start;i<raw.length;i++){const ch=raw[i];if(escp){escp=false;continue}if(ch==='\\'&&str){escp=true;continue}if(ch==='"'){str=!str;continue}if(str)continue;if(ch==='{'||ch==='[')stack.push(ch==='{'?'}':']');else if(ch==='}'||ch===']'){stack.pop();if(!stack.length){try{return JSON.parse(raw.slice(start,i+1).replace(/,\s*([}\]])/g,'$1'))}catch{break}}}}}return null}
-function responseText(r){if(typeof r==='string')return r;return r?.text||r?.content||r?.choices?.[0]?.message?.content||r?.choices?.[0]?.text||''}
-function buildPrompt(t){const bi=brainInfo(t);const group=t?.isGroup;return `Generate ${group?'a realistic group messenger exchange':'private messenger replies'} inside PocketVerse.\n\nPARTICIPANTS / CHARACTER DATA:\n${bi.card}\n\nRECENT ROLEPLAY CONTEXT:\n${bi.rp||'(none)'}\n\nMESSENGER HISTORY:\n${bi.phone||'(empty)'}\n\nRULES:\n- Preserve established personalities and relationships.\n- Messenger only: short natural texts; NO narration, NO inner thoughts, NO analysis.\n- React to the newest user messages.\n- 1-4 short bubbles total.\n- Never write messages for User/Hanabi.\n- Russian unless this chat clearly uses another language.\n- Output valid JSON only. No markdown fence.\n${group?'Each item MUST include sender matching a participant name.':''}\n${group?'{"messages":[{"sender":"Name","text":"message"}]}':'{"messages":["message one","message two"]}'}`}
-function extractJsonish(txt){let t=String(txt||'').trim();t=t.replace(/<think>[\s\S]*?<\/think>/gi,'').replace(/\*\*[^\n]*Thoughts[^\n]*\*\*[\s\S]*?(?=```json|\{\s*"messages")/i,'').trim();const fenced=t.match(/```(?:json)?\s*([\s\S]*?)```/i);if(fenced)t=fenced[1].trim();return t}
-async function aiReply(){if(state.generating)return;const {all,box,defaultId}=store(),id=state.chatId||defaultId,t=box.threads[id];if(!t)return;state.generating=true;render();try{const raw=await generateRaw({prompt:buildPrompt(t),systemPrompt:'Return only the requested messenger JSON. Do not expose chain-of-thought or analysis.',quietToLoud:false,instructOverride:true,responseLength:900,trimNames:false});const txt=extractJsonish(responseText(raw));const obj=parseJson(txt);let arr=[];if(obj)arr=Array.isArray(obj.messages)?obj.messages:(Array.isArray(obj)?obj:(obj.text?[obj.text]:[]));if(!arr.length){const quoted=[...txt.matchAll(/"(?:text|message)"\s*:\s*"((?:\\.|[^"\\])*)"/g)].map(m=>{try{return JSON.parse('"'+m[1]+'"')}catch{return m[1]}});arr=quoted.slice(0,4)}if(!arr.length)throw new Error('Ответ модели оборвался до сообщения. Я увеличила лимит; нажми ✨ ещё раз.');for(const item of arr.slice(0,4)){const text=cleanText(typeof item==='string'?item:item?.text||item?.message);if(!text||text==='{'||text==='}')continue;let senderName=t.name,senderId=t.id;if(t.isGroup&&typeof item==='object'){senderName=cleanText(item.sender||item.name||'')||t.name;const hit=(t.participants||[]).find(pid=>(box.registry?.[pid]?.name||'').toLowerCase()===senderName.toLowerCase());if(hit)senderId=hit}t.messages.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),from:'char',senderName,senderId,text:text.slice(0,900),at:Date.now(),reactions:{}})}persist(all)}catch(e){console.error('[PocketVerse]',e);window.toastr?.error(String(e?.message||e),'PocketVerse')}finally{state.generating=false;render();setTimeout(()=>{const b=document.querySelector('.pv-bubbles');if(b)b.scrollTop=b.scrollHeight},0)}}
-function messageHtml(m,t){const replied=m.replyTo?(t.messages||[]).find(x=>String(x.id)===String(m.replyTo)):null, reacts=Object.entries(m.reactions||{}).map(([e,n])=>`<span>${e}${n>1?' '+n:''}</span>`).join(''), menu=state.showReactions===String(m.id)?`<div class="pv-reactmenu">${['❤️','😂','😭','💀','👀','👍','😡','🥹','🤌🏻','😅','🔥','💔'].map(e=>`<button data-pv="react" data-id="${esc(m.id)}" data-emoji="${e}">${e}</button>`).join('')}<div class="pv-actionline"><button data-pv="reply" data-id="${esc(m.id)}">↩ Ответить</button><button class="danger" data-pv="delete-message" data-id="${esc(m.id)}">🗑 Удалить</button></div></div>`:'';const reg=store().box.registry||{},sender=m.senderId?reg[m.senderId]:null,ava=m.from==='char'?avatarUrl(sender?.avatar||t.avatar):'';const body=m.media?`<img class="pv-media" src="${esc(m.media)}" alt="image">${m.text?`<div>${esc(m.text)}</div>`:''}`:esc(m.text);return `<div class="pv-row ${m.from==='user'?'me':'them'}">${m.from==='char'?ava?`<img class="pv-msgavatar" src="${esc(ava)}">`:`<span class="pv-msgavatar fallback">${esc((sender?.name||m.senderName||t.name)?.[0]||'?')}</span>`:''}<div class="pv-msgwrap ${m.from==='user'?'me':'them'}"><div class="pv-bubble ${m.from==='user'?'me':'them'}" data-pv-hold="${esc(m.id)}">${replied?`<div class="pv-quote">↪ ${esc(replied.text?.slice(0,90)||'вложение')}</div>`:''}${body}<small>${new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></div>${menu}${reacts?`<div class="pv-reactions">${reacts}</div>`:''}</div></div>`}
-function sendLocal(){const inp=document.querySelector('.pv-input'),text=inp?.value.trim();if(!text)return;const {all,box,defaultId}=store(),id=state.chatId||defaultId,t=box.threads[id];t.messages.push({id:crypto.randomUUID?.()||String(Date.now()),from:'user',text,at:Date.now(),replyTo:state.replyTo,reactions:{}});state.replyTo=null;persist(all);inp.value='';render()}
-function react(id,emoji){const {all,box}=store();for(const t of Object.values(box.threads)){const m=t.messages.find(x=>String(x.id)===String(id));if(m){m.reactions??={};m.reactions[emoji]=(m.reactions[emoji]||0)+1;break}}persist(all);state.showReactions=null;render()}
-function deleteMessage(id){const {all,box}=store();for(const t of Object.values(box.threads)){const i=t.messages.findIndex(x=>String(x.id)===String(id));if(i>=0){t.messages.splice(i,1);break}}persist(all);state.showReactions=null;render()}
-function pickMedia(){let input=document.getElementById('pv-file-input');if(!input){input=document.createElement('input');input.id='pv-file-input';input.type='file';input.accept='image/*';input.hidden=true;document.body.appendChild(input);input.onchange=()=>{const f=input.files?.[0];if(!f)return;const r=new FileReader();r.onload=()=>{const {all,box,defaultId}=store(),id=state.chatId||defaultId,t=box.threads[id];t.messages.push({id:crypto.randomUUID?.()||String(Date.now()),from:'user',text:'',media:String(r.result),at:Date.now(),reactions:{}});persist(all);input.value='';render()};r.readAsDataURL(f)}}input.click()}
-function randomPhone(){return '+PV '+String(Math.floor(10000000+Math.random()*89999999))}
-function autoHandle(name){return '@'+String(name||'contact').toLowerCase().replace(/[^a-zа-яё0-9]+/gi,'_').replace(/^_+|_+$/g,'').slice(0,22)}
-function createContact(){const name=document.querySelector('#pv-contact-name')?.value.trim();if(!name)return window.toastr?.warning('Нужно имя контакта','PocketVerse');const phone=document.querySelector('#pv-contact-phone')?.value.trim()||randomPhone(),handle=document.querySelector('#pv-contact-handle')?.value.trim()||autoHandle(name),persona=document.querySelector('#pv-contact-persona')?.value.trim()||'';const {all,k,box}=store();const c=ctx(),hit=(c.characters||[]).find(x=>String(x?.name||'').toLowerCase()===name.toLowerCase());const id=hit?.avatar?`char:${hit.avatar}`:`npc:${crypto.randomUUID?.()||Date.now()}`;box.registry[id]={id,type:hit?'character':'npc',name,avatar:hit?.avatar||'',phone,handle,persona};box.threads[id]??={id,type:hit?'character':'npc',name,avatar:hit?.avatar||'',phone,handle,isGroup:false,participants:[id],messages:[]};persist(all);state.chatId=id;state.screen='thread';render()}
-function createGroup(){const name=document.querySelector('#pv-group-name')?.value.trim()||'Новая группа',ids=[...document.querySelectorAll('[data-pv-member]:checked')].map(x=>x.value);if(ids.length<1)return window.toastr?.warning('Выбери хотя бы одного участника','PocketVerse');const {all,box}=store(),id=`group:${crypto.randomUUID?.()||Date.now()}`;box.threads[id]={id,type:'group',name,avatar:'',phone:'Групповой чат',handle:'',isGroup:true,participants:ids,messages:[]};persist(all);state.chatId=id;state.screen='thread';render()}
-function saveProfile(){const {all,box}=store(),id=state.profileId||state.chatId,t=box.threads[id],r=box.registry?.[id];if(!t||!r)return;const name=document.querySelector('#pv-prof-name')?.value.trim()||t.name,phone=document.querySelector('#pv-prof-phone')?.value.trim()||t.phone,handle=document.querySelector('#pv-prof-handle')?.value.trim()||t.handle,persona=document.querySelector('#pv-prof-persona')?.value.trim()||r.persona||'';Object.assign(t,{name,phone,handle});Object.assign(r,{name,phone,handle,persona});persist(all);state.screen='thread';render()}
-function render(){const s=document.querySelector('.pv-screen');if(!s)return;const {box,defaultId}=store();if(state.screen==='home')s.innerHTML=`<div class="pv-home"><div class="pv-bigtime">${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div><div class="pv-date">${new Date().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})}</div><div class="pv-grid"><button class="pv-app" data-pv="messages"><span>💬</span><b>Сообщения</b></button><button class="pv-app pv-disabled"><span>📸</span><b>Social</b><small>скоро</small></button><button class="pv-app pv-disabled"><span>📌</span><b>Campus</b><small>скоро</small></button><button class="pv-app" data-pv="contacts"><span>👥</span><b>Контакты</b></button></div></div>`;
- if(state.screen==='messages')s.innerHTML=`<div class="pv-sectionhead"><button data-pv="back">‹</button><h2>Сообщения</h2><button data-pv="new-contact">＋</button></div><div class="pv-list">${Object.entries(box.threads).map(([id,t])=>{const av=avatarUrl(t.avatar),last=t.messages.at(-1);return `<button class="pv-thread" data-pv="thread" data-id="${esc(id)}">${av?`<img class="pv-avatarimg" src="${esc(av)}">`:`<span class="pv-avatar">${esc(t.isGroup?'👥':t.name?.[0]||'?')}</span>`}<span><b>${esc(t.name)}</b><small>${esc(last?.text||last?.media?'📷 Фото':'Начать переписку')}</small></span><i>›</i></button>`}).join('')}</div>`;
- if(state.screen==='contacts')s.innerHTML=`<div class="pv-sectionhead"><button data-pv="back">‹</button><h2>Контакты</h2><button data-pv="new-contact">＋</button></div><div class="pv-contact-actions"><button data-pv="new-group">👥 Новый групповой чат</button></div><div class="pv-list">${Object.entries(box.registry||{}).map(([id,r])=>{const av=avatarUrl(r.avatar);return `<button class="pv-thread" data-pv="profile" data-id="${esc(id)}">${av?`<img class="pv-avatarimg" src="${esc(av)}">`:`<span class="pv-avatar">${esc(r.name?.[0]||'?')}</span>`}<span><b>${esc(r.name)}</b><small>${esc(r.phone||r.handle||'PocketVerse')}</small></span><i>›</i></button>`}).join('')}</div>`;
- if(state.screen==='new-contact')s.innerHTML=`<div class="pv-sectionhead"><button data-pv="back">‹</button><h2>Новый контакт</h2><span></span></div><div class="pv-form"><div class="pv-profile-avatar">👤</div><label>Имя<input id="pv-contact-name" placeholder="Как в ролевой, точно"></label><label>Номер<input id="pv-contact-phone" placeholder="Пусто = случайный"></label><label>Ник (@)<input id="pv-contact-handle" placeholder="Пусто = авто из имени"></label><label>Короткая Persona<textarea id="pv-contact-persona" placeholder="Для NPC: характер, манера речи, отношения"></textarea></label><button class="pv-primary" data-pv="save-contact">✓ Сохранить</button></div>`;
- if(state.screen==='new-group')s.innerHTML=`<div class="pv-sectionhead"><button data-pv="back">‹</button><h2>Новый групповой чат</h2><span></span></div><div class="pv-form"><label>Название<input id="pv-group-name" placeholder="Например: Компания"></label><div class="pv-members">${Object.entries(box.registry||{}).map(([id,r])=>`<label><input type="checkbox" data-pv-member value="${esc(id)}"> ${esc(r.name)}</label>`).join('')}</div><button class="pv-primary" data-pv="save-group">👥 Создать чат</button></div>`;
- if(state.screen==='profile'){const id=state.profileId,t=box.threads[id],r=box.registry?.[id];if(r)s.innerHTML=`<div class="pv-sectionhead"><button data-pv="back">‹</button><h2>Контакт</h2><span></span></div><div class="pv-form"><div class="pv-profile-avatar">${avatarUrl(r.avatar)?`<img src="${esc(avatarUrl(r.avatar))}">`:esc(r.name?.[0]||'?')}</div><label>Имя<input id="pv-prof-name" value="${esc(r.name)}"></label><label>Номер<input id="pv-prof-phone" value="${esc(r.phone||'')}"></label><label>Ник (@)<input id="pv-prof-handle" value="${esc(r.handle||'')}"></label><label>Persona<textarea id="pv-prof-persona">${esc(r.persona||'')}</textarea></label><button class="pv-primary" data-pv="save-profile">✓ Сохранить</button>${t?`<button data-pv="thread" data-id="${esc(id)}">💬 Открыть чат</button>`:''}</div>`}
- if(state.screen==='brain'){const t=box.threads[state.chatId||defaultId],bi=brainInfo(t),total=bi.tokens.card+bi.tokens.rp+bi.tokens.phone+120;s.innerHTML=`<div class="pv-title">🧠 Контекст PocketVerse</div><div class="pv-braincard"><b>Персонажи · ~${bi.tokens.card} ток.</b><pre>${esc(bi.card)}</pre></div><div class="pv-braincard"><b>Последний RP · ~${bi.tokens.rp} ток.</b><pre>${esc(bi.rp||'Нет RP')}</pre></div><div class="pv-braincard"><b>Телефон · ~${bi.tokens.phone} ток.</b><pre>${esc(bi.phone||'Пока пусто')}</pre></div><div class="pv-tokenline">Контекст PocketVerse ≈ ${total} токенов · обычная ➤ отправка = 0 запросов</div>`}
- if(state.screen==='thread'){const t=box.threads[state.chatId||defaultId],av=avatarUrl(t.avatar);s.innerHTML=`<div class="pv-chathead"><button data-pv="back">‹</button><button class="pv-headperson" data-pv="profile" data-id="${esc(t.id)}">${av?`<img src="${esc(av)}">`:t.isGroup?`<span class="pv-headfallback">👥</span>`:''}<span class="pv-headtext"><b>${esc(t.name)}</b><small>${esc(t.phone||t.handle||'PocketVerse')}</small></span></button><span>${state.generating?'печатает…':'онлайн'}</span><button class="pv-brainbtn" data-pv="brain">🧠</button></div><div class="pv-bubbles">${t.messages.map(m=>messageHtml(m,t)).join('')||'<div class="pv-empty">Напиши несколько сообщений, затем ✨ — один запрос на всю пачку.</div>'}</div>${state.replyTo?`<div class="pv-replybar">↪ Ответ <button data-pv="cancel-reply">×</button></div>`:''}<div class="pv-compose"><button class="pv-attach" data-pv="attach">📎</button><textarea class="pv-input" rows="1" placeholder="Сообщение"></textarea><button data-pv="send-local">➤</button><button class="pv-ai" data-pv="ai-reply" ${state.generating?'disabled':''}>${state.generating?'…':'✨'}</button></div>`}}
-function onClick(e){const b=e.target.closest('[data-pv]');if(!b)return;const a=b.dataset.pv;if(a==='close')return close();if(a==='home'){state.screen='home';return render()}if(a==='back'){state.screen=state.screen==='thread'?'messages':state.screen==='brain'?'thread':state.screen==='profile'?'contacts':state.screen==='new-contact'||state.screen==='new-group'?'contacts':state.screen==='contacts'||state.screen==='messages'?'home':'home';return render()}if(a==='messages'){state.screen='messages';return render()}if(a==='contacts'){state.screen='contacts';return render()}if(a==='new-contact'){state.screen='new-contact';return render()}if(a==='new-group'){state.screen='new-group';return render()}if(a==='save-contact')return createContact();if(a==='save-group')return createGroup();if(a==='profile'){const {box}=store();if(box.registry?.[b.dataset.id]){state.profileId=b.dataset.id;state.screen='profile';return render()}return}if(a==='save-profile')return saveProfile();if(a==='thread'){state.chatId=b.dataset.id;state.screen='thread';return render()}if(a==='send-local')return sendLocal();if(a==='attach')return pickMedia();if(a==='ai-reply')return aiReply();if(a==='brain'){state.screen='brain';return render()}if(a==='reply'){state.replyTo=b.dataset.id;return render()}if(a==='cancel-reply'){state.replyTo=null;return render()}if(a==='react')return react(b.dataset.id,b.dataset.emoji);if(a==='delete-message')return deleteMessage(b.dataset.id)}
-function mount(){if(document.getElementById(ID))return;const r=document.createElement('div');r.id=ID;r.innerHTML=`<button class="pv-fab">📱</button><div class="pv-overlay" hidden><section class="pv-phone"><header class="pv-status"><span class="pv-clock"></span><span>◔ Wi‑Fi ▰</span></header><main class="pv-screen"></main><footer class="pv-nav"><button data-pv="back">‹</button><button data-pv="home">●</button><button data-pv="close">×</button></footer></section></div>`;document.body.appendChild(r);r.querySelector('.pv-fab').onclick=open;r.addEventListener('click',onClick);let holdTimer=null,holdId=null;r.addEventListener('pointerdown',e=>{const b=e.target.closest('[data-pv-hold]');if(!b)return;holdId=b.dataset.pvHold;holdTimer=setTimeout(()=>{state.showReactions=holdId;render();holdTimer=null},520)});for(const evn of ['pointerup','pointercancel','pointermove'])r.addEventListener(evn,()=>{if(holdTimer){clearTimeout(holdTimer);holdTimer=null}});clock();setInterval(clock,30000);render()}
-function clock(){const e=document.querySelector('.pv-clock');if(e)e.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}function open(){document.querySelector('.pv-overlay').hidden=false;state.screen='home';render()}function close(){document.querySelector('.pv-overlay').hidden=true}
-function mountSettings(){if(document.getElementById('pocketverse-settings'))return;const host=document.getElementById('extensions_settings2')||document.getElementById('extensions_settings');if(!host)return;const c=document.createElement('div');c.id='pocketverse-settings';c.className='extension_container';c.innerHTML=`<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>📱 PocketVerse · ${VERSION}</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>Phone Core: контакты, NPC, группы, аватары, долгий тап, ответ/удаление, локальные фото и устойчивый AI-ответ.</p><label>Контекст <select id="pv-context-mode"><option value="economy">Экономно</option><option value="balanced">Баланс</option><option value="deep">Глубоко (~до 1500 ток.)</option></select></label><button type="button" class="menu_button" id="pocketverse-open-settings">📱 Открыть PocketVerse</button></div></div>`;host.appendChild(c);const sel=c.querySelector('#pv-context-mode');sel.value=settings().contextMode;sel.onchange=()=>saveJson(SETTINGS,{...settings(),contextMode:sel.value});c.querySelector('#pocketverse-open-settings').onclick=open}
-function boot(){mount();mountSettings()}const c=ctx(),ev=c.eventSource,types=c.eventTypes||c.event_types;if(ev&&types?.APP_READY)ev.on(types.APP_READY,boot);if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();setTimeout(boot,500);setTimeout(boot,1500);
-export {VERSION};
+
+// ── Панель настроек в Extensions ──
+function setupSettingsPanel() {
+    const s = getSettings();
+    const html = `
+<div class="inline-drawer gp-settings-panel" id="gp-settings-drawer">
+    <div class="inline-drawer-toggle inline-drawer-header gp-settings-header">
+        <div class="gp-settings-title">
+            <span class="gp-settings-status-dot" aria-hidden="true"></span>
+            <span><b>PocketVerse 📱</b><small id="gp-settings-status"></small></span>
+        </div>
+        <select id="gp-set-lang" class="text_pole gp-settings-language" aria-label="Язык / Language">
+            <option value="ru" ${s.lang !== 'en' ? 'selected' : ''}>Русский</option>
+            <option value="en" ${s.lang === 'en' ? 'selected' : ''}>English</option>
+        </select>
+        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+    </div>
+    <div class="inline-drawer-content gp-settings-body">
+        <div class="gp-settings-quick">
+            <label><input type="checkbox" id="gp-set-enabled" ${s.isEnabled ? 'checked' : ''}><span>Включено</span></label>
+            <label><input type="checkbox" id="gp-set-fab" ${s.showFab ? 'checked' : ''}><span>Плавающая кнопка</span></label>
+            <label><input type="checkbox" id="gp-set-inject" ${s.injectPrompt ? 'checked' : ''}><span>Инструкции для модели</span></label>
+        </div>
+
+        <details class="gp-settings-group">
+            <summary><i class="fa-solid fa-layer-group"></i><span><b>Модель и контекст</b><small>Профиль, история и параметры ответа</small></span><i class="fa-solid fa-chevron-down gp-settings-chevron"></i></summary>
+            <div class="gp-settings-group-body gp-settings-grid">
+                <label class="gp-settings-field"><span>Глубина инжекта</span><input type="number" id="gp-set-depth" class="text_pole gp-settings-number" min="0" max="100" step="1" value="${Math.max(0, Number(s.injectDepth) || 0)}"><small>0 — перед последним ходом</small></label>
+                <label class="gp-settings-field"><span>Макс. длина ответа</span><input type="number" id="gp-set-maxtokens" class="text_pole gp-settings-number" min="0" max="32000" step="256" value="${s.socialMaxTokens || 0}"><small>0 = авто</small></label>
+                <label class="gp-settings-field gp-settings-wide"><span>Профиль для соцсетей</span><span class="gp-settings-control-row"><select id="gp-set-profile" class="text_pole"></select><button class="menu_button gp-settings-icon-button" id="gp-profile-test" type="button" title="Проверить профиль (маленький запрос)" aria-label="Проверить профиль (маленький запрос)"><i class="fa-solid fa-plug-circle-check"></i></button></span></label>
+                <label class="gp-settings-field"><span>Контекст соцсетей</span><select id="gp-set-ctxmode" class="text_pole"><option value="rich" ${s.socialContextMode !== 'lite' ? 'selected' : ''}>История + лорбук + карточка бота</option><option value="lite" ${s.socialContextMode === 'lite' ? 'selected' : ''}>Изолированно (только срез чата)</option></select></label>
+                <label class="gp-settings-field"><span>Твой ник (@)</span><input type="text" id="gp-set-handle" class="text_pole" maxlength="21" placeholder="авто из имени"></label>
+                <label class="gp-settings-field"><span>Узнать автора анонимки</span><input type="number" id="gp-set-anonprice" class="text_pole gp-settings-number" min="0" step="100" value="${Number(s.anonRevealPrice) || 2500}"><small>цена первого имени, дальше растёт</small></label>
+                <div class="gp-settings-checks gp-settings-wide">
+                    <label><input type="checkbox" id="gp-set-hide" ${s.hideSmsInChat !== false ? 'checked' : ''}><span>Скрывать смс-переписку из ленты чата</span></label>
+                    <label><input type="checkbox" id="gp-set-scam" ${s.scamEnabled !== false ? 'checked' : ''}><span>Спам и мошенники в смс</span></label>
+                    <label><input type="checkbox" id="gp-set-anon" ${s.anonChannel !== false ? 'checked' : ''}><span>Анонимка «Подслушано» в каналах</span></label>
+                    <label><input type="checkbox" id="gp-set-prefill" ${s.usePrefill ? 'checked' : ''}><span>Префилл ответа</span></label>
+                    <label><input type="checkbox" id="gp-set-figspaces" ${s.useFigureSpaces ? 'checked' : ''}><span>Фигурные пробелы в ответе</span></label>
+                </div>
+            </div>
+        </details>
+
+        <details class="gp-settings-group">
+            <summary><i class="fa-solid fa-image"></i><span><b>Изображения</b><small>Модель, формат и промпты</small></span><i class="fa-solid fa-chevron-down gp-settings-chevron"></i></summary>
+            <div class="gp-settings-group-body gp-settings-grid">
+                <label class="gp-settings-field gp-settings-wide"><span>Модель картинок</span><span class="gp-settings-control-row"><input type="text" id="gp-set-imgmodel" class="text_pole" list="gp-imgmodels" placeholder="авто"><datalist id="gp-imgmodels"></datalist><button class="menu_button gp-settings-icon-button" id="gp-imgmodel-refresh" type="button" title="Загрузить список моделей" aria-label="Загрузить список моделей"><i class="fa-solid fa-rotate"></i></button></span></label>
+                <label class="gp-settings-field gp-hidden" id="gp-imgcfg-row"><span>Картинко-расширение</span><select id="gp-set-imgcfg" class="text_pole"></select></label>
+                <label class="gp-settings-field"><span>Профиль картинко-расширения</span><select id="gp-set-imgprofile" class="text_pole"></select></label>
+                <label class="gp-settings-field"><span>Стиль картинок телефона</span><select id="gp-set-imgstyle" class="text_pole"></select></label>
+                <div class="gp-settings-checks gp-settings-wide">
+                    <label><input type="checkbox" id="gp-set-square" ${s.imageGenSquare !== false ? 'checked' : ''}><span>Картинки постов — квадрат 1:1</span></label>
+                    <label><input type="checkbox" id="gp-set-tagmode" ${s.imgTagMode ? 'checked' : ''}><span>Booru-теги (для NovelAI/аниме-моделей)</span></label>
+                </div>
+                <label class="gp-settings-field"><span>Публичные посты</span><textarea id="gp-set-imgprompt-ig" class="text_pole" rows="3"></textarea></label>
+                <label class="gp-settings-field"><span>Закрытые посты</span><textarea id="gp-set-imgprompt-of" class="text_pole" rows="3"></textarea></label>
+                <label class="gp-settings-field"><span>Твич: чужой эфир</span><textarea id="gp-set-imgprompt-twwatch" class="text_pole" rows="3"></textarea></label>
+                <label class="gp-settings-field"><span>Твич: свой эфир</span><textarea id="gp-set-imgprompt-twmy" class="text_pole" rows="3"></textarea></label>
+                <div class="gp-settings-wide gp-settings-align-end"><button id="gp-imgprompt-apply" type="button" class="menu_button">Применить</button></div>
+            </div>
+        </details>
+
+        <details class="gp-settings-group">
+            <summary><i class="fa-solid fa-sliders"></i><span><b>Поведение</b><small>Журнал, инжект и плавающая кнопка</small></span><i class="fa-solid fa-chevron-down gp-settings-chevron"></i></summary>
+            <div class="gp-settings-group-body">
+                <div class="gp-settings-checks">
+                    <label><input type="checkbox" id="gp-set-sociallog" ${s.socialLogToChat !== false ? 'checked' : ''}><span>Журнал соцсетей в чат</span></label>
+                    <label><input type="checkbox" id="gp-set-compact" ${s.compactRules ? 'checked' : ''}><span>Компактные правила в инжекте</span></label>
+                    <label><input type="checkbox" id="gp-set-safearea" ${s.forceSafeArea ? 'checked' : ''}><span>Экран с системной панелью (сдвинуть телефон)</span></label>
+                </div>
+                <div class="gp-settings-actions">
+                    <button class="menu_button gp-settings-reset" id="gp-reset-fab" type="button">Сбросить позицию кнопки</button>
+                    <button class="menu_button gp-settings-reset" id="gp-show-report" type="button">Отчёт: последние действия</button>
+                    <button class="menu_button gp-settings-reset gp-settings-danger" id="gp-wipe-chat" type="button">Очистить телефон в этом чате</button>
+                    <button class="menu_button gp-settings-reset gp-settings-danger" id="gp-factory-reset" type="button">Сброс к заводским настройкам</button>
+                </div>
+                <pre id="gp-report-box" class="gp-report-box" hidden></pre>
+            </div>
+        </details>
+
+        <div class="gp-settings-footer"><small id="gp-version-label"></small></div>
+    </div>
+</div>`;
+    $('#extensions_settings2').append(html);
+    // Значения назначаются как свойства DOM, не интерполируются в HTML:
+    // кавычки и </textarea> в пользовательских промптах/CSS безопасны.
+    $('#gp-set-imgmodel').val(s.imageGenModel || '');
+    $('#gp-set-imgprompt-ig').val(s.imgPromptIg || '');
+    $('#gp-set-imgprompt-of').val(s.imgPromptOf || '');
+    $('#gp-set-imgprompt-twwatch').val(s.imgPromptTwWatch || '');
+    $('#gp-set-imgprompt-twmy').val(s.imgPromptTwMy || '');
+    // Источник настроек картинок. Строку показываем, только когда установлено
+    // несколько расширений — иначе выбирать не из чего.
+    {
+        const sel = $('#gp-set-imgcfg');
+        const buckets = listImageBuckets();
+        $('#gp-imgcfg-row').toggleClass('gp-hidden', buckets.length < 2);
+        sel.empty().append(`<option value="">Определять автоматически</option>`);
+        for (const b of buckets) {
+            const note = b.ready ? (b.model || b.apiType) : 'не настроено';
+            sel.append($('<option>').val(b.key).text(`${b.key} — ${note}`));
+        }
+        if (s.imageCfgKey && !buckets.some(b => b.key === s.imageCfgKey)) s.imageCfgKey = '';
+        sel.val(s.imageCfgKey || '');
+        sel.off('change.gp').on('change.gp', function () {
+            getSettings().imageCfgKey = String($(this).val() || '');
+            $('#gp-imgmodels').empty();   // модели и профили относятся к прежнему расширению
+            // Профили и стили принадлежат прежнему расширению — сбрасываем,
+            // иначе телефон рисовал бы чужими настройками
+            getSettings().imageGenProfileId = '';
+            getSettings().imageGenStyleId = '';
+            saveSettingsDebounced();
+            $('#gp-set-imgprofile').empty().append($('<option>').val('').text('Как в основном чате'));
+            $('#gp-set-imgstyle').empty().append($('<option>').val('').text('Как в основном чате'));
+        });
+    }
+    // Профили подключения картинко-расширения (общее ведро всех форков).
+    // '' = телефон рисует через активный профиль основного чата
+    {
+        const sel = $('#gp-set-imgprofile');
+        const profiles = listIigProfiles();
+        sel.empty().append(`<option value="">Как в основном чате</option>`);
+        for (const p of profiles) sel.append($('<option>').val(p.id).text(p.name));
+        if (s.imageGenProfileId && !profiles.some(p => p.id === s.imageGenProfileId)) {
+            s.imageGenProfileId = ''; // профиль удалили в расширении — тихий сброс
+        }
+        sel.val(s.imageGenProfileId || '');
+        sel.off('change.gp').on('change.gp', function () {
+            getSettings().imageGenProfileId = String($(this).val() || '');
+            $('#gp-imgmodels').empty(); // список моделей от старого профиля устарел — ↻ перечитает
+            saveSettingsDebounced();
+        });
+    }
+    // Стиль картинок для телефона (стили расширения глобальные — не в профилях)
+    {
+        const sel = $('#gp-set-imgstyle');
+        const styles = listIigStyles();
+        sel.empty().append(`<option value="">Как в основном чате</option>`);
+        for (const p of styles) sel.append($('<option>').val(p.id).text(p.name));
+        if (s.imageGenStyleId && !styles.some(p => p.id === s.imageGenStyleId)) {
+            s.imageGenStyleId = ''; // стиль удалили в расширении — тихий сброс
+        }
+        sel.val(s.imageGenStyleId || '');
+        sel.off('change.gp').on('change.gp', function () {
+            getSettings().imageGenStyleId = String($(this).val() || '');
+            saveSettingsDebounced();
+        });
+    }
+    // Перевод панели (en) — оригиналы хранятся на нодах, переключение обратимо
+    const translatePanel = () => { try { trDom(document.getElementById('gp-settings-drawer')); } catch (e) { /* ignore */ } };
+    const updatePanelStatus = () => {
+        const enabled = getSettings().isEnabled;
+        const status = document.getElementById('gp-settings-status');
+        document.getElementById('gp-settings-drawer')?.classList.toggle('gp-settings-disabled', !enabled);
+        if (status) status.textContent = getSettings().lang === 'en'
+            ? (enabled ? 'Enabled' : 'Disabled')
+            : (enabled ? 'Включён' : 'Выключен');
+    };
+    $('#gp-set-lang').on('click mousedown', event => event.stopPropagation());
+    translatePanel();
+    updatePanelStatus();
+    $('#gp-set-lang').on('change', function () {
+        getSettings().lang = this.value === 'en' ? 'en' : 'ru';
+        saveSettingsDebounced();
+        translatePanel();
+        updatePanelStatus();
+        if (isPhoneOpen()) render();
+    });
+    $('#gp-set-enabled').on('change', function () {
+        getSettings().isEnabled = this.checked;
+        saveSettingsDebounced();
+        updatePhoneInjection();
+        updateFabBadge();
+        updatePanelStatus();
+    });
+    $('#gp-set-fab').on('change', function () {
+        getSettings().showFab = this.checked;
+        saveSettingsDebounced();
+        updateFabBadge();
+    });
+    $('#gp-set-inject').on('change', function () {
+        getSettings().injectPrompt = this.checked;
+        saveSettingsDebounced();
+        updatePhoneInjection();
+    });
+    $('#gp-set-depth').on('change', function () {
+        const value = Math.max(0, Math.min(100, parseInt(this.value) || 0));
+        this.value = value;
+        getSettings().injectDepth = value;
+        saveSettingsDebounced();
+        updatePhoneInjection();
+    });
+    $('#gp-set-scam').on('change', function () {
+        getSettings().scamEnabled = this.checked;
+        saveSettingsDebounced();
+    });
+    $('#gp-set-hide').on('change', function () {
+        getSettings().hideSmsInChat = this.checked;
+        saveSettingsDebounced();
+        applyChatHiding();
+    });
+    // Ник юзера хранится per-chat (в метаданных) — подставляем при открытии панели
+    try { $('#gp-set-handle').val(getUserHandle().replace(/^@/, '')); } catch (e) { /* чат ещё не загружен */ }
+    $('#gp-set-handle').on('change', function () {
+        setUserHandle(this.value);
+        updatePhoneInjection();
+    });
+    $('#gp-set-maxtokens').on('change', function () {
+        getSettings().socialMaxTokens = Math.max(0, Math.min(32000, parseInt(this.value) || 0));
+        saveSettingsDebounced();
+    });
+    $('#gp-set-imgmodel').on('change', function () {
+        const st = getSettings();
+        st.imageGenModel = this.value.trim();
+        // Запоминаем, какая модель стояла в расширении: сменит её там —
+        // телефон перестанет держаться за выбранную здесь
+        st.imageGenModelBase = st.imageGenModel ? (currentExtModel() || '') : '';
+        saveSettingsDebounced();
+    });
+    // Список моделей — из автоопределённого картинко-расширения
+    $('#gp-imgmodel-refresh').on('click', async function () {
+        const btn = $(this);
+        btn.find('i').addClass('fa-spin');
+        try {
+            const mod = await import('./social.js');
+            const models = await mod.fetchImageModels();
+            $('#gp-imgmodels').html(models.map(m => `<option value="${$('<i>').text(m).html()}">`).join(''));
+            toast(`Моделей: ${models.length} — открой поле, появится список`, 'fa-check');
+        } catch (e) {
+            console.warn('[GlassPhone] fetch models failed:', e);
+            toast(`Не удалось: ${String(e?.message || e).slice(0, 50)}`, 'fa-circle-exclamation');
+        } finally {
+            btn.find('i').removeClass('fa-spin');
+        }
+    });
+    $('#gp-set-square').on('change', function () {
+        getSettings().imageGenSquare = this.checked;
+        saveSettingsDebounced();
+    });
+    $('#gp-set-tagmode').on('change', function () {
+        getSettings().imgTagMode = this.checked;
+        saveSettingsDebounced();
+    });
+    // Промпты сохраняются сами, как только уходит фокус: «Применить» легко
+    // не заметить, и генерация уходила со старым текстом
+    const saveImgPrompts = () => {
+        getSettings().imgPromptIg = $('#gp-set-imgprompt-ig').val() || '';
+        getSettings().imgPromptOf = $('#gp-set-imgprompt-of').val() || '';
+        getSettings().imgPromptTwWatch = $('#gp-set-imgprompt-twwatch').val() || '';
+        getSettings().imgPromptTwMy = $('#gp-set-imgprompt-twmy').val() || '';
+        saveSettingsDebounced();
+    };
+    $('#gp-set-imgprompt-ig, #gp-set-imgprompt-of, #gp-set-imgprompt-twwatch, #gp-set-imgprompt-twmy')
+        .on('change blur', saveImgPrompts);
+    $('#gp-imgprompt-apply').on('click', function () {
+        saveImgPrompts();
+        toast('Промпты картинок сохранены', 'fa-check');
+    });
+    $('#gp-set-safearea').on('change', function () {
+        getSettings().forceSafeArea = this.checked;
+        saveSettingsDebounced();
+        document.body.classList.toggle('gp-native-shell', this.checked);
+    });
+    $('#gp-set-anon').on('change', function () {
+        getSettings().anonChannel = this.checked;
+        saveSettingsDebounced();
+        updatePhoneInjection();
+    });
+    $('#gp-set-anonprice').on('change', function () {
+        getSettings().anonRevealPrice = Math.max(0, Math.round(Number(this.value) || 0)) || 2500;
+        saveSettingsDebounced();
+    });
+    $('#gp-set-sociallog').on('change', function () {
+        getSettings().socialLogToChat = this.checked;
+        saveSettingsDebounced();
+    });
+    $('#gp-set-compact').on('change', function () {
+        getSettings().compactRules = this.checked;
+        saveSettingsDebounced();
+        updatePhoneInjection();
+    });
+    // Отчёт: последние запросы/действия телефона (когда в консоли пусто)
+    $('#gp-show-report').on('click', function () {
+        const box = document.getElementById('gp-report-box');
+        if (!box) return;
+        if (!box.hidden) { box.hidden = true; return; }
+        box.textContent = buildReport(14);
+        box.hidden = false;
+        try {
+            navigator.clipboard?.writeText(box.textContent);
+            toast('Отчёт скопирован в буфер', 'fa-clipboard-check');
+        } catch (e) { /* без буфера — просто показываем */ }
+    });
+    // Чистка данных телефона В ЭТОМ ЧАТЕ: контакты, переписки, соцсети, банк,
+    // магазин, дискорд, заметки. Настройки расширения не трогаем.
+    $('#gp-wipe-chat').on('click', async function () {
+        if (!confirm('Стереть все данные телефона в ЭТОМ чате?\n\nУдалятся контакты, переписки, посты, банк, заказы, дискорд и заметки. Настройки расширения останутся.\n\nОтменить это будет нельзя.')) return;
+        // Контакты и переписки строятся ИЗ ЧАТА: не убрав теги и строки
+        // журнала из истории, телефон восстановит их при первом же скане
+        const alsoChat = confirm('Убрать следы и из самой истории чата?\n\nЭто удалит служебные строки «Событие мира» и скрытые теги телефона из реплик. Без этого контакты и переписки вернутся при следующем сканировании.\n\nСообщения ролевой не пострадают.');
+        factoryReset({ settings: false, chatData: true });
+        let note = '';
+        if (alsoChat) {
+            const { removed, cleaned } = await wipePhoneTraces();
+            note = ` · история: −${removed}, правок ${cleaned}`;
+        }
+        resetIncomingCounters();
+        updatePhoneInjection();
+        updateFabBadge();
+        applyChatHiding();
+        if (isPhoneOpen()) render();
+        toast(`Данные телефона в этом чате стёрты${note}`, 'fa-broom');
+    });
+
+    // Полный сброс: настройки + данные текущего чата
+    $('#gp-factory-reset').on('click', async function () {
+        if (!confirm('Сбросить ВСЁ к заводскому состоянию?\n\nСлетят настройки расширения (тема, промпты, профили, язык) И данные телефона в этом чате.\n\nДанные в других чатах останутся — их чистить нужно там же, своей кнопкой.')) return;
+        if (!confirm('Точно? Отменить это будет нельзя.')) return;
+        const alsoChat = confirm('Убрать следы и из самой истории чата?\n\nЭто удалит служебные строки «Событие мира» и скрытые теги телефона из реплик. Без этого контакты и переписки вернутся при следующем сканировании.\n\nСообщения ролевой не пострадают.');
+        factoryReset({ settings: true, chatData: true });
+        if (alsoChat) await wipePhoneTraces();
+        saveSettingsDebounced();
+        resetIncomingCounters();
+        applySkin();
+        applyWallpaper();
+        updatePhoneInjection();
+        updateFabBadge();
+        if (isPhoneOpen()) closePhone();
+        applyChatHiding();
+        toast('Сброшено к заводским настройкам', 'fa-broom');
+        // Панель настроек построена из прежних значений — перечитываем
+        $('#gp-settings-drawer').remove();
+        setupSettingsPanel();
+    });
+
+    $('#gp-report-box').on('dblclick', function () {
+        clearLog();
+        this.textContent = buildReport(14);
+    });
+    $('#gp-reset-fab').on('click', function () {
+        getSettings().fabPos = null;
+        saveSettingsDebounced();
+        const fab = document.getElementById('gp-fab');
+        if (fab) {
+            const vw = window.innerWidth, vh = window.innerHeight;
+            fab.style.left = `${vw - 48 - 16}px`;
+            fab.style.top = `${Math.round(vh * 0.55)}px`;
+            fab.style.right = 'auto';
+            fab.style.bottom = 'auto';
+        }
+        toast('Кнопка возвращена на место', 'fa-mobile-screen-button');
+    });
+
+    // Профиль подключения для соцсетей (из Connection Manager)
+    const fillProfiles = () => {
+        const sel = document.getElementById('gp-set-profile');
+        if (!sel) return;
+        const cur = getSettings().socialProfileId || '';
+        let profiles = [];
+        try {
+            profiles = SillyTavern.getContext()?.extensionSettings?.connectionManager?.profiles || [];
+        } catch (e) { /* ignore */ }
+        sel.innerHTML = `<option value="">Текущий API (изолированно, без пресета)</option>`
+            + profiles.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${$('<i>').text(p.name || p.id).html()}</option>`).join('');
+        const alive = profiles.some(p => p.id === cur);
+        sel.value = alive ? cur : '';
+        // Профиль удалили или переименовали в Connection Manager: список
+        // показывал «Текущий API», а в настройках лежал мёртвый id — и каждая
+        // генерация падала с «профиль не найден». Сбрасываем по-настоящему.
+        if (cur && !alive) {
+            getSettings().socialProfileId = '';
+            saveSettingsDebounced();
+        }
+    };
+    fillProfiles();
+    // Профили могли добавиться позже — обновляем список при открытии выпадашки
+    $('#gp-set-profile').on('mousedown', fillProfiles);
+    $('#gp-set-profile').on('change', function () {
+        getSettings().socialProfileId = this.value;
+        saveSettingsDebounced();
+    });
+    $('#gp-set-ctxmode').on('change', function () {
+        getSettings().socialContextMode = this.value;
+        saveSettingsDebounced();
+    });
+    $('#gp-set-prefill').on('change', function () {
+        getSettings().usePrefill = this.checked;
+        saveSettingsDebounced();
+    });
+    $('#gp-set-figspaces').on('change', function () {
+        getSettings().useFigureSpaces = this.checked;
+        saveSettingsDebounced();
+    });
+    // Проверка профиля подключения — показывает РЕАЛЬНУЮ ошибку (а не «API request failed»)
+    $('#gp-profile-test').on('click', async function () {
+        const btn = $(this);
+        btn.find('i').removeClass('fa-plug-circle-check').addClass('fa-spinner fa-spin');
+        try {
+            const mod = await import('./social.js');
+            const out = await mod.testSocialProfile();
+            toast(`Профиль ОК: «${out}»`, 'fa-check');
+        } catch (e) {
+            const msg = String(e?.message || e).slice(0, 140);
+            console.error('[GlassPhone] проверка профиля:', e);
+            toast(`Профиль не отвечает: ${msg}`, 'fa-circle-exclamation');
+        } finally {
+            btn.find('i').removeClass('fa-spinner fa-spin').addClass('fa-plug-circle-check');
+        }
+    });
+
+    // Обои и свой CSS переехали в приложение «Оформление» внутри телефона
+    // (дублирование в панели расширения убрано по просьбе юзера)
+}
+
+jQuery(async () => {
+    try {
+        getSettings();
+        setupSettingsPanel();
+        initUI();
+        updatePhoneInjection();
+        // Первичный замер входящих без тостов
+        setTimeout(() => resetIncomingCounters(), 800);
+
+        // ── Новые сообщения: пересчёт тредов, тосты, бейдж, обновление инжекции ──
+        const onNewMessage = () => {
+            if (!getSettings().isEnabled) return;
+            // Модель могла скопировать формат журнальной строки себе в пост —
+            // убираем, пока телефон не спрятал весь ответ
+            try { stripFakeJournal(); } catch (e) { /* ignore */ }
+            checkNewIncoming();
+            // Персонаж запостил из ролевой (теги tel:tweet / tel:insta) → в ленты + тост
+            try {
+                const { tweets, posts } = harvestSocialTags();
+                if (tweets > 0) toast(`Новый твит в ленте`, 'fa-x-twitter');
+                if (posts > 0) toast(`Новый пост в Instagram`, 'fa-instagram');
+            } catch (e) { /* ignore */ }
+            // Транзакции из ролевой (tel:bank) → баланс + тост
+            try {
+                const n = harvestBankTags();
+                if (n > 0) toast(`Банк: ${n} ${n === 1 ? 'операция' : 'операции'} из ролевой`, 'fa-building-columns');
+            } catch (e) { /* ignore */ }
+            // Посты, которые ролевая опубликовала в каналах
+            try {
+                const { n, names } = harvestChannelTags();
+                if (n > 0) toast(`Каналы: ${names.slice(0, 2).join(', ')}${names.length > 2 ? '…' : ''} · ${n} ${n === 1 ? 'новый пост' : 'новых постов'}`, 'fa-tower-broadcast');
+            } catch (e) { /* ignore */ }
+            // Анонимки из ролевой: сплетни и вопросы к ней через @
+            try {
+                const n = harvestAnonTags();
+                if (n > 0) toast(`${ANON_NAME}: ${n} ${n === 1 ? 'новый пост' : 'новых постов'}`, 'fa-user-secret');
+            } catch (e) { /* ignore */ }
+            // Её саму пробили — это надо сказать громко
+            try {
+                for (const b of harvestAnonBust()) {
+                    toast(`${b.who} узнал, что анонимку писала ты`, 'fa-user-secret');
+                }
+            } catch (e) { /* ignore */ }
+            // Планы и даты, о которых договорились в сцене
+            try {
+                const n = harvestPlanTags();
+                if (n > 0) toast(`В календарь: ${n}`, 'fa-calendar-check');
+            } catch (e) { /* ignore */ }
+            notifyBankReminders();
+            notifyDeliveries();   // курьер выехал / заказ приехал
+            // Мошенники: редкий скам-смс (сам себя гейтит кулдауном и шансом)
+            maybeScamSms().then(sms => { if (sms) deliverScamSms(sms); }).catch(() => {});
+            updatePhoneInjection();
+            applyChatHiding();
+            setTimeout(applyChatHiding, 350); // второй проход — переживает ре-рендер ST
+            if (isPhoneOpen()) render();
+        };
+        eventSource.on(event_types.MESSAGE_RECEIVED, onNewMessage);
+        if (event_types.GENERATION_ENDED) {
+            eventSource.on(event_types.GENERATION_ENDED, onNewMessage);
+        }
+        eventSource.on(event_types.MESSAGE_SENT, () => {
+            if (!getSettings().isEnabled) return;
+            updatePhoneInjection();
+            applyChatHiding();
+            if (isPhoneOpen()) render();
+        });
+        if (event_types.USER_MESSAGE_RENDERED) {
+            eventSource.on(event_types.USER_MESSAGE_RENDERED, () => applyChatHiding());
+        }
+        if (event_types.CHARACTER_MESSAGE_RENDERED) {
+            eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, () => applyChatHiding());
+        }
+
+        // ── Правки истории: телефон просто пересобирается из чата ──
+        const onEdit = () => {
+            if (!getSettings().isEnabled) return;
+            invalidateChatCache();
+            // Свайп уносит вариант ответа вместе с его деньгами: пересверяемся
+            // сразу, иначе баланс держал бы списание до следующего сообщения
+            try { harvestBankTags(); } catch (e) { /* ignore */ }
+            checkNewIncoming({ silent: true });
+            applyChatHiding();
+        };
+        if (event_types.MESSAGE_DELETED) eventSource.on(event_types.MESSAGE_DELETED, onEdit);
+        if (event_types.MESSAGE_EDITED) eventSource.on(event_types.MESSAGE_EDITED, onEdit);
+        if (event_types.MESSAGE_UPDATED) eventSource.on(event_types.MESSAGE_UPDATED, onEdit);
+        if (event_types.MESSAGE_SWIPED) eventSource.on(event_types.MESSAGE_SWIPED, onEdit);
+
+        // ── Смена чата: новый источник правды, счётчики с нуля ──
+        if (event_types.CHAT_CHANGED) {
+            eventSource.on(event_types.CHAT_CHANGED, () => {
+                invalidateChatCache();
+                setTimeout(() => {
+                    invalidateChatCache();
+                    resetIncomingCounters();
+                    try { harvestSocialTags(); } catch (e) { /* ignore */ }
+                    try { harvestBankTags(); } catch (e) { /* ignore */ }
+                    updateFabBadge();
+                    updatePhoneInjection();
+                    applyChatHiding();
+                    // Ник юзера per-chat — обновляем поле в настройках
+                    try { $('#gp-set-handle').val(getUserHandle().replace(/^@/, '')); } catch (e) { /* ignore */ }
+                    if (isPhoneOpen()) render();
+                }, 150);
+            });
+        }
+
+        // ── MutationObserver: ST пересобирает .mes при рендере/скролле — прячем заново.
+        // Наблюдаем ТОЛЬКО childList (не attributes), чтобы не зациклиться на своём же classList.
+        try {
+            const chatEl = document.getElementById('chat');
+            if (chatEl) {
+                let pending = false;
+                const observer = new MutationObserver(() => {
+                    if (pending) return;
+                    pending = true;
+                    requestAnimationFrame(() => {
+                        pending = false;
+                        applyChatHiding();
+                    });
+                });
+                observer.observe(chatEl, { childList: true, subtree: false });
+            }
+        } catch (e) {
+            console.warn('[GlassPhone] hide-observer failed:', e);
+        }
+
+        // Первичное скрытие при загрузке
+        setTimeout(applyChatHiding, 600);
+
+        // Версия — в консоль и в панель настроек (сверка ПК ↔ айфон против стейл-синка)
+        try { document.getElementById('gp-version-label').textContent = `Версия: ${GP_VERSION}`; } catch (e) { /* ignore */ }
+    } catch (e) {
+        console.error('[GlassPhone] FATAL:', e);
+    }
+});

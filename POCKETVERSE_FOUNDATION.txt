@@ -1,0 +1,4 @@
+PocketVerse v0.6.0 WORKHORSE
+Foundation: user-supplied Phone-ST v2.35.0 by Delidgi1.
+This build intentionally keeps the proven phone implementation intact and isolates PocketVerse settings/chat metadata under the pocketverse key.
+NOVA was reviewed as an additional reference for later Brain/media/social customization.
