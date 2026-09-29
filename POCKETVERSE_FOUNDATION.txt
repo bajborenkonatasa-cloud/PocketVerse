@@ -20,3 +20,5 @@ module initialization. This is the safe first cleanup checkpoint.
 PocketVerse v0.9.2 SAFE BRAIN CONTROL: ordinary RP uses a tiny phone bridge; full phone rules wake only for phone turns. Brain UI controls Lite/Balanced/Deep, photos, meme intent, groups, and custom phone instructions. Built from user-confirmed rollback ZIP.
 
 PocketVerse v1.0.0 MEDIA BRIDGE 1: automatic incoming character photos use the already-configured image extension; optional GIPHY GIF/meme resolution via local API key; meme intent is stored in tel:sms and works in direct/group threads.
+
+PocketVerse v1.0.3 GIF STABILITY: local media is persisted in PocketVerse metadata (not RP chat tags); Messages DOM is frozen during quiet LLM generation to stop render storms; GIPHY failures are surfaced as a toast and success is logged.

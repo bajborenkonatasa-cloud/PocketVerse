@@ -5,7 +5,7 @@ import {
     getSettings, getThreadList, getThread, markRead, addManualContact, hideContact,
     randomNumber, getTotalUnread, fmtTime, getRpDateTime, keyOf, getHiddenMessageIndexes,
     addGroup, delGroup, updateGroupMembers, renameContact, banAccount,
-    isSmsBlocked, blockSmsContact, unblockSmsContact, saveMeta, invalidateChatCache, getMeta, addLocalSms, ingestQuietPhoneReply,
+    isSmsBlocked, blockSmsContact, unblockSmsContact, saveMeta, invalidateChatCache, getMeta, addLocalSms, updateLocalSms, ingestQuietPhoneReply,
 } from './state.js';
 import { updatePhoneInjection, getPhoneBrainSnapshot } from './prompts.js';
 import {
@@ -646,6 +646,11 @@ const BLEED_SCREENS = new Set(['discord', 'dchannel', 'twitch', 'stream', 'mystr
 export function render() {
     const screen = document.getElementById('gp-screen');
     if (!screen || !isPhoneOpen()) return;
+    // During a quiet phone LLM request SillyTavern and other extensions can emit many
+    // render-triggering events. Keep the already-painted Messages DOM frozen so the
+    // phone does not flash/rebuild (the old "disco" bug). We render exactly once
+    // after the quiet request finishes.
+    if (_pvThreadRenderFrozen && currentScreen === 'thread') return;
     bindStopGen(screen);
     bindZoom(screen);
     screen.classList.toggle('gp-screen-bleed', BLEED_SCREENS.has(currentScreen));
@@ -1888,6 +1893,7 @@ function voiceBubbleHtml(m) {
     return `<div class="gp-voice" style="--gp-voice-dur:${dur}s"><button class="gp-voice-play" data-voiceplay aria-label="Воспроизвести">${ic('fa-play')}</button><div class="gp-voice-wave">${bars}</div><span class="gp-voice-dur">${fmtVoiceDur(dur)}</span></div>${m.text ? `<div class="gp-voice-tr">${esc(m.text)}</div>` : ''}`;
 }
 
+let _pvThreadRenderFrozen = false;
 const _pvAutoMediaBusy = new Set();
 async function autoResolveIncomingMedia(t) {
     const st = getSettings();
@@ -1903,10 +1909,13 @@ async function autoResolveIncomingMedia(t) {
                 if (await isImageGenAvailable()) {
                     const author = m.from || t.name;
                     const src = await generatePostImage({ imgDesc:m.photoDesc, author, ak:`contact:${keyOf(author)}`, kind:'ig', mms:true }, null, key);
-                    if (src && await rewriteSmsTag(m, t, j => { j.img = src; })) m.img = src;
+                    if (src) {
+                    const ok = m.localId ? updateLocalSms(m.localId, { img: src }) : await rewriteSmsTag(m, t, j => { j.img = src; });
+                    if (ok) m.img = src;
+                }
                 }
             } catch (e) { console.warn('[PocketVerse] auto incoming photo failed:', e); }
-            finally { _mmsGenBusy.delete(key); _pvAutoMediaBusy.delete(key); render(); }
+            finally { _mmsGenBusy.delete(key); _pvAutoMediaBusy.delete(key); if (!_pvThreadRenderFrozen) render(); }
             return; // по одному медиа за цикл, чтобы не запускать пачку генераций одновременно
         }
         // Мем/GIF: отдельный бесплатный media lookup, LLM второй раз НЕ вызывается.
@@ -1914,9 +1923,13 @@ async function autoResolveIncomingMedia(t) {
             _pvAutoMediaBusy.add(key);
             try {
                 const g = await searchGiphyMeme(m.memeQuery);
-                if (g?.url && await rewriteSmsTag(m, t, j => { j.gif = g.url; j.gifPage = g.page || ''; })) m.gifUrl = g.url;
-            } catch (e) { console.warn('[PocketVerse] GIPHY resolve failed:', e); }
-            finally { _pvAutoMediaBusy.delete(key); render(); }
+                if (g?.url) {
+                    const ok = m.localId ? updateLocalSms(m.localId, { gif: g.url }) : await rewriteSmsTag(m, t, j => { j.gif = g.url; j.gifPage = g.page || ''; });
+                    if (ok) { m.gifUrl = g.url; console.info('[PocketVerse] GIPHY OK', { query:m.memeQuery, id:g.id, url:g.url }); }
+                    else throw new Error('GIF найден, но не удалось сохранить его в сообщении');
+                }
+            } catch (e) { console.warn('[PocketVerse] GIPHY resolve failed:', e); toast(`GIPHY: ${String(e?.message || e).slice(0,90)}`, 'fa-triangle-exclamation'); }
+            finally { _pvAutoMediaBusy.delete(key); if (!_pvThreadRenderFrozen) render(); }
             return;
         }
     }
@@ -7179,6 +7192,7 @@ async function flushPending(key) {
         }
         pvClear(key);
         applyChatHiding(); typingKey = key; render(); updatePhoneInjection();
+        _pvThreadRenderFrozen = true;
         const ctx = SillyTavern.getContext();
         const ladder = batch.map((x,i)=>`${i+1}. ${x}`).join('\n');
         const quietPrompt = isGroup
@@ -7188,7 +7202,7 @@ async function flushPending(key) {
         if (rawReply && rawReply.trim()) await insertGhostReply(name, rawReply.trim(), isGroup ? name : '');
     } catch(e) {
         console.error('[PocketVerse] ladder send failed:', e); toast('Не удалось отправить лесенку', 'fa-circle-exclamation');
-    } finally { sending=false; typingKey=null; render(); updateFabBadge(); applyChatHiding(); }
+    } finally { _pvThreadRenderFrozen=false; sending=false; typingKey=null; render(); updateFabBadge(); applyChatHiding(); }
 }
 
 async function doSend(key, opts = {}) {

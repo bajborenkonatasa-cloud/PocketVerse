@@ -5,7 +5,7 @@ import { extension_settings, saveMetadataDebounced } from '../../../extensions.j
 export const EXT_NAME = 'pocketverse_foundation';
 // Версия для сверки инстансов (ПК ↔ айфон): видна в настройках и в консоли.
 // БАМПАТЬ при каждом коммите вместе с manifest.json!
-export const GP_VERSION = '2.35.0-pocketverse.7';
+export const GP_VERSION = '2.35.0-pocketverse.8';
 const META_KEY = 'pocketverse_foundation';
 
 // ── Глобальные настройки ──
@@ -1246,6 +1246,17 @@ export function addLocalSms(data = {}) {
     if (meta.localSms.length > 2000) meta.localSms.splice(0, meta.localSms.length - 2000);
     saveMeta(); invalidateChatCache();
     return rec;
+}
+
+// Update a PocketVerse-local SMS in place (media/reaction/etc.) without ever touching ST chat[].
+export function updateLocalSms(id, patch = {}) {
+    const meta = getMeta();
+    const rec = (meta.localSms || []).find(x => x && String(x.id) === String(id));
+    if (!rec) return false;
+    const allowed = ['photo','img','meme','gif','voice','react','shot','number','text'];
+    for (const k of allowed) if (Object.prototype.hasOwnProperty.call(patch, k)) rec[k] = patch[k];
+    saveMeta(); invalidateChatCache();
+    return true;
 }
 
 export function ingestQuietPhoneReply(raw, fallbackName = '', fallbackChat = '') {
