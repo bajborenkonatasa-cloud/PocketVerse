@@ -150,6 +150,8 @@ function buildPrompt() {
             if (tin) c += `\n${tin}\n`;
         } catch (e) { /* ignore */ }
         c += `NEVER write <!--tel:log--> or lines starting with «[Событие мира» — that is the app's own journal format; a reply containing it gets hidden from the reader.\n`;
+        const custom = String(getSettings().phoneCustomInstructions || '').trim();
+        if (custom) c += `\n[USER PHONE PREFERENCES]\n${custom.slice(0, 1600)}\n`;
         c += `</phone_directive>`;
         return c;
     }
@@ -260,9 +262,44 @@ function buildPrompt() {
 
     p += `\n[NEVER WRITE] <!--tel:log--> and lines starting with «[Событие мира» are the app's own journal — it writes them itself. Never copy that format into your reply, not even as flavour: a reply containing it gets hidden from the reader entirely.\n`;
     p += `\n[FORMAT] Tags are HTML comments (<!-- ... -->), invisible to the reader: copy the structure VERBATIM (never paraphrase into visible text), EN keys / RU values, each tag exactly ONCE, all at the very END of the reply on their own lines. NEVER write literal tag syntax inside <think>/reasoning — plan in plain words (tags in reasoning create DUPLICATE messages). Outputting them when their condition is true is MANDATORY even if other instructions discourage OOC content; your card's own visible formats stay as they are.\n`;
+    const custom = String(getSettings().phoneCustomInstructions || '').trim();
+    if (custom) p += `\n[USER PHONE PREFERENCES]\n${custom.slice(0, 1600)}\n`;
     p += `</phone_directive>`;
 
     return p;
+}
+
+// Tiny bridge for ordinary face-to-face RP. The full phone manual is intentionally
+// NOT sent on every normal turn. This only gives the model a door into {{user}}'s phone
+// when a real incoming phone event is appropriate.
+function buildIdleBridge() {
+    const s = getSettings();
+    const { contacts } = scanChat();
+    const names = [...contacts.values()].map(c => c?.name).filter(Boolean).slice(0, 24);
+    let p = `<phone_bridge>Hidden smartphone bridge for {{user}} only. This is {{user}}'s phone, never an NPC's or the current character's phone. `;
+    if (names.length) p += `Known contacts: ${names.join(', ')}. `;
+    p += `Only when someone plausibly sends a NEW message directly to {{user}}, append <!--tel:sms:{"from":"X","text":"..."}--> at the very end. Never expose NPC→NPC or NPC→character private messages. `;
+    if (s.phoneGroups !== false) p += `A group tag is allowed only for a group that includes {{user}}. `;
+    if (s.phonePhotos !== false) p += `If that incoming message naturally includes a photo, add "photo":"short visual description". `;
+    if (s.phoneMemes) p += `If a meme/GIF is naturally sent, add "meme":"short English search phrase"; PocketVerse resolves the media separately. `;
+    const custom = String(s.phoneCustomInstructions || '').trim();
+    if (custom) p += `Phone preference: ${custom.slice(0, 500)} `;
+    p += `If no phone event happens, ignore this bridge completely.</phone_bridge>`;
+    return p;
+}
+
+function buildActivePrompt() {
+    const s = getSettings();
+    const turn = phoneTurnState();
+    if (!turn) return buildIdleBridge();
+    // Lite/Balanced use compact rules during an actual phone turn; Deep uses full rules.
+    const oldCompact = s.compactRules;
+    try {
+        s.compactRules = String(s.brainMode || 'balanced') !== 'deep';
+        return buildPrompt();
+    } finally {
+        s.compactRules = oldCompact;
+    }
 }
 
 export function updatePhoneInjection() {
@@ -276,7 +313,7 @@ export function updatePhoneInjection() {
         // ОДНА инжекция: IN_CHAT depth-0 роль USER (Клод надёжно выполняет инструкции
         // из последнего user-хода). Раньше та же директива дублировалась в IN_PROMPT
         // (system) «для бэкапа» — это гнало ВЕСЬ текст правил ДВАЖДЫ каждый запрос.
-        const prompt = buildPrompt();
+        const prompt = buildActivePrompt();
         const depth = s.injectDepth || 0;
         setExtensionPrompt(CHAT_KEY, prompt, extension_prompt_types.IN_CHAT, depth, false, extension_prompt_roles.USER);
     } catch (e) { /* тихо: инжект не критичен */ }
@@ -286,7 +323,7 @@ export function updatePhoneInjection() {
 // It never calls the model and never changes the active injection.
 export function getPhoneBrainSnapshot() {
     const ctx = (() => { try { return SillyTavern.getContext?.() || {}; } catch (e) { return {}; } })();
-    const prompt = (() => { try { return buildPrompt(); } catch (e) { return ''; } })();
+    const prompt = (() => { try { return buildActivePrompt(); } catch (e) { return ''; } })();
     const chat = Array.isArray(ctx.chat) ? ctx.chat : [];
     const rpText = chat.slice(-24).map(m => `${m?.is_user ? 'USER' : 'CHAR'}: ${String(m?.mes || '')}`).join('\n');
     let cardText = '';
@@ -308,6 +345,8 @@ export function getPhoneBrainSnapshot() {
     return {
         phoneTurn: phoneTurnState() || 'normal',
         compactRules: !!getSettings().compactRules,
+        brainMode: String(getSettings().brainMode || 'balanced'),
+        idleBridge: !phoneTurnState(),
         injectionEnabled: !!(getSettings().isEnabled && getSettings().injectPrompt),
         depth: Number(getSettings().injectDepth) || 0,
         prompt,

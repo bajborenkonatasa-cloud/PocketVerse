@@ -5,7 +5,7 @@ import { extension_settings, saveMetadataDebounced } from '../../../extensions.j
 export const EXT_NAME = 'pocketverse_foundation';
 // Версия для сверки инстансов (ПК ↔ айфон): видна в настройках и в консоли.
 // БАМПАТЬ при каждом коммите вместе с manifest.json!
-export const GP_VERSION = '2.35.0-foundation.1';
+export const GP_VERSION = '2.35.0-pocketverse.5';
 const META_KEY = 'pocketverse_foundation';
 
 // ── Глобальные настройки ──
@@ -103,6 +103,14 @@ const defaultSettings = () => ({
     forceSafeArea: false,
     // Компактные правила в инжекте (экономия ~60% токенов директивы)
     compactRules: false,
+    // PocketVerse Brain Control: lite | balanced | deep.
+    brainMode: 'balanced',
+    // Небольшой пользовательский слой поведения телефона.
+    phoneCustomInstructions: '',
+    // Медиа-возможности: сами интеграции могут подключаться отдельно.
+    phonePhotos: true,
+    phoneMemes: false,
+    phoneGroups: true,
     // Городская анонимка «Подслушано» в каналах
     anonChannel: true,
     // Тиндер: анкеты, колода и мэтчи

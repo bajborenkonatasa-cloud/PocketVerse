@@ -1177,28 +1177,56 @@ function renderLock(screen) {
 function renderBrain(screen) {
     currentScreen = 'brain';
     const b = getPhoneBrainSnapshot();
+    const st = getSettings();
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const mode = b.phoneTurn === 'now' ? '📱 PHONE-ONLY' : b.phoneTurn === 'justEnded' ? '↩ после телефона' : '💬 обычный RP';
+    const mode = b.phoneTurn === 'now' ? '📱 PHONE-ONLY' : b.phoneTurn === 'justEnded' ? '↩ после телефона' : '😴 обычный RP · мини-мост';
+    const brain = String(st.brainMode || 'balanced');
     screen.innerHTML = `
       <div class="gp-brain">
-        <div class="gp-brain-head"><button class="gp-back">‹</button><div><b>🧠 Мозг PocketVerse</b><small>Ничего не отправляет модели</small></div><button class="gp-brain-refresh" title="Обновить">↻</button></div>
+        <div class="gp-brain-head"><button class="gp-back">‹</button><div><b>🧠 Мозг PocketVerse</b><small>Настройки здесь не вызывают модель</small></div><button class="gp-brain-refresh" title="Обновить">↻</button></div>
         <div class="gp-brain-scroll">
-          <div class="gp-brain-status"><span>${b.injectionEnabled ? '🟢 Инжект включён' : '⚪ Инжект выключен'}</span><span>${mode}</span><span>depth ${b.depth}</span></div>
-          <div class="gp-brain-grid">
-            <div><b>📱 PocketVerse</b><strong>≈ ${b.counts.phone}</strong><small>токенов · ${b.counts.phoneChars} знаков</small></div>
-            <div><b>🎭 Character Card</b><strong>≈ ${b.counts.card}</strong><small>видимая оценка</small></div>
-            <div><b>👤 Persona</b><strong>≈ ${b.counts.persona}</strong><small>если доступна расширению</small></div>
-            <div><b>📖 последние 24 хода</b><strong>≈ ${b.counts.rp}</strong><small>диагностический срез</small></div>
+          <div class="gp-brain-status"><span>${b.injectionEnabled ? '🟢 Инжект включён' : '⚪ Инжект выключен'}</span><span>${mode}</span><span>≈ ${b.counts.phone} ток.</span></div>
+          <div class="gp-brain-control">
+            <b>Режим телефонного мозга</b><small>В обычной RP-сцене во всех режимах работает только маленький мост. Полные правила просыпаются при телефонном ходе.</small>
+            <div class="gp-brain-modes">
+              <button data-brain="lite" class="${brain==='lite'?'on':''}">Lite<small>минимум</small></button>
+              <button data-brain="balanced" class="${brain==='balanced'?'on':''}">Balanced<small>рекомендуется</small></button>
+              <button data-brain="deep" class="${brain==='deep'?'on':''}">Deep<small>полные правила</small></button>
+            </div>
           </div>
-          <div class="gp-brain-warning">≈ — оценка по тексту, не счётчик провайдера. PocketVerse не притворяется, что знает скрытый system/preset SillyTavern.</div>
-          <details class="gp-brain-details" open><summary>📱 Точный инжект PocketVerse</summary><pre>${esc(b.prompt)}</pre></details>
-          <details class="gp-brain-details"><summary>🎭 Что удалось прочитать из Character Card</summary><pre>${esc(b.cardText || 'Недоступно в текущем контексте.')}</pre></details>
-          <details class="gp-brain-details"><summary>📖 RP-срез (последние 24 хода)</summary><pre>${esc(b.rpText || 'История пуста.')}</pre></details>
-          <div class="gp-brain-note">${esc(b.note)}</div>
+          <div class="gp-brain-control"><b>Возможности</b>
+            <label><input type="checkbox" id="gp-bc-photo" ${st.phonePhotos!==false?'checked':''}> 📸 Фото</label>
+            <label><input type="checkbox" id="gp-bc-meme" ${st.phoneMemes?'checked':''}> 😂 Мемы/GIF <small>мост подготовлен; источник подключим отдельно</small></label>
+            <label><input type="checkbox" id="gp-bc-groups" ${st.phoneGroups!==false?'checked':''}> 👥 Групповые чаты</label>
+          </div>
+          <div class="gp-brain-control"><b>✏️ Мои инструкции</b><small>Только поведение телефона; Character Card не заменяет.</small><textarea id="gp-bc-custom" maxlength="1600" rows="4" placeholder="Например: пиши коротко; эмодзи по характеру; фото и мемы только к месту...">${esc(st.phoneCustomInstructions || '')}</textarea><button id="gp-bc-save">Сохранить</button></div>
+          <div class="gp-brain-grid">
+            <div><b>📱 Сейчас добавляет PocketVerse</b><strong>≈ ${b.counts.phone}</strong><small>${b.counts.phoneChars} знаков</small></div>
+            <div><b>🎭 Character Card</b><strong>≈ ${b.counts.card}</strong><small>диагностика, управляет ST</small></div>
+            <div><b>👤 Persona</b><strong>≈ ${b.counts.persona}</strong><small>диагностика</small></div>
+            <div><b>📖 последние 24 хода</b><strong>≈ ${b.counts.rp}</strong><small>не добавляются PocketVerse повторно</small></div>
+          </div>
+          <div class="gp-brain-warning">Важно: число 📱 — именно текущий текст PocketVerse. Card/Persona/RP показаны для понимания контекста, но PocketVerse не дублирует их этим экраном.</div>
+          <details class="gp-brain-details" open><summary>📱 Что PocketVerse добавляет прямо сейчас</summary><pre>${esc(b.prompt)}</pre></details>
+          <details class="gp-brain-details"><summary>🎭 Character Card</summary><pre>${esc(b.cardText || 'Недоступно в текущем контексте.')}</pre></details>
+          <details class="gp-brain-details"><summary>📖 RP-срез</summary><pre>${esc(b.rpText || 'История пуста.')}</pre></details>
         </div>
       </div>`;
     screen.querySelector('.gp-back')?.addEventListener('click', () => goto('home'));
     screen.querySelector('.gp-brain-refresh')?.addEventListener('click', () => renderBrain(screen));
+    screen.querySelectorAll('[data-brain]').forEach(btn => btn.addEventListener('click', () => {
+        getSettings().brainMode = btn.dataset.brain; saveSettingsDebounced(); updatePhoneInjection(); renderBrain(screen);
+    }));
+    const save = () => {
+        const x = getSettings();
+        x.phonePhotos = !!screen.querySelector('#gp-bc-photo')?.checked;
+        x.phoneMemes = !!screen.querySelector('#gp-bc-meme')?.checked;
+        x.phoneGroups = !!screen.querySelector('#gp-bc-groups')?.checked;
+        x.phoneCustomInstructions = String(screen.querySelector('#gp-bc-custom')?.value || '').trim();
+        saveSettingsDebounced(); updatePhoneInjection();
+    };
+    ['#gp-bc-photo','#gp-bc-meme','#gp-bc-groups'].forEach(q => screen.querySelector(q)?.addEventListener('change', () => { save(); renderBrain(screen); }));
+    screen.querySelector('#gp-bc-save')?.addEventListener('click', () => { save(); renderBrain(screen); });
 }
 
 // ── Домашний экран ──
