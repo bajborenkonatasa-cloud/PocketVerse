@@ -5,7 +5,7 @@ import { extension_settings, saveMetadataDebounced } from '../../../extensions.j
 export const EXT_NAME = 'pocketverse_foundation';
 // Версия для сверки инстансов (ПК ↔ айфон): видна в настройках и в консоли.
 // БАМПАТЬ при каждом коммите вместе с manifest.json!
-export const GP_VERSION = '2.35.0-pocketverse.6';
+export const GP_VERSION = '2.35.0-pocketverse.7';
 const META_KEY = 'pocketverse_foundation';
 
 // ── Глобальные настройки ──
@@ -158,6 +158,9 @@ export function getMeta() {
     if (!Array.isArray(m.contacts)) m.contacts = [];
     if (!m.lastRead || typeof m.lastRead !== 'object') m.lastRead = {};
     if (!Array.isArray(m.hidden)) m.hidden = [];
+    // PocketVerse-owned SMS history. Kept OUTSIDE SillyTavern chat[] so phone actions
+    // can never reindex/overwrite RP messages or metadata owned by Scene Blocks/other extensions.
+    if (!Array.isArray(m.localSms)) m.localSms = [];
     // Ники (@handle): per-chat, override поверх авто-генерации из имени
     if (!m.handles || typeof m.handles !== 'object') m.handles = {};
     if (typeof m.userHandle !== 'string') m.userHandle = '';
@@ -1184,7 +1187,81 @@ function scanChatUncached() {
         }
     }
 
+    // PocketVerse-local messages are merged only for the phone UI. They never enter
+    // SillyTavern chat[] and therefore cannot disturb RP message indexes/metadata.
+    const localSms = Array.isArray(getMeta().localSms) ? getMeta().localSms : [];
+    for (let n = 0; n < localSms.length; n++) {
+        const m = localSms[n];
+        if (!m || !m.name) continue;
+        const isGroup = !!m.chat;
+        const kname = isGroup ? `group:${keyOf(m.chat)}` : m.name;
+        const entry = {
+            dir: m.dir === 'out' ? 'out' : 'in',
+            from: m.from || undefined,
+            text: String(m.text || ''),
+            idx: Number(m.idx || (1000000000 + n)),
+            time: m.time ? new Date(m.time) : new Date(),
+            tagStart: 0,
+            tagEnd: 0,
+            eventId: `local:${m.id || n}`,
+            localId: m.id || String(n),
+        };
+        if (m.photo) entry.photoDesc = String(m.photo).slice(0, 300);
+        if (m.img) entry.img = m.img;
+        if (m.meme) entry.memeQuery = String(m.meme).slice(0, 120);
+        if (m.gif) entry.gifUrl = String(m.gif).slice(0, 1600);
+        if (m.voice) entry.voice = true;
+        if (m.react) entry.react = String(m.react);
+        if (m.shot) entry.shot = m.shot;
+        if (isGroup) pushMsg(kname, entry, String(m.chat));
+        else {
+            pushMsg(kname, entry);
+            addContact(m.name, m.number || '', 'local');
+        }
+    }
+
     return { contacts, threads };
+}
+
+// Store phone messages in PocketVerse metadata only. This is the isolation boundary:
+// NEVER write quiet-phone replies into SillyTavern's main RP chat[].
+export function addLocalSms(data = {}) {
+    const meta = getMeta();
+    const now = Date.now();
+    const id = `pv_${now}_${Math.random().toString(36).slice(2, 8)}`;
+    const rec = {
+        id,
+        idx: now,
+        time: now,
+        dir: data.dir === 'out' ? 'out' : 'in',
+        name: String(data.name || data.from || data.chat || '').trim(),
+        from: data.from ? String(data.from).trim() : '',
+        chat: data.chat ? String(data.chat).trim() : '',
+        text: String(data.text || ''),
+    };
+    for (const k of ['photo','img','meme','gif','voice','react','shot','number']) if (data[k] !== undefined) rec[k] = data[k];
+    if (!rec.name && !rec.chat) return null;
+    meta.localSms.push(rec);
+    // Prevent unbounded metadata growth while retaining a large local phone history.
+    if (meta.localSms.length > 2000) meta.localSms.splice(0, meta.localSms.length - 2000);
+    saveMeta(); invalidateChatCache();
+    return rec;
+}
+
+export function ingestQuietPhoneReply(raw, fallbackName = '', fallbackChat = '') {
+    const text = String(raw || '');
+    const re = /<!--\s*tel:sms:(\{[\s\S]*?\})\s*-->/gi;
+    let m, accepted = 0;
+    while ((m = re.exec(text)) !== null) {
+        let j = null; try { j = JSON.parse(m[1]); } catch (_) { continue; }
+        if (!j || (!j.text && !j.photo && !j.meme && !j.gif)) continue;
+        const chat = j.chat || fallbackChat || '';
+        const from = String(j.from || fallbackName || '').trim();
+        if (!from) continue;
+        addLocalSms({ dir:'in', name: from, from, chat, text:j.text || '', photo:j.photo, img:j.img, meme:j.meme, gif:j.gif, voice:j.voice, shot:j.shot });
+        accepted++;
+    }
+    return accepted;
 }
 
 // ── Список для экрана «Сообщения»: контакты + треды, отсортированы по свежести ──

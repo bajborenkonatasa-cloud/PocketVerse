@@ -5,7 +5,7 @@ import {
     getSettings, getThreadList, getThread, markRead, addManualContact, hideContact,
     randomNumber, getTotalUnread, fmtTime, getRpDateTime, keyOf, getHiddenMessageIndexes,
     addGroup, delGroup, updateGroupMembers, renameContact, banAccount,
-    isSmsBlocked, blockSmsContact, unblockSmsContact, saveMeta, invalidateChatCache, getMeta,
+    isSmsBlocked, blockSmsContact, unblockSmsContact, saveMeta, invalidateChatCache, getMeta, addLocalSms, ingestQuietPhoneReply,
 } from './state.js';
 import { updatePhoneInjection, getPhoneBrainSnapshot } from './prompts.js';
 import {
@@ -7148,30 +7148,16 @@ async function deleteSmsFromChat(msg) {
 // «Призрак»: вставка ответа в чат БЕЗ генерации через основной пайплайн —
 // is_system:true на 1.5с, чтобы ExtBlocks/JS Runner не триггерились,
 // потом флаг снимается и сообщение живёт в контексте модели как обычное.
-async function insertGhostReply(name, mesText) {
-    const ctx = SillyTavern.getContext();
-    const chat = ctx?.chat;
-    if (!chat || !mesText || !mesText.trim()) return;
-    const replyMsg = {
-        name: name,
-        is_user: false,
-        is_system: true,
-        send_date: Date.now(),
-        mes: mesText.trim(),
-        extra: { isSmsSilent: true },
-    };
-    chat.push(replyMsg);
-    if (typeof ctx.saveChat === 'function') await ctx.saveChat();
-    if (typeof ctx.printMessages === 'function') ctx.printMessages();
-    setTimeout(async () => {
-        replyMsg.is_system = false;
-        const mesIdx = chat.indexOf(replyMsg);
-        if (mesIdx >= 0) {
-            const mesEl = document.querySelector(`.mes[mesid="${mesIdx}"]`);
-            if (mesEl) mesEl.setAttribute('is_system', 'false');
-        }
-        if (typeof ctx.saveChat === 'function') await ctx.saveChat();
-    }, 1500);
+async function insertGhostReply(name, mesText, chatName = '') {
+    // Legacy call-site compatibility, but NO ghost is inserted anymore.
+    // Quiet phone output is parsed and stored only in PocketVerse metadata.
+    const accepted = ingestQuietPhoneReply(mesText, name, chatName);
+    console.info('[PocketVerse] quiet phone reply', { accepted, chars: String(mesText || '').length, isolated: true });
+    if (!accepted && String(mesText || '').trim() && !/<!--\s*tel:silent\s*-->/i.test(String(mesText))) {
+        toast('Телефонный ответ не распознан · RP-чат не изменён', 'fa-shield-halved');
+    }
+    invalidateChatCache();
+    return accepted;
 }
 
 // opts: {text, shot} — так уходит пересланный скрин поста (адресата и подпись
@@ -7189,11 +7175,7 @@ async function flushPending(key) {
     try {
         const name = t.name || key, isGroup = !!t.isGroup;
         for (const text of batch) {
-            const markerBase = isGroup ? { to: `группа:${name}` } : { to: name };
-            const marker = `<!--tel:out:${JSON.stringify(markerBase)}-->`;
-            const en = lang() === 'en';
-            const visible = isGroup ? (en ? `[SMS to chat «${name}»]` : `[СМС в чат «${name}»]`) : `[${en ? 'SMS' : 'СМС'} → ${name}]`;
-            await sendMessageAsUser(`${marker}\n${visible} ${text}`);
+            addLocalSms({ dir:'out', name, chat: isGroup ? name : '', text });
         }
         pvClear(key);
         applyChatHiding(); typingKey = key; render(); updatePhoneInjection();
@@ -7203,7 +7185,7 @@ async function flushPending(key) {
             ? `Continue the roleplay. The group chat «${name}» (members: ${(t.members || []).join(', ')}) received a sequence of ${batch.length} messages from ${ctx?.name1 || 'User'}, in this exact order:\n${ladder}\nReact to the whole sequence naturally. Reply as group members ONLY with hidden tel:sms tags with the "chat" field (RULE 3 — PHONE-ONLY MODE). One tag per bubble; several members may text. No visible prose.`
             : `Continue the roleplay. ${name} received a sequence of ${batch.length} SMS messages from ${ctx?.name1 || 'User'}, in this exact order:\n${ladder}\nReact naturally to the whole sequence, not each line as a separate API turn. Reply in-character ONLY with hidden tel:sms tags (RULE 3 — PHONE-ONLY MODE). Use 1-4 short message bubbles when natural. No visible prose.`;
         const rawReply = await generateQuietPrompt(quietPrompt, false, false);
-        if (rawReply && rawReply.trim()) await insertGhostReply(name, rawReply.trim());
+        if (rawReply && rawReply.trim()) await insertGhostReply(name, rawReply.trim(), isGroup ? name : '');
     } catch(e) {
         console.error('[PocketVerse] ladder send failed:', e); toast('Не удалось отправить лесенку', 'fa-circle-exclamation');
     } finally { sending=false; typingKey=null; render(); updateFabBadge(); applyChatHiding(); }
@@ -7244,62 +7226,36 @@ async function doSend(key, opts = {}) {
     const mes = `${marker}\n${visible} ${draftImg ? photoTok + ' ' : ''}${shotTok ? shotTok + ' ' : ''}${text}`;
 
     try {
-        await sendMessageAsUser(mes);
+        // ISOLATED PHONE: outgoing messages live in PocketVerse metadata only.
+        // Never call sendMessageAsUser here: changing main chat[] can reindex or
+        // invalidate Scene Blocks / media metadata owned by other extensions.
+        addLocalSms({
+            dir:'out', name, chat: isGroup ? name : '', text, voice: asVoice,
+            img: draftImg || undefined, shot: shot || undefined,
+        });
 
-        // Приложенное фото. Порядок:
-        //  1) файл + img в маркер → рендер: МИНИАТЮРА СРАЗУ
-        //  2) ОДИН vision-запрос: описание + ответ собеседника (экономия: картинка
-        //     в API один раз; описание → в mes «*фото: ...*», ответ → призраком)
-        // Сам файл к сообщению чата НЕ приклеивается: в телефоне миниатюра
-        // берётся из маркера, а в истории остаётся описание — без второй копии снимка.
         let photoHandled = false;
         if (draftImg) {
             try {
-                const ctx0 = SillyTavern.getContext();
-                const lastMsg = ctx0?.chat?.[ctx0.chat.length - 1];
-                if (lastMsg && lastMsg.is_user) {
-                    let src = draftImg;
-                    try {
-                        const base64 = draftImg.replace(/^data:image\/[a-z]+;base64,/i, '');
-                        src = await saveBase64AsFile(base64, 'glassphone', `sms_${Date.now()}`, 'jpeg');
-                    } catch (e) {
-                        console.warn('[GlassPhone] saveBase64AsFile failed, keeping dataURL:', e);
-                    }
-                    // Миниатюра телефона: img в маркере tel:out (mes переживает всё)
-                    const markerJson = JSON.stringify({ ...markerBase, img: src });
-                    lastMsg.mes = lastMsg.mes.replace(/<!--\s*tel:out:\{[\s\S]*?\}\s*-->/, `<!--tel:out:${markerJson}-->`);
-                    invalidateChatCache();
-                    await saveChatConditional();
-
-                    // Миниатюра на экране НЕМЕДЛЕННО, до вижна
-                    applyChatHiding();
-                    typingKey = key;
-                    render();
-
-                    // Комбо: описание + ответ одним запросом
-                    const combo = await generateSmsPhotoReply({
-                        contactName: name, isGroup, members: t?.members || [],
-                        userText: text, image: draftImg,
-                    });
-                    if (combo) {
-                        if (combo.desc) {
-                            lastMsg.mes = lastMsg.mes.replace(photoTok, `${photoTok.slice(0, -1)}: ${combo.desc}*`);
-                            invalidateChatCache();
-                            await saveChatConditional();
+                applyChatHiding(); typingKey = key; render();
+                const combo = await generateSmsPhotoReply({
+                    contactName: name, isGroup, members: t?.members || [],
+                    userText: text, image: draftImg,
+                });
+                if (combo) {
+                    // Keep the visual description locally; never rewrite an RP message.
+                    if (combo.replies?.length) {
+                        for (const r of combo.replies) {
+                            addLocalSms({
+                                dir:'in', name: String(r.from || name), from: String(r.from || name),
+                                chat: isGroup ? name : '', text: String(r.text || ''),
+                            });
                         }
-                        const botMes = combo.replies.length
-                            ? combo.replies.map(r => `<!--tel:sms:${JSON.stringify(isGroup
-                                ? { from: r.from, chat: name, text: r.text }
-                                : { from: name, text: r.text })}-->`).join('\n')
-                            : '<!--tel:silent-->';
-                        await insertGhostReply(name, botMes);
-                        photoHandled = true;
-                    } else {
-                        console.warn('[GlassPhone] комбо-запрос не удался — ответ пойдёт через тихий путь без описания');
                     }
+                    photoHandled = true;
                 }
             } catch (e) {
-                console.warn('[GlassPhone] attach image failed:', e);
+                console.warn('[PocketVerse] isolated photo reply failed:', e);
             }
         }
         if (photoHandled) return; // finally всё приберёт
@@ -7319,7 +7275,7 @@ async function doSend(key, opts = {}) {
             : `Continue the roleplay. ${name} just received this ${asVoice ? msgKind : 'SMS'} from ${ctx?.name1 || 'User'}: "${text}"${draftImg ? ' (with a photo attached)' : ''}${shot ? ` (with a forwarded screenshot — ${shotLabel(shot)}; react to what is IN it)` : ''}. Reply in-character with ONLY hidden tel:sms tags (RULE 3 — PHONE-ONLY MODE). No visible prose.`;
         const rawReply = await generateQuietPrompt(quietPrompt, false, false);
         if (rawReply && rawReply.trim()) {
-            await insertGhostReply(name, rawReply.trim());
+            await insertGhostReply(name, rawReply.trim(), isGroup ? name : '');
         }
     } catch (e) {
         console.error('[GlassPhone] send failed:', e);
