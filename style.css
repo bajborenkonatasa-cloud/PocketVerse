@@ -4345,3 +4345,20 @@ img[data-zoom] { cursor: zoom-in; }
 
 /* PocketVerse v0.8 — Messages */
 .gp-msg-line{display:flex;width:100%;align-items:flex-end;gap:6px}.gp-msg-line-out{justify-content:flex-end}.gp-msg-line-in{justify-content:flex-start}.gp-msg-avatar-slot{width:28px;min-width:28px;display:flex;align-items:flex-end}.gp-msg-avatar{width:28px;height:28px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.25)}.gp-msg-avatar img{width:100%;height:100%;object-fit:cover;display:block}.gp-msg-line .gp-bubble-wrap{max-width:78%}.gp-pending-bubble{opacity:.82}.gp-pending-dot{margin-left:7px;font-size:18px;line-height:8px;opacity:.6}.gp-send-ai{margin-left:3px}.gp-action-pop{flex-direction:column!important;border-radius:16px!important;max-width:min(320px,82vw);padding:6px!important}.gp-reaction-row{display:flex;gap:2px;overflow-x:auto;max-width:min(300px,78vw);scrollbar-width:none}.gp-reaction-row::-webkit-scrollbar{display:none}.gp-action-row{display:flex;border-top:1px solid var(--gp-border-soft);margin-top:4px;padding-top:4px;gap:4px}.gp-action-row button{width:auto!important;height:32px!important;border-radius:9px!important;padding:0 10px!important;font-size:11px!important;gap:5px}.gp-action-row .gp-danger{color:#ff7b86!important}
+
+/* PocketVerse v0.8.1 — compact Telegram-like SMS controls */
+.gp-action-pop{max-width:min(272px,76vw)!important;padding:4px!important;border-radius:13px!important}
+.gp-reaction-row{max-width:min(260px,72vw)!important;gap:0!important}
+.gp-reaction-row button{width:27px!important;height:29px!important;min-width:27px!important;padding:0!important;font-size:12px!important}
+.gp-action-row{margin-top:2px!important;padding-top:2px!important;gap:2px!important}
+.gp-action-row button{height:28px!important;padding:0 8px!important;font-size:10px!important}
+.gp-msg-line{gap:4px!important}
+.gp-msg-avatar-slot{width:24px!important;min-width:24px!important}
+.gp-msg-avatar{width:24px!important;height:24px!important;font-size:9px!important}
+.gp-msg-line .gp-bubble-wrap{max-width:74%!important}
+.gp-pending-line .gp-bubble-wrap{max-width:72%!important}
+.gp-pending-bubble{padding-top:9px!important;padding-bottom:9px!important}
+.gp-pending-line .gp-bubble-time{font-size:9px!important;opacity:.52!important;margin-top:2px!important}
+.gp-pending-dot{font-size:13px!important;margin-left:5px!important}
+.gp-sms-attach{padding:5px 7px!important;min-height:40px!important;border-radius:11px!important}
+.gp-sms-attach img{width:30px!important;height:30px!important;border-radius:7px!important}
