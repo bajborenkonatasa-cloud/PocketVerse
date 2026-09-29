@@ -23,7 +23,7 @@ import {
     regenerateTweet, regenerateIgPost, refreshFeed,
     compressImage, setContactAvatar, getContactAvatar, avatarForAuthor, setUserAvatar, getUserAvatar,
     timeAgo, makeHandle, getUserName, generatePostImage, cancelImageGen, isImageGenAvailable, resolveAuthorKey,
-    handleFor, setContactHandle, setUserHandle, getUserHandle, describePostImage, generateSmsPhotoReply, searchGiphyMeme, logSocialToChat, getSocialJournalEntries, logIgPost, logFeedDigest,
+    handleFor, setContactHandle, setUserHandle, getUserHandle, describePostImage, generateSmsPhotoReply, searchGiphyMeme, searchGiphyChoices, logSocialToChat, getSocialJournalEntries, logIgPost, logFeedDigest,
     settleSocialPost, maybeGenerateStoryEvent, resolveStoryEvent, generateAdvertisingOffers,
     getStories, activeStories, addStory, deleteStory, bumpStoryViews, toggleStoryLike, generateContactStories, generateStoryReactions,
     generateRepLabel, generateGroupChats,
@@ -74,6 +74,10 @@ let typingKey = null;           // тред, в котором «печатае�
 let sending = false;
 let _smsDraftImage = null;      // фото, приложенное к смс (dataURL до отправки)
 let _smsDraftVoice = false;     // режим голосового: текст уйдёт как расшифровка
+let _gifPickerOpen = false;
+let _gifPickerKind = 'gif';
+let _gifPickerResults = [];
+let _gifPickerBusy = false;
 
 // Черновики полей ввода. Живут ВНЕ DOM, поэтому переживают и перерисовку
 // (генерация картинки, публикация, новое сообщение), и закрытие телефона.
@@ -1975,7 +1979,7 @@ function renderThread(screen) {
             media = `<div class="gp-bubble-img gp-bubble-img-gen" style="${avatarStyle((m.from || t.name) + m.photoDesc)}"><span>${ic('fa-image')}</span><i data-mmsdesc="${esc(genKey)}">${esc(m.photoDesc)}</i><button class="gp-mms-gen" data-mmsgen="${mi}" title="Сгенерировать фото" ${busy ? 'disabled' : ''}>${ic(busy ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles')}</button>${busy ? stopGenBtn(genKey) : ''}</div>`;
         }
         if (m.gifUrl) {
-            media += `<div class="gp-bubble-img gp-giphy"><img src="${esc(m.gifUrl)}" alt="${esc(m.memeQuery || 'GIF')}" data-zoom><small>Powered by GIPHY</small></div>`;
+            media += `<div class="gp-bubble-img gp-giphy${m.mediaKind === 'sticker' ? ' gp-sticker' : ''}"><img src="${esc(m.gifUrl)}" alt="${esc(m.memeQuery || 'GIF')}" data-zoom><small>Powered by GIPHY</small></div>`;
         } else if (m.memeQuery) {
             media += `<div class="gp-bubble-img gp-bubble-img-gen gp-meme-wait"><span>${ic('fa-face-laugh-squint')}</span><i>${esc(m.memeQuery)}</i></div>`;
         }
@@ -2046,10 +2050,12 @@ function renderThread(screen) {
             ${typing}
         </div>
         ${_smsDraftImage ? `<div class="gp-sms-attach"><img src="${esc(_smsDraftImage)}" alt=""><span>Фото приложено</span><button class="gp-iconbtn gp-danger" id="gp-attach-clear">${ic('fa-xmark')}</button></div>` : ''}
+        ${_gifPickerOpen ? `<div class="gp-gif-picker"><div class="gp-gif-head"><button class="${_gifPickerKind==='gif'?'active':''}" data-gifkind="gif">GIF · мемы</button><button class="${_gifPickerKind==='sticker'?'active':''}" data-gifkind="sticker">Стикеры</button><button class="gp-iconbtn" id="gp-gif-close">${ic('fa-xmark')}</button></div><div class="gp-gif-search"><input id="gp-gif-q" placeholder="Поиск реакции, мема, GIF…"><button id="gp-gif-go">${ic('fa-magnifying-glass')}</button></div><div class="gp-gif-grid">${_gifPickerBusy ? `<div class="gp-gif-status">${ic('fa-spinner fa-spin')} Ищу…</div>` : (_gifPickerResults.length ? _gifPickerResults.map((g,i)=>`<button data-gifpick="${i}" title="${esc(g.title||'GIF')}"><img src="${esc(g.url)}" loading="lazy"></button>`).join('') : '<div class="gp-gif-status">Напиши, что хочешь найти ✨</div>')}</div><small class="gp-giphy-credit">Powered by GIPHY</small></div>` : ''}
         <div class="gp-inputbar">
             ${t.messages.length > 0 && t.messages[t.messages.length - 1].dir === 'in'
                 ? `<button class="gp-iconbtn gp-regen" id="gp-regen" title="Другой ответ" ${sending ? 'disabled' : ''}>${ic('fa-rotate-right')}</button>` : ''}
             <button class="gp-iconbtn" id="gp-attach" title="Приложить фото">${ic('fa-paperclip')}</button>
+            <button class="gp-iconbtn gp-gif-btn" id="gp-gif" title="GIF · мем · стикер">GIF</button>
             <input type="file" id="gp-attach-file" accept="image/*" style="display:none">
             <button class="gp-iconbtn${_smsDraftVoice ? ' gp-voice-armed' : ''}" id="gp-voice-toggle" title="Голосовое сообщение">${ic('fa-microphone')}</button>
             <textarea id="gp-input" rows="1" placeholder="${_smsDraftVoice ? 'Расшифровка голосового...' : 'Сообщение...'}"></textarea>
@@ -2116,6 +2122,25 @@ function renderThread(screen) {
         render();
         updateFabBadge();
     });
+
+    // GIF / meme / sticker picker — поиск GIPHY без LLM.
+    screen.querySelector('#gp-gif')?.addEventListener('click', () => { _gifPickerOpen = !_gifPickerOpen; _gifPickerResults = []; render(); });
+    screen.querySelector('#gp-gif-close')?.addEventListener('click', () => { _gifPickerOpen=false; _gifPickerResults=[]; render(); });
+    screen.querySelectorAll('[data-gifkind]').forEach(b => b.addEventListener('click', () => { _gifPickerKind=b.dataset.gifkind||'gif'; _gifPickerResults=[]; render(); }));
+    const runGifSearch = async () => {
+        const q = String(screen.querySelector('#gp-gif-q')?.value || '').trim(); if (!q || _gifPickerBusy) return;
+        _gifPickerBusy=true; render();
+        try { _gifPickerResults = await searchGiphyChoices(q, _gifPickerKind, 12); }
+        catch(e){ toast(`GIPHY: ${String(e?.message||e).slice(0,80)}`, 'fa-triangle-exclamation'); _gifPickerResults=[]; }
+        finally { _gifPickerBusy=false; render(); }
+    };
+    screen.querySelector('#gp-gif-go')?.addEventListener('click', runGifSearch);
+    screen.querySelector('#gp-gif-q')?.addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault(); runGifSearch();} });
+    screen.querySelectorAll('[data-gifpick]').forEach(b => b.addEventListener('click', async () => {
+        const g=_gifPickerResults[Number(b.dataset.gifpick)]; if(!g) return;
+        _gifPickerOpen=false; _gifPickerResults=[];
+        await sendUserGiphy(t.key, g);
+    }));
 
     // Скрепка: приложить фото к смс
     const attachBtn = screen.querySelector('#gp-attach');
@@ -7175,6 +7200,25 @@ async function insertGhostReply(name, mesText, chatName = '') {
 
 // opts: {text, shot} — так уходит пересланный скрин поста (адресата и подпись
 // выбирают в шторке, поле ввода треда при этом не участвует)
+async function sendUserGiphy(key, g) {
+    if (sending || !g?.url) return;
+    const t=getThread(key); if(!t) return;
+    const name=t.name||key, isGroup=!!t.isGroup;
+    addLocalSms({dir:'out', name, chat:isGroup?name:'', text:'', gif:g.url, meme:g.title||'', mediaKind:g.kind||'gif'});
+    sending=true; typingKey=key; _pvThreadRenderFrozen=true; render();
+    try {
+        updatePhoneInjection();
+        const ctx=SillyTavern.getContext();
+        const label=g.kind==='sticker'?'animated sticker':'GIF/meme reaction';
+        const prompt=isGroup
+          ? `The group chat «${name}» just received an ${label} from ${ctx?.name1||'User'} described as: "${String(g.title||'reaction').slice(0,140)}". React naturally as group members. Reply ONLY with hidden tel:sms tags with the "chat" field. No visible prose.`
+          : `${name} just received an ${label} from ${ctx?.name1||'User'} described as: "${String(g.title||'reaction').slice(0,140)}". React naturally in character. Reply ONLY with hidden tel:sms tags. No visible prose.`;
+        const raw=await generateQuietPrompt(prompt,false,false);
+        if(raw?.trim()) await insertGhostReply(name,raw.trim(),isGroup?name:'');
+    } catch(e){ console.error('[PocketVerse] user GIPHY send failed',e); toast('Не удалось получить ответ','fa-circle-exclamation'); }
+    finally { _pvThreadRenderFrozen=false; sending=false; typingKey=null; render(); updateFabBadge(); }
+}
+
 async function flushPending(key) {
     if (sending) return;
     const pending = pvPending(key);

@@ -5,7 +5,7 @@ import { extension_settings, saveMetadataDebounced } from '../../../extensions.j
 export const EXT_NAME = 'pocketverse_foundation';
 // Версия для сверки инстансов (ПК ↔ айфон): видна в настройках и в консоли.
 // БАМПАТЬ при каждом коммите вместе с manifest.json!
-export const GP_VERSION = '2.35.0-pocketverse.8';
+export const GP_VERSION = '2.35.0-pocketverse.9';
 const META_KEY = 'pocketverse_foundation';
 
 // ── Глобальные настройки ──
@@ -1210,6 +1210,7 @@ function scanChatUncached() {
         if (m.img) entry.img = m.img;
         if (m.meme) entry.memeQuery = String(m.meme).slice(0, 120);
         if (m.gif) entry.gifUrl = String(m.gif).slice(0, 1600);
+        if (m.mediaKind) entry.mediaKind = String(m.mediaKind).slice(0, 20);
         if (m.voice) entry.voice = true;
         if (m.react) entry.react = String(m.react);
         if (m.shot) entry.shot = m.shot;
@@ -1239,7 +1240,7 @@ export function addLocalSms(data = {}) {
         chat: data.chat ? String(data.chat).trim() : '',
         text: String(data.text || ''),
     };
-    for (const k of ['photo','img','meme','gif','voice','react','shot','number']) if (data[k] !== undefined) rec[k] = data[k];
+    for (const k of ['photo','img','meme','gif','mediaKind','voice','react','shot','number']) if (data[k] !== undefined) rec[k] = data[k];
     if (!rec.name && !rec.chat) return null;
     meta.localSms.push(rec);
     // Prevent unbounded metadata growth while retaining a large local phone history.
@@ -1253,7 +1254,7 @@ export function updateLocalSms(id, patch = {}) {
     const meta = getMeta();
     const rec = (meta.localSms || []).find(x => x && String(x.id) === String(id));
     if (!rec) return false;
-    const allowed = ['photo','img','meme','gif','voice','react','shot','number','text'];
+    const allowed = ['photo','img','meme','gif','mediaKind','voice','react','shot','number','text'];
     for (const k of allowed) if (Object.prototype.hasOwnProperty.call(patch, k)) rec[k] = patch[k];
     saveMeta(); invalidateChatCache();
     return true;

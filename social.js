@@ -2504,12 +2504,13 @@ export async function generateCommentAvatar(comment) {
 
 // ═══ PocketVerse Meme/GIF Bridge — GIPHY ═══
 // API key остаётся локально в extension_settings; в LLM-промпты не попадает.
-export async function searchGiphyMeme(query) {
+export async function searchGiphyMeme(query, kind = 'gif') {
     const key = String(getSettings().giphyApiKey || '').trim();
     if (!key) throw new Error('GIPHY API key не задан');
     const q = String(query || '').trim().slice(0, 50);
-    if (!q) throw new Error('Пустой запрос мема');
-    const u = new URL('https://api.giphy.com/v1/gifs/search');
+    if (!q) throw new Error('Пустой запрос медиа');
+    const resource = kind === 'sticker' ? 'stickers' : 'gifs';
+    const u = new URL(`https://api.giphy.com/v1/${resource}/search`);
     u.searchParams.set('api_key', key);
     u.searchParams.set('q', q);
     u.searchParams.set('limit', '8');
@@ -2525,7 +2526,28 @@ export async function searchGiphyMeme(query) {
     const images = it?.images || {};
     const url = images.fixed_width?.url || images.downsized?.url || images.original?.url || '';
     if (!url) throw new Error('У результата GIPHY нет GIF URL');
-    return { url, page: it.url || '', title: it.title || q, id: it.id || '' };
+    return { url, page: it.url || '', title: it.title || q, id: it.id || '', kind: resource === 'stickers' ? 'sticker' : 'gif' };
+}
+
+export async function searchGiphyChoices(query, kind = 'gif', limit = 12) {
+    const key = String(getSettings().giphyApiKey || '').trim();
+    if (!key) throw new Error('GIPHY API key не задан');
+    const q = String(query || '').trim().slice(0, 60);
+    if (!q) return [];
+    const resource = kind === 'sticker' ? 'stickers' : 'gifs';
+    const u = new URL(`https://api.giphy.com/v1/${resource}/search`);
+    u.searchParams.set('api_key', key); u.searchParams.set('q', q);
+    u.searchParams.set('limit', String(Math.max(1, Math.min(20, limit))));
+    u.searchParams.set('rating', 'pg-13');
+    if (resource === 'gifs') u.searchParams.set('bundle', 'messaging_non_clips');
+    const r = await fetch(u.toString());
+    if (!r.ok) throw new Error(`GIPHY HTTP ${r.status}`);
+    const j = await r.json();
+    return (Array.isArray(j?.data) ? j.data : []).map(it => {
+        const images = it?.images || {};
+        const url = images.fixed_width?.url || images.downsized?.url || images.original?.url || '';
+        return { id:it.id||'', url, page:it.url||'', title:it.title||q, kind:resource==='stickers'?'sticker':'gif' };
+    }).filter(x => x.url);
 }
 
 // ═══ Генерация картинок — через установленное картинко-расширение ═══
