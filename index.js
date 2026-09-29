@@ -1,160 +1,46 @@
 import { getContext } from '../../../extensions.js';
 import { generateRaw, getThumbnailUrl } from '../../../../script.js';
 
-const VERSION = '0.3.1';
-  const ID='pocketverse-root';
-  const STORE='pocketverse.v0.1';
-  const BRAIN_STORE='pocketverse.brain.v0.3';
-  const state={screen:'home', chatId:null, replyTo:null, generating:false, showReactions:null};
-  function load(){try{return JSON.parse(localStorage.getItem(STORE)||'{}')}catch{return {}}}
-  function save(v){localStorage.setItem(STORE,JSON.stringify(v));}
-  function chatKey(){
-    const ctx=getContext?.();
-    return String(ctx?.chatId ?? ctx?.chat_metadata?.chat_id ?? ctx?.characterId ?? location.pathname);
-  }
-  function data(){const all=load(); const k=chatKey(); all[k]??={threads:{demo:{name:(getContext?.()?.name2 || getContext?.()?.characterName || 'Персонаж'),messages:[]}}}; return {all,k,box:all[k]};}
-  function persist(all){save(all);}
-  function esc(s=''){return String(s).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-  function mount(){
-    if(document.getElementById(ID))return;
-    const root=document.createElement('div'); root.id=ID;
-    root.innerHTML=`<button class="pv-fab" aria-label="PocketVerse">📱</button><div class="pv-overlay" hidden><section class="pv-phone"><header class="pv-status"><span class="pv-clock"></span><span>◔  Wi‑Fi  ▰</span></header><main class="pv-screen"></main><footer class="pv-nav"><button data-pv="back">‹</button><button data-pv="home">●</button><button data-pv="close">×</button></footer></section></div>`;
-    document.body.appendChild(root);
-    root.querySelector('.pv-fab').onclick=()=>open();
-    root.addEventListener('click',onClick);
-    render(); setInterval(clock,30000); clock();
-  }
-  function clock(){const el=document.querySelector('.pv-clock');if(el)el.textContent=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});}
-  function open(){document.querySelector('.pv-overlay').hidden=false; state.screen='home';render();}
-  function close(){document.querySelector('.pv-overlay').hidden=true;}
-  function onClick(e){const b=e.target.closest('[data-pv]'); if(!b)return; const a=b.dataset.pv;
-    if(a==='close')return close(); if(a==='home'){state.screen='home';return render();} if(a==='back'){state.screen=state.screen==='thread'?'messages':state.screen==='brain'?'thread':'home';return render();}
-    if(a==='messages'){state.screen='messages';return render();} if(a==='thread'){state.screen='thread';state.chatId=b.dataset.id;return render();}
-    if(a==='send-local'){sendLocal();} if(a==='ai-reply'){generateCharacterReply();} if(a==='react-menu'){state.showReactions=state.showReactions===b.dataset.id?null:b.dataset.id;render();} if(a==='react'){reactTo(b.dataset.id,b.dataset.emoji);} if(a==='reply'){startReply(b.dataset.id);} if(a==='cancel-reply'){state.replyTo=null;render();} if(a==='brain'){state.screen='brain';render();}
-  }
-
-  function findMessage(box,id){for(const t of Object.values(box.threads||{})){const m=(t.messages||[]).find(x=>String(x.id)===String(id));if(m)return m;}return null;}
-  function reactTo(id,emoji){const {all,box}=data();const m=findMessage(box,id);if(!m)return;m.reactions??={};m.reactions[emoji]=(m.reactions[emoji]||0)+1;persist(all);render();}
-  function startReply(id){state.replyTo=id;render();setTimeout(()=>document.querySelector('.pv-input')?.focus(),0);}
-  function messageHtml(m,t){
-    const replied=m.replyTo?(t.messages||[]).find(x=>String(x.id)===String(m.replyTo)):null;
-    const reacts=Object.entries(m.reactions||{}).map(([e,n])=>`<span>${e}${n>1?' '+n:''}</span>`).join('');
-    const menu=state.showReactions===String(m.id)?`<div class="pv-reactmenu">${['❤️','😂','😭','💀','👀','👍','😡','🥹','🤌🏻','😅','🔥','💔'].map(e=>`<button data-pv="react" data-id="${esc(m.id)}" data-emoji="${e}">${e}</button>`).join('')}</div>`:'';
-    return `<div class="pv-msgwrap ${m.from==='user'?'me':'them'}"><div class="pv-bubble ${m.from==='user'?'me':'them'}" data-mid="${esc(m.id)}">${replied?`<div class="pv-quote">↪ ${esc(replied.text.slice(0,90))}</div>`:''}${esc(m.text)}<small>${new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></div><div class="pv-msgtools"><button data-pv="reply" data-id="${esc(m.id)}">↩</button><button data-pv="react-menu" data-id="${esc(m.id)}">☺</button></div>${menu}${reacts?`<div class="pv-reactions">${reacts}</div>`:''}</div>`;
-  }
-
-  function currentCharacter(){
-    const ctx=getContext?.()||{}; const cid=ctx.characterId;
-    const c=(ctx.characters && cid!=null)?ctx.characters[cid]:null;
-    return {ctx,c,name:c?.name||ctx.name2||ctx.characterName||'Персонаж'};
-  }
-  function cleanText(v=''){
-    return String(v)
-      .replace(/<START>[\s\S]*$/i,' ')
-      .replace(/<[^>]+>/g,' ')
-      .replace(/\{\{[^}]+\}\}/g,' ')
-      .replace(/\s+/g,' ').trim();
-  }
-  function compactPersona(){
-    const {c,name}=currentCharacter();
-    if(!c) return `Name: ${name}. Stay strictly in character.`;
-    const personality=cleanText(c.personality||'').slice(0,420);
-    let desc=cleanText(c.description||'');
-    // Description cards often contain appearance + examples. Messages only need stable behavioral traits.
-    desc=desc.replace(/\[[^\]]*(?:body|hair|eyes|skin|teeth|lips|dress|clothes|appearance)[^\]]*\]/ig,' ');
-    desc=desc.replace(/(?:body|appearance|looks?)\s*[:=][^.;]{0,260}/ig,' ');
-    desc=desc.replace(/\s+/g,' ').trim().slice(0,260);
-    const scenario=cleanText(c.scenario||'').slice(0,180);
-    const parts=[`Name: ${name}`];
-    if(personality) parts.push(`Core personality: ${personality}`);
-    else if(desc) parts.push(`Behavior: ${desc}`);
-    if(scenario) parts.push(`Relevant setting: ${scenario}`);
-    return parts.join('\n');
-  }
-  function sanitizeRpText(v=''){
-    let x=String(v||'')
-      .replace(/<[^>]+>/g,' ')
-      .replace(/\[Scene image:[\s\S]*?(?=(?:\n|$))/ig,' ')
-      .replace(/Scene image\s*:[^\n]*/ig,' ')
-      .replace(/\b(?:masterpiece|best quality|amazing quality|highres|very aesthetic|painterly|detailed face|1boy|1girl)\b[^\n]*/ig,' ')
-      .replace(/\((?:ooc|OOC)[\s\S]*?\)/g,' ')
-      .replace(/\b(?:prompt|negative prompt)\s*:[^\n]*/ig,' ')
-      .replace(/\{\{[^}]+\}\}/g,' ')
-      .replace(/[ \t]+/g,' ')
-      .replace(/\n{2,}/g,'\n').trim();
-    // Extension/service lines are useful in the main chat but poison a tiny phone context.
-    x=x.split('\n').filter(line=>{
-      const l=line.trim();
-      if(!l) return false;
-      return !/(?:scene\s*blocks?|sillyimages?|hanabi\s*:\s*\(?ooc|negative\s*prompt|masterpiece|best\s*quality)/i.test(l);
-    }).join(' ');
-    return x.replace(/\s+/g,' ').trim();
-  }
-  function recentRpDigest(){
-    const {ctx}=currentCharacter(); const chat=Array.isArray(ctx.chat)?ctx.chat:[];
-    const rows=[];
-    for(const m of chat.slice(-10)){
-      const clean=sanitizeRpText(m.mes||'');
-      if(!clean || clean.length<3) continue;
-      const who=m.is_user?(ctx.name1||'User'):(ctx.name2||'Character');
-      rows.push(`${who}: ${clean.slice(0,190)}`);
-      if(rows.length>4) rows.shift();
-    }
-    // Hard local budget: this is an excerpt of recent RP, not the full chat and not an LLM summary.
-    return rows.join('\n').slice(0,620);
-  }
-  function brainInfo(t){
-    const persona=compactPersona(), rp=recentRpDigest();
-    const msgs=(t?.messages||[]).slice(-10).map(m=>`${m.from==='user'?'User':'Character'}: ${m.text}`).join('\n');
-    const approx=x=>Math.ceil(String(x||'').length/4);
-    return {persona,rp,msgs,tokens:{persona:approx(persona),rp:approx(rp),messages:approx(msgs)}};
-  }
-  function extractJson(text){
-    const raw=String(text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/```$/,'').trim();
-    try{return JSON.parse(raw)}catch{}
-    const a=raw.indexOf('{'),b=raw.lastIndexOf('}'); if(a>=0&&b>a){try{return JSON.parse(raw.slice(a,b+1))}catch{}}
-    return {messages:[raw.slice(0,500)]};
-  }
-  async function generateCharacterReply(){
-    if(state.generating)return; const {all,box}=data(); const id=state.chatId||'demo'; const t=box.threads[id]; if(!t)return;
-    state.generating=true; render();
-    try{
-      const {name}=currentCharacter(); const bi=brainInfo(t);
-      const prompt=`You are writing ONLY a private messenger reply as ${name}.\n\nCOMPACT CHARACTER:\n${bi.persona}\n\nRECENT RP EVENTS:\n${bi.rp||'(none available)'}\n\nRECENT PHONE CHAT:\n${bi.msgs||'(empty)'}\n\nRules: stay strictly in character; react to the newest phone messages; write like texting, not prose; never narrate actions; never write for User; keep it short. Return ONLY valid JSON: {"messages":["bubble 1","bubble 2"],"reaction":"optional emoji or empty"}. Use 1-4 bubbles, usually 1-3. Total reply under 90 words.`;
-      const raw=await generateRaw({prompt,systemPrompt:'',quietToLoud:false,instructOverride:true,responseLength:180,trimNames:false});
-      const obj=extractJson(typeof raw==='string'?raw:(raw?.text||raw?.content||''));
-      const arr=Array.isArray(obj.messages)?obj.messages.slice(0,4):[];
-      for(const txt of arr){if(!String(txt).trim())continue; t.messages.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),from:'char',text:String(txt).trim().slice(0,700),at:Date.now(),replyTo:null,reactions:{},media:[]});}
-      persist(all);
-    }catch(e){console.error('[PocketVerse] character reply failed',e); if(window.toastr)toastr.error(String(e?.message||e),'PocketVerse');}
-    finally{state.generating=false;render(); setTimeout(()=>{const b=document.querySelector('.pv-bubbles'); if(b)b.scrollTop=b.scrollHeight},0);}
-  }
-
-  function sendLocal(){const inp=document.querySelector('.pv-input');const text=inp?.value.trim();if(!text)return;const {all,k,box}=data(); const id=state.chatId||'demo';box.threads[id]??={name:'Чат',messages:[]};box.threads[id].messages.push({id:crypto.randomUUID?.()||String(Date.now()),from:'user',text,at:Date.now(),replyTo:state.replyTo||null,reactions:{},media:[]});state.replyTo=null;persist(all);inp.value='';render();}
-  function render(){const s=document.querySelector('.pv-screen');if(!s)return;
-    if(state.screen==='home') s.innerHTML=`<div class="pv-home"><div class="pv-bigtime">${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div><div class="pv-date">${new Date().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})}</div><div class="pv-grid"><button class="pv-app" data-pv="messages"><span>💬</span><b>Сообщения</b></button><button class="pv-app pv-disabled"><span>📸</span><b>Social</b><small>скоро</small></button><button class="pv-app pv-disabled"><span>📌</span><b>Campus</b><small>скоро</small></button><button class="pv-app pv-disabled"><span>👥</span><b>Контакты</b><small>скоро</small></button></div><p class="pv-zero">Навигация и локальные сообщения: 0 запросов к модели.</p></div>`;
-    if(state.screen==='messages'){const {box}=data();s.innerHTML=`<div class="pv-title">💬 Сообщения</div><div class="pv-list">${Object.entries(box.threads).map(([id,t])=>`<button class="pv-thread" data-pv="thread" data-id="${esc(id)}"><span class="pv-avatar">${esc((t.name||'?')[0])}</span><span><b>${esc(t.name)}</b><small>${esc(t.messages.at(-1)?.text||'Локальный тестовый чат')}</small></span><i>›</i></button>`).join('')}</div>`;}
-    if(state.screen==='brain'){const {box}=data();const t=box.threads[state.chatId]||box.threads.demo;const bi=brainInfo(t);const total=bi.tokens.persona+bi.tokens.rp+bi.tokens.messages+110;s.innerHTML=`<div class="pv-title">🧠 Compact Context</div><div class="pv-braincard"><b>Persona · ~${bi.tokens.persona} ток.</b><pre>${esc(bi.persona)}</pre></div><div class="pv-braincard"><b>Последний RP · ~${bi.tokens.rp} ток.</b><pre>${esc(bi.rp||'Нет доступного RP-контекста')}</pre></div><div class="pv-braincard"><b>Телефон · ~${bi.tokens.messages} ток.</b><pre>${esc(bi.msgs||'Пока пусто')}</pre></div><div class="pv-tokenline">Контекст PocketVerse: ~${total} токенов · обычная ➤ отправка = 0 запросов</div>`;}
-    if(state.screen==='thread'){const {box}=data();const t=box.threads[state.chatId]||box.threads.demo;s.innerHTML=`<div class="pv-chathead"><button data-pv="back">‹</button><b>${esc(t.name)}</b><span>${state.generating?'печатает…':'онлайн'}</span><button class="pv-brainbtn" data-pv="brain">🧠</button></div><div class="pv-bubbles">${t.messages.map(m=>messageHtml(m,t)).join('')||'<div class="pv-empty">Напиши несколько сообщений лесенкой, а потом нажми ✨ — это будет один запрос 🙂</div>'}</div>${state.replyTo?`<div class="pv-replybar">↪ Ответ на сообщение <button data-pv="cancel-reply">×</button></div>`:''}<div class="pv-compose"><button class="pv-attach" disabled title="Медиа будет в v0.4">📎</button><textarea class="pv-input" rows="1" placeholder="Сообщение"></textarea><button data-pv="send-local">➤</button><button class="pv-ai" data-pv="ai-reply" ${state.generating?'disabled':''}>${state.generating?'…':'✨'}</button></div>`;}
-  }
-  function mountSettings(){
-    if(document.getElementById('pocketverse-settings')) return;
-    const host=document.getElementById('extensions_settings2') || document.getElementById('extensions_settings');
-    if(!host) return;
-    const card=document.createElement('div');
-    card.id='pocketverse-settings';
-    card.className='extension_container';
-    card.innerHTML=`<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>📱 PocketVerse · ${VERSION}</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>Карманный RP-мир. v0.3.1: Context Cleanup — компактная Persona + очищенный RP без image/OOC мусора + короткие ответы по ✨.</p><button type="button" class="menu_button" id="pocketverse-open-settings">📱 Открыть PocketVerse</button></div></div>`;
-    host.appendChild(card);
-    card.querySelector('#pocketverse-open-settings')?.addEventListener('click', open);
-  }
-  function mountAll(){ mount(); mountSettings(); }
-  const ctx=getContext?.();
-  const ev=ctx?.eventSource;
-  const types=ctx?.eventTypes || ctx?.event_types;
-  if(ev && types?.APP_READY) ev.on(types.APP_READY, mountAll);
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', mountAll, {once:true}); else mountAll();
-  setTimeout(mountAll, 500);
-  setTimeout(mountAll, 1500);
-
-export { VERSION };
+const VERSION='0.4.0', ID='pocketverse-root', STORE='pocketverse.v0.1', SETTINGS='pocketverse.settings.v0.4';
+const state={screen:'home',chatId:null,replyTo:null,generating:false,showReactions:null};
+const DEFAULTS={contextMode:'deep',history:14};
+const loadJson=(k,d={})=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
+const saveJson=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+const esc=(s='')=>String(s).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const approx=s=>Math.ceil(String(s||'').length/4);
+function settings(){return {...DEFAULTS,...loadJson(SETTINGS,{})}}
+function ctx(){return getContext?.()||SillyTavern?.getContext?.()||{}}
+function chatKey(){const c=ctx();return String(c.chatId??c.chat_metadata?.chat_id??c.groupId??c.characterId??location.pathname)}
+function currentChar(){const c=ctx(),ch=c.characters?.[c.characterId];return {c,ch,name:ch?.name||c.name2||c.characterName||'Персонаж',avatar:ch?.avatar||''}}
+function avatarUrl(av){if(!av||av==='none')return '';try{return getThumbnailUrl('avatar',av)}catch{return `/characters/${av}`}}
+function store(){const all=loadJson(STORE,{}),k=chatKey();const cc=currentChar();all[k]??={threads:{}};all[k].threads??={};all[k].registry??={};const id=cc.avatar?`char:${cc.avatar}`:'demo';all[k].registry[id]={id,type:'character',name:cc.name,avatar:cc.avatar};all[k].threads[id]??={id,name:cc.name,avatar:cc.avatar,handle:id,isGroup:false,participants:[id],messages:[]};all[k].threads[id].name=cc.name;all[k].threads[id].avatar=cc.avatar;return {all,k,box:all[k],defaultId:id}}
+function persist(all){saveJson(STORE,all)}
+function cleanText(v=''){return String(v).replace(/<span[^>]*class=["']?nova-hidden-context["']?[^>]*>[\s\S]*?<\/span>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()}
+function cleanRp(v=''){
+ let s=String(v); s=s.replace(/\[Scene image:[\s\S]*?(?=(?:\n[A-ZА-ЯЁ][^\n]{0,40}:)|$)/gi,' ');
+ s=s.replace(/(?:^|\n)\s*(?:Scene image|Image prompt|Negative prompt)\s*:[\s\S]*?(?=\n\S+\s*:|$)/gi,' ');
+ s=s.replace(/\((?:ooc|OOC)[\s\S]*?\)/g,' ').replace(/<[^>]+>/g,' ');
+ return s.replace(/\b(?:masterpiece|best quality|highres|very aesthetic|detailed face|artist\s*:\s*[^,\n]+)(?:\s*,\s*)?/gi,' ').replace(/\s+/g,' ').trim();
+}
+function cardContext(){const {ch,name}=currentChar();if(!ch)return `Name: ${name}`;const parts=[`Name: ${name}`];for(const [lab,val] of [['Personality',ch.personality],['Description',ch.description],['Scenario',ch.scenario],['Examples',ch.mes_example||ch.message_example]]){const x=cleanText(val);if(x)parts.push(`${lab}: ${x}`)}return parts.join('\n')}
+function rpContext(){const c=ctx(), chat=Array.isArray(c.chat)?c.chat:[], mode=settings().contextMode, count=mode==='economy'?6:mode==='balanced'?12:20, budget=mode==='economy'?1800:mode==='balanced'?3600:5600;let rows=chat.slice(-count).map(m=>{const x=cleanRp(m.mes||'');if(!x)return '';return `${m.is_user?(c.name1||'User'):(m.name||c.name2||'Character')}: ${x}`}).filter(Boolean).join('\n');return rows.length>budget?rows.slice(-budget):rows}
+function phoneHistory(t){return (t?.messages||[]).slice(-settings().history).map(m=>`${m.from==='user'?'User':(m.senderName||t.name)}: ${m.text}`).join('\n')}
+function brainInfo(t){const card=cardContext(),rp=rpContext(),phone=phoneHistory(t);return {card,rp,phone,tokens:{card:approx(card),rp:approx(rp),phone:approx(phone)}}}
+function parseJson(text){const raw=String(text??'').trim();if(!raw)return null;const tries=[raw,raw.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]].filter(Boolean);for(const q of tries){try{return JSON.parse(q.replace(/,\s*([}\]])/g,'$1'))}catch{}}
+ const start=Math.min(...[raw.indexOf('{'),raw.indexOf('[')].filter(x=>x>=0));if(Number.isFinite(start)){let stack=[],str=false,escp=false;for(let i=start;i<raw.length;i++){const ch=raw[i];if(escp){escp=false;continue}if(ch==='\\'&&str){escp=true;continue}if(ch==='"'){str=!str;continue}if(str)continue;if(ch==='{'||ch==='[')stack.push(ch==='{'?'}':']');else if(ch==='}'||ch===']'){stack.pop();if(!stack.length){try{return JSON.parse(raw.slice(start,i+1).replace(/,\s*([}\]])/g,'$1'))}catch{break}}}}}return null}
+function responseText(r){if(typeof r==='string')return r;return r?.text||r?.content||r?.choices?.[0]?.message?.content||r?.choices?.[0]?.text||''}
+function buildPrompt(t){const bi=brainInfo(t),cc=currentChar();return `You are generating private messenger replies for ${cc.name}.\n\nCHARACTER CARD:\n${bi.card}\n\nRECENT ROLEPLAY CONTEXT:\n${bi.rp||'(none)'}\n\nMESSENGER HISTORY:\n${bi.phone||'(empty)'}\n\nRULES:\n- Stay strictly in the character card and recent events.\n- This is Telegram/WhatsApp style chat: short natural messages, no prose narration, no inner thoughts, never write for User.\n- React to the newest user messages and move the conversation forward.\n- Send 1-4 separate bubbles as this character would naturally text.\n- Russian unless the conversation clearly uses another language.\n- Return ONLY JSON, no markdown.\n{\"messages\":[\"first bubble\",\"optional second bubble\"]}`}
+async function aiReply(){if(state.generating)return;const {all,box,defaultId}=store(),id=state.chatId||defaultId,t=box.threads[id];if(!t)return;state.generating=true;render();try{const raw=await generateRaw({prompt:buildPrompt(t),systemPrompt:'',quietToLoud:false,instructOverride:true,responseLength:260,trimNames:false});const txt=responseText(raw),obj=parseJson(txt);if(!obj)throw new Error(`Модель вернула неразбираемый ответ: ${txt.slice(0,120)||'пусто'}`);let arr=Array.isArray(obj.messages)?obj.messages:(obj.text?[obj.text]:[]);arr=arr.slice(0,4);if(!arr.length)throw new Error('В ответе модели нет сообщений.');for(const item of arr){const text=cleanText(typeof item==='string'?item:item?.text);if(!text)continue;t.messages.push({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),from:'char',senderName:t.name,text:text.slice(0,900),at:Date.now(),reactions:{}})}persist(all)}catch(e){console.error('[PocketVerse]',e);window.toastr?.error(String(e?.message||e),'PocketVerse')}finally{state.generating=false;render();setTimeout(()=>{const b=document.querySelector('.pv-bubbles');if(b)b.scrollTop=b.scrollHeight},0)}}
+function messageHtml(m,t){const replied=m.replyTo?(t.messages||[]).find(x=>String(x.id)===String(m.replyTo)):null, reacts=Object.entries(m.reactions||{}).map(([e,n])=>`<span>${e}${n>1?' '+n:''}</span>`).join(''), menu=state.showReactions===String(m.id)?`<div class="pv-reactmenu">${['❤️','😂','😭','💀','👀','👍','😡','🥹','🤌🏻','😅','🔥','💔'].map(e=>`<button data-pv="react" data-id="${esc(m.id)}" data-emoji="${e}">${e}</button>`).join('')}</div>`:'';const ava=m.from==='char'?avatarUrl(t.avatar):'';return `<div class="pv-row ${m.from==='user'?'me':'them'}">${m.from==='char'?ava?`<img class="pv-msgavatar" src="${esc(ava)}">`:`<span class="pv-msgavatar fallback">${esc(t.name?.[0]||'?')}</span>`:''}<div class="pv-msgwrap ${m.from==='user'?'me':'them'}"><div class="pv-bubble ${m.from==='user'?'me':'them'}">${replied?`<div class="pv-quote">↪ ${esc(replied.text.slice(0,90))}</div>`:''}${esc(m.text)}<small>${new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></div><div class="pv-msgtools"><button data-pv="reply" data-id="${esc(m.id)}">↩</button><button data-pv="react-menu" data-id="${esc(m.id)}">☺</button></div>${menu}${reacts?`<div class="pv-reactions">${reacts}</div>`:''}</div></div>`}
+function sendLocal(){const inp=document.querySelector('.pv-input'),text=inp?.value.trim();if(!text)return;const {all,box,defaultId}=store(),id=state.chatId||defaultId,t=box.threads[id];t.messages.push({id:crypto.randomUUID?.()||String(Date.now()),from:'user',text,at:Date.now(),replyTo:state.replyTo,reactions:{}});state.replyTo=null;persist(all);inp.value='';render()}
+function react(id,emoji){const {all,box}=store();for(const t of Object.values(box.threads)){const m=t.messages.find(x=>String(x.id)===String(id));if(m){m.reactions??={};m.reactions[emoji]=(m.reactions[emoji]||0)+1;break}}persist(all);state.showReactions=null;render()}
+function render(){const s=document.querySelector('.pv-screen');if(!s)return;const {box,defaultId}=store();if(state.screen==='home')s.innerHTML=`<div class="pv-home"><div class="pv-bigtime">${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div><div class="pv-date">${new Date().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})}</div><div class="pv-grid"><button class="pv-app" data-pv="messages"><span>💬</span><b>Сообщения</b></button><button class="pv-app pv-disabled"><span>📸</span><b>Social</b><small>скоро</small></button><button class="pv-app pv-disabled"><span>📌</span><b>Campus</b><small>скоро</small></button><button class="pv-app pv-disabled"><span>👥</span><b>Контакты</b><small>скоро</small></button></div></div>`;
+ if(state.screen==='messages')s.innerHTML=`<div class="pv-title">💬 Сообщения</div><div class="pv-list">${Object.entries(box.threads).map(([id,t])=>{const av=avatarUrl(t.avatar);return `<button class="pv-thread" data-pv="thread" data-id="${esc(id)}">${av?`<img class="pv-avatarimg" src="${esc(av)}">`:`<span class="pv-avatar">${esc(t.name?.[0]||'?')}</span>`}<span><b>${esc(t.name)}</b><small>${esc(t.messages.at(-1)?.text||'Начать переписку')}</small></span><i>›</i></button>`}).join('')}</div>`;
+ if(state.screen==='brain'){const t=box.threads[state.chatId||defaultId],bi=brainInfo(t),total=bi.tokens.card+bi.tokens.rp+bi.tokens.phone+120;s.innerHTML=`<div class="pv-title">🧠 Контекст PocketVerse</div><div class="pv-braincard"><b>Character Card · ~${bi.tokens.card} ток.</b><pre>${esc(bi.card)}</pre></div><div class="pv-braincard"><b>Последний RP · ~${bi.tokens.rp} ток.</b><pre>${esc(bi.rp||'Нет RP')}</pre></div><div class="pv-braincard"><b>Телефон · ~${bi.tokens.phone} ток.</b><pre>${esc(bi.phone||'Пока пусто')}</pre></div><div class="pv-tokenline">Контекст PocketVerse ≈ ${total} токенов · обычная ➤ отправка = 0 запросов</div>`}
+ if(state.screen==='thread'){const t=box.threads[state.chatId||defaultId],av=avatarUrl(t.avatar);s.innerHTML=`<div class="pv-chathead"><button data-pv="back">‹</button><div class="pv-headperson">${av?`<img src="${esc(av)}">`:''}<b>${esc(t.name)}</b></div><span>${state.generating?'печатает…':'онлайн'}</span><button class="pv-brainbtn" data-pv="brain">🧠</button></div><div class="pv-bubbles">${t.messages.map(m=>messageHtml(m,t)).join('')||'<div class="pv-empty">Напиши несколько сообщений, затем ✨ — один запрос на всю пачку.</div>'}</div>${state.replyTo?`<div class="pv-replybar">↪ Ответ <button data-pv="cancel-reply">×</button></div>`:''}<div class="pv-compose"><button class="pv-attach" disabled>📎</button><textarea class="pv-input" rows="1" placeholder="Сообщение"></textarea><button data-pv="send-local">➤</button><button class="pv-ai" data-pv="ai-reply" ${state.generating?'disabled':''}>${state.generating?'…':'✨'}</button></div>`}}
+function onClick(e){const b=e.target.closest('[data-pv]');if(!b)return;const a=b.dataset.pv;if(a==='close')return close();if(a==='home'){state.screen='home';return render()}if(a==='back'){state.screen=state.screen==='thread'?'messages':state.screen==='brain'?'thread':'home';return render()}if(a==='messages'){state.screen='messages';return render()}if(a==='thread'){state.chatId=b.dataset.id;state.screen='thread';return render()}if(a==='send-local')return sendLocal();if(a==='ai-reply')return aiReply();if(a==='brain'){state.screen='brain';return render()}if(a==='reply'){state.replyTo=b.dataset.id;return render()}if(a==='cancel-reply'){state.replyTo=null;return render()}if(a==='react-menu'){state.showReactions=state.showReactions===b.dataset.id?null:b.dataset.id;return render()}if(a==='react')return react(b.dataset.id,b.dataset.emoji)}
+function mount(){if(document.getElementById(ID))return;const r=document.createElement('div');r.id=ID;r.innerHTML=`<button class="pv-fab">📱</button><div class="pv-overlay" hidden><section class="pv-phone"><header class="pv-status"><span class="pv-clock"></span><span>◔ Wi‑Fi ▰</span></header><main class="pv-screen"></main><footer class="pv-nav"><button data-pv="back">‹</button><button data-pv="home">●</button><button data-pv="close">×</button></footer></section></div>`;document.body.appendChild(r);r.querySelector('.pv-fab').onclick=open;r.addEventListener('click',onClick);clock();setInterval(clock,30000);render()}
+function clock(){const e=document.querySelector('.pv-clock');if(e)e.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}function open(){document.querySelector('.pv-overlay').hidden=false;state.screen='home';render()}function close(){document.querySelector('.pv-overlay').hidden=true}
+function mountSettings(){if(document.getElementById('pocketverse-settings'))return;const host=document.getElementById('extensions_settings2')||document.getElementById('extensions_settings');if(!host)return;const c=document.createElement('div');c.id='pocketverse-settings';c.className='extension_container';c.innerHTML=`<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>📱 PocketVerse · ${VERSION}</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>Rebase Messages Engine: реальные Character Card/аватары, чистый RP-контекст, надёжный JSON.</p><label>Контекст <select id="pv-context-mode"><option value="economy">Экономно</option><option value="balanced">Баланс</option><option value="deep">Глубоко (~до 1500 ток.)</option></select></label><button type="button" class="menu_button" id="pocketverse-open-settings">📱 Открыть PocketVerse</button></div></div>`;host.appendChild(c);const sel=c.querySelector('#pv-context-mode');sel.value=settings().contextMode;sel.onchange=()=>saveJson(SETTINGS,{...settings(),contextMode:sel.value});c.querySelector('#pocketverse-open-settings').onclick=open}
+function boot(){mount();mountSettings()}const c=ctx(),ev=c.eventSource,types=c.eventTypes||c.event_types;if(ev&&types?.APP_READY)ev.on(types.APP_READY,boot);if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();setTimeout(boot,500);setTimeout(boot,1500);
+export {VERSION};
