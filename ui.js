@@ -284,7 +284,7 @@ function createWandButton() {
         item.id = 'gp-wand-open';
         item.className = 'list-group-item flex-container flexGap5 interactable';
         item.tabIndex = 0;
-        item.innerHTML = `<i class="fa-solid fa-mobile-screen-button"></i><span>PocketVerse</span>`;
+        item.innerHTML = `<i class="fa-solid fa-mobile-screen-button"></i><span>Телефон</span>`;
         item.addEventListener('click', () => {
             openPhone();
         });

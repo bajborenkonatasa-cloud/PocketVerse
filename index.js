@@ -31,7 +31,7 @@ function setupSettingsPanel() {
     <div class="inline-drawer-toggle inline-drawer-header gp-settings-header">
         <div class="gp-settings-title">
             <span class="gp-settings-status-dot" aria-hidden="true"></span>
-            <span><b>PocketVerse 📱</b><small id="gp-settings-status"></small></span>
+            <span><b>PocketVerse FOUNDATION</b><small id="gp-settings-status"></small></span>
         </div>
         <select id="gp-set-lang" class="text_pole gp-settings-language" aria-label="Язык / Language">
             <option value="ru" ${s.lang !== 'en' ? 'selected' : ''}>Русский</option>

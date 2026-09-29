@@ -2,11 +2,11 @@
 import { chat_metadata } from '../../../../script.js';
 import { extension_settings, saveMetadataDebounced } from '../../../extensions.js';
 
-export const EXT_NAME = 'pocketverse';
+export const EXT_NAME = 'pocketverse_foundation';
 // Версия для сверки инстансов (ПК ↔ айфон): видна в настройках и в консоли.
 // БАМПАТЬ при каждом коммите вместе с manifest.json!
-export const GP_VERSION = '0.6.0';
-const META_KEY = 'pocketverse';
+export const GP_VERSION = '2.35.0-foundation.1';
+const META_KEY = 'pocketverse_foundation';
 
 // ── Глобальные настройки ──
 const defaultSettings = () => ({
