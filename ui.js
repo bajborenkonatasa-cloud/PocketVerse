@@ -1719,14 +1719,24 @@ function renderList(screen) {
 const REACTIONS = [
     { id: 'heart', icon: 'fa-heart', ru: 'сердечко' },
     { id: 'like', icon: 'fa-thumbs-up', ru: 'лайк' },
+    { id: 'dislike', icon: 'fa-thumbs-down', ru: 'дизлайк' },
     { id: 'laugh', icon: 'fa-face-laugh-squint', ru: 'смех' },
     { id: 'wow', icon: 'fa-face-surprise', ru: 'вау' },
     { id: 'sad', icon: 'fa-face-sad-tear', ru: 'грусть' },
     { id: 'angry', icon: 'fa-face-angry', ru: 'злость' },
     { id: 'fire', icon: 'fa-fire', ru: 'огонь' },
+    { id: 'kiss', icon: 'fa-face-kiss-wink-heart', ru: 'поцелуй' },
+    { id: 'skull', icon: 'fa-skull', ru: 'умер со смеху' },
+    { id: 'eyes', icon: 'fa-eye', ru: 'смотрю' },
 ];
 let _reactPickerFor = null; // mi сообщения с открытым пикером
 let _reactPickerKey = null; // тред пикера (чтобы mi не «переехал» в другой чат)
+
+// PocketVerse: локальная лесенка. Буферные сообщения не вызывают модель до ✨.
+const _pvPending = new Map(); // threadKey -> [{text,time}]
+function pvPending(key){ return _pvPending.get(key) || []; }
+function pvQueue(key,text){ const a=pvPending(key).slice(); a.push({text:String(text||'').trim(),time:new Date()}); _pvPending.set(key,a); }
+function pvClear(key){ _pvPending.delete(key); }
 
 // Перезапись JSON-тега сообщения по позиции (tel:sms или tel:out маркер юзера).
 // После записи позиции соседних тегов устаревают — но render() пересканирует чат.
@@ -1856,15 +1866,26 @@ function renderThread(screen) {
         const reaction = m.react ? REACTIONS.find(r => r.id === m.react) : null;
         const reactChip = reaction ? `<span class="gp-react-chip">${ic(reaction.icon)}</span>` : '';
         const picker = (_reactPickerFor === mi && _reactPickerKey === t.key)
-            ? `<div class="gp-react-picker">${REACTIONS.map(r => `<button data-react="${r.id}" data-react-mi="${mi}" class="${m.react === r.id ? 'gp-selected' : ''}" title="${r.ru}">${ic(r.icon)}</button>`).join('')}</div>` : '';
+            ? `<div class="gp-react-picker gp-action-pop"><div class="gp-reaction-row">${REACTIONS.map(r => `<button data-react="${r.id}" data-react-mi="${mi}" class="${m.react === r.id ? 'gp-selected' : ''}" title="${r.ru}">${ic(r.icon)}</button>`).join('')}</div><div class="gp-action-row"><button data-reply-mi="${mi}">${ic('fa-reply')} Ответить</button><button class="gp-danger" data-smsdel="${mi}">${ic('fa-trash-can')} Удалить</button></div></div>` : '';
+        const next = t.messages[mi + 1];
+        const endOfIncomingRun = m.dir === 'in' && (!next || next.dir !== 'in' || (t.isGroup && next.from !== m.from));
+        const bubbleAva = endOfIncomingRun
+            ? avatarHtml(m.from || t.name, getContactAvatar(keyOf(m.from || t.name)), 'gp-msg-avatar') : '';
         bubbles += `
-        <div class="gp-bubble-wrap ${m.dir === 'out' ? 'gp-out' : 'gp-in'}${reaction ? ' gp-has-react' : ''}">
-            ${picker}
-            <div class="gp-bubble${m.voice ? ' gp-bubble-voice' : ''}" data-bmi="${mi}">${senderLabel}${media}${shotHtml(m)}${body}<button class="gp-sms-del" data-smsdel="${mi}" title="Удалить">${ic('fa-xmark')}</button>${reactChip}</div>
-            ${tm ? `<div class="gp-bubble-time">${esc(tm)}</div>` : ''}
+        <div class="gp-msg-line ${m.dir === 'out' ? 'gp-msg-line-out' : 'gp-msg-line-in'}">
+            ${m.dir === 'in' ? `<div class="gp-msg-avatar-slot">${bubbleAva}</div>` : ''}
+            <div class="gp-bubble-wrap ${m.dir === 'out' ? 'gp-out' : 'gp-in'}${reaction ? ' gp-has-react' : ''}">
+                ${picker}
+                <div class="gp-bubble${m.voice ? ' gp-bubble-voice' : ''}" data-bmi="${mi}">${senderLabel}${media}${shotHtml(m)}${body}${reactChip}</div>
+                ${tm ? `<div class="gp-bubble-time">${esc(tm)}</div>` : ''}
+            </div>
         </div>`;
     }
 
+    const pending = pvPending(t.key);
+    if (pending.length) {
+        bubbles += pending.map((q, qi) => `<div class="gp-msg-line gp-msg-line-out gp-pending-line"><div class="gp-bubble-wrap gp-out"><div class="gp-bubble gp-pending-bubble">${esc(q.text)}<span class="gp-pending-dot" title="Ещё не отправлено модели">•</span></div><div class="gp-bubble-time">в очереди ${qi + 1}/${pending.length}</div></div></div>`).join('');
+    }
     const typing = typingKey === t.key
         ? `<div class="gp-bubble-wrap gp-in gp-typing-wrap"><div class="gp-bubble gp-typing"><span></span><span></span><span></span></div></div>`
         : '';
@@ -1911,7 +1932,7 @@ function renderThread(screen) {
             <input type="file" id="gp-attach-file" accept="image/*" style="display:none">
             <button class="gp-iconbtn${_smsDraftVoice ? ' gp-voice-armed' : ''}" id="gp-voice-toggle" title="Голосовое сообщение">${ic('fa-microphone')}</button>
             <textarea id="gp-input" rows="1" placeholder="${_smsDraftVoice ? 'Расшифровка голосового...' : 'Сообщение...'}"></textarea>
-            <button class="gp-send" id="gp-send" ${sending ? 'disabled' : ''}>${ic('fa-paper-plane')}</button>
+            <button class="gp-send" id="gp-send" title="Добавить в лесенку" ${sending ? 'disabled' : ''}>${ic('fa-paper-plane')}</button><button class="gp-send gp-send-ai" id="gp-send-ai" title="Отправить лесенку персонажу" ${(sending || !pvPending(t.key).length) ? 'disabled' : ''}>${ic('fa-wand-magic-sparkles')}</button>
         </div>`;
 
     const msgs = screen.querySelector('#gp-msgs');
@@ -2113,22 +2134,30 @@ function renderThread(screen) {
         input.style.height = Math.min(110, input.scrollHeight) + 'px';
     };
     input?.addEventListener('input', autoGrow);
-    input?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            doSend(t.key);
-        }
-    });
-    sendBtn?.addEventListener('click', () => doSend(t.key));
-    screen.querySelector('#gp-regen')?.addEventListener('click', () => doRegen(t.key));
-    // Реакции: тап по пузырю → пикер; выбор пишет react в тег + журнал
-    screen.querySelectorAll('[data-bmi]').forEach(b => b.addEventListener('click', () => {
-        const mi = parseInt(b.getAttribute('data-bmi'));
-        const wasOpen = _reactPickerFor === mi && _reactPickerKey === t.key;
-        _reactPickerFor = wasOpen ? null : mi;
-        _reactPickerKey = t.key;
+    const queueCurrent = () => {
+        const text = (input?.value || '').trim();
+        if (!text) return;
+        pvQueue(t.key, text);
+        input.value = '';
+        input.style.height = 'auto';
         render();
-    }));
+    };
+    input?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); queueCurrent(); }
+    });
+    sendBtn?.addEventListener('click', queueCurrent);
+    screen.querySelector('#gp-send-ai')?.addEventListener('click', () => flushPending(t.key));
+    screen.querySelector('#gp-regen')?.addEventListener('click', () => doRegen(t.key));
+    // PocketVerse: долгое нажатие открывает действия; обычный тап закрывает плашку.
+    screen.querySelectorAll('[data-bmi]').forEach(b => {
+        let timer = null, opened = false;
+        const open = (e) => { e?.preventDefault?.(); opened = true; _reactPickerFor = parseInt(b.getAttribute('data-bmi')); _reactPickerKey = t.key; render(); };
+        b.addEventListener('touchstart', () => { opened = false; timer = setTimeout(open, 430); }, {passive:true});
+        b.addEventListener('touchend', () => { if (timer) clearTimeout(timer); });
+        b.addEventListener('touchmove', () => { if (timer) clearTimeout(timer); });
+        b.addEventListener('contextmenu', open);
+        b.addEventListener('click', () => { if (_reactPickerFor !== null && !opened) { _reactPickerFor = null; _reactPickerKey = null; render(); } });
+    });
     screen.querySelectorAll('[data-react]').forEach(b => b.addEventListener('click', async (e) => {
         e.stopPropagation();
         const mi = parseInt(b.getAttribute('data-react-mi'));
@@ -2154,6 +2183,17 @@ function renderThread(screen) {
         }
         applyChatHiding();
         render();
+    }));
+
+    screen.querySelectorAll('[data-reply-mi]').forEach(b => b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const m = t.messages[parseInt(b.getAttribute('data-reply-mi'))];
+        if (!m) return;
+        const who = m.dir === 'out' ? getUserName() : (m.from || t.name);
+        const quote = String(m.text || (m.photoDesc ? '📷 Фото' : m.voice ? '🎤 Голосовое' : '')).slice(0, 180);
+        _reactPickerFor = null; _reactPickerKey = null;
+        const inp = document.getElementById('gp-input');
+        if (inp) { inp.value = `↩ ${who}: ${quote}\n`; inp.focus(); }
     }));
 
     // Генерация фото по описанию ММС (заглушка → реальная картинка).
@@ -7026,6 +7066,39 @@ async function insertGhostReply(name, mesText) {
 
 // opts: {text, shot} — так уходит пересланный скрин поста (адресата и подпись
 // выбирают в шторке, поле ввода треда при этом не участвует)
+async function flushPending(key) {
+    if (sending) return;
+    const pending = pvPending(key);
+    if (!pending.length) return;
+    const t = getThread(key); if (!t) return;
+    const batch = pending.map(x => x.text).filter(Boolean);
+    if (!batch.length) return;
+    // Сначала записываем каждую реплику как отдельное сообщение пользователя. Это НЕ вызывает модель.
+    // Затем делаем ровно один generateQuietPrompt на всю лесенку.
+    sending = true;
+    try {
+        const name = t.name || key, isGroup = !!t.isGroup;
+        for (const text of batch) {
+            const markerBase = isGroup ? { to: `группа:${name}` } : { to: name };
+            const marker = `<!--tel:out:${JSON.stringify(markerBase)}-->`;
+            const en = lang() === 'en';
+            const visible = isGroup ? (en ? `[SMS to chat «${name}»]` : `[СМС в чат «${name}»]`) : `[${en ? 'SMS' : 'СМС'} → ${name}]`;
+            await sendMessageAsUser(`${marker}\n${visible} ${text}`);
+        }
+        pvClear(key);
+        applyChatHiding(); typingKey = key; render(); updatePhoneInjection();
+        const ctx = SillyTavern.getContext();
+        const ladder = batch.map((x,i)=>`${i+1}. ${x}`).join('\n');
+        const quietPrompt = isGroup
+            ? `Continue the roleplay. The group chat «${name}» (members: ${(t.members || []).join(', ')}) received a sequence of ${batch.length} messages from ${ctx?.name1 || 'User'}, in this exact order:\n${ladder}\nReact to the whole sequence naturally. Reply as group members ONLY with hidden tel:sms tags with the "chat" field (RULE 3 — PHONE-ONLY MODE). One tag per bubble; several members may text. No visible prose.`
+            : `Continue the roleplay. ${name} received a sequence of ${batch.length} SMS messages from ${ctx?.name1 || 'User'}, in this exact order:\n${ladder}\nReact naturally to the whole sequence, not each line as a separate API turn. Reply in-character ONLY with hidden tel:sms tags (RULE 3 — PHONE-ONLY MODE). Use 1-4 short message bubbles when natural. No visible prose.`;
+        const rawReply = await generateQuietPrompt(quietPrompt, false, false);
+        if (rawReply && rawReply.trim()) await insertGhostReply(name, rawReply.trim());
+    } catch(e) {
+        console.error('[PocketVerse] ladder send failed:', e); toast('Не удалось отправить лесенку', 'fa-circle-exclamation');
+    } finally { sending=false; typingKey=null; render(); updateFabBadge(); applyChatHiding(); }
+}
+
 async function doSend(key, opts = {}) {
     if (sending) return;
     const input = document.getElementById('gp-input');
