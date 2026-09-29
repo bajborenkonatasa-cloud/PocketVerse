@@ -1,12 +1,12 @@
 {
-    "display_name": "PocketVerse FOUNDATION",
+    "display_name": "PocketVerse 📱",
     "loading_order": 12,
     "requires": [],
     "optional": [],
     "js": "index.js",
     "css": "style.css",
     "author": "Delidgi1 (Phone-ST) · test fork for PocketVerse",
-    "version": "2.35.0-foundation.1",
+    "version": "2.35.0-pocketverse.1",
     "homePage": "",
     "source": "",
     "auto_update": false

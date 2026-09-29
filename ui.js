@@ -1219,29 +1219,13 @@ function renderHome(screen) {
                     <div class="gp-app-icon gp-app-of">${ic('fa-heart')}</div>
                     <div class="gp-app-name">OnlyFans</div>
                 </div>
-                <div class="gp-app" data-app="bank">
-                    <div class="gp-app-icon gp-app-bank">${ic('fa-building-columns')}${bankBadgeCount() > 0 ? `<span class="gp-app-badge">${bankBadgeCount()}</span>` : ''}</div>
-                    <div class="gp-app-name">Банк</div>
-                </div>
-                <div class="gp-app" data-app="shop">
-                    <div class="gp-app-icon gp-app-shop">${ic('fa-bag-shopping')}${pendingOrders() > 0 ? `<span class="gp-app-badge">${pendingOrders()}</span>` : ''}</div>
-                    <div class="gp-app-name">Магазин</div>
-                </div>
                 <div class="gp-app" data-app="chans">
                     <div class="gp-app-icon gp-app-chans">${ic('fa-paper-plane')}${unreadChannels() > 0 ? `<span class="gp-app-badge">${unreadChannels()}</span>` : ''}</div>
                     <div class="gp-app-name">Каналы</div>
                 </div>
-                <div class="gp-app" data-app="casino">
-                    <div class="gp-app-icon gp-app-casino">${ic('fa-dice')}</div>
-                    <div class="gp-app-name">Казино</div>
-                </div>
                 <div class="gp-app" data-app="news">
                     <div class="gp-app-icon gp-app-news">${ic('fa-newspaper')}</div>
                     <div class="gp-app-name">Новости</div>
-                </div>
-                <div class="gp-app" data-app="discord">
-                    <div class="gp-app-icon gp-app-discord">${brand('fa-discord')}</div>
-                    <div class="gp-app-name">Discord</div>
                 </div>
                 <div class="gp-app" data-app="twitch">
                     <div class="gp-app-icon gp-app-twitch">${brand('fa-twitch')}${getTwitch().myStream ? '<span class="gp-app-badge gp-live-badge">LIVE</span>' : ''}</div>
@@ -1251,11 +1235,6 @@ function renderHome(screen) {
                     <div class="gp-app-icon gp-app-notes">${ic('fa-note-sticky')}${plansBadgeCount() > 0 ? `<span class="gp-app-badge">${plansBadgeCount()}</span>` : ''}</div>
                     <div class="gp-app-name">Заметки</div>
                 </div>
-                ${tinderEnabled() ? `
-                <div class="gp-app" data-app="tinder">
-                    <div class="gp-app-icon gp-app-tinder">${ic('fa-fire')}${matchBadge() > 0 ? `<span class="gp-app-badge">${matchBadge()}</span>` : ''}</div>
-                    <div class="gp-app-name">Tinder</div>
-                </div>` : ''}
                 <div class="gp-app" data-app="appearance">
                     <div class="gp-app-icon gp-app-appearance">${ic('fa-palette')}</div>
                     <div class="gp-app-name">Оформление</div>

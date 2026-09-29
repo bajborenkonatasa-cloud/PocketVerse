@@ -1,4 +1,17 @@
-PocketVerse v0.6.0 WORKHORSE
-Foundation: user-supplied Phone-ST v2.35.0 by Delidgi1.
-This build intentionally keeps the proven phone implementation intact and isolates PocketVerse settings/chat metadata under the pocketverse key.
-NOVA was reviewed as an additional reference for later Brain/media/social customization.
+PocketVerse — GOLDEN FOUNDATION / CLEANUP 1
+
+Based on the working FOUNDATION test.
+This patch intentionally removes only the HOME SCREEN entry points for:
+- Bank
+- Shop
+- Casino
+- Discord
+- Tinder
+
+Events and News remain for evaluation.
+Twitter, Instagram, OnlyFans, Channels, Twitch, Notes, Messages and Appearance remain.
+
+IMPORTANT: underlying legacy modules are intentionally still present in this patch because
+Phone-ST has cross-module imports (for example Twitch/Channels depend on Bank, prompts and UI
+import several legacy modules). Physical deletion before dependency untangling would break
+module initialization. This is the safe first cleanup checkpoint.
