@@ -1810,9 +1810,13 @@ let _reactPickerKey = null; // тред пикера (чтобы mi не «пе�
 
 // PocketVerse: локальная лесенка. Буферные сообщения не вызывают модель до ✨.
 const _pvPending = new Map(); // threadKey -> [{text,time}]
+const _pvPendingMedia = new Map(); // threadKey -> [{kind,title,time}] — already visible locally, waits for ✨
 function pvPending(key){ return _pvPending.get(key) || []; }
+function pvPendingMedia(key){ return _pvPendingMedia.get(key) || []; }
+function pvHasPending(key){ return pvPending(key).length > 0 || pvPendingMedia(key).length > 0; }
 function pvQueue(key,text){ const a=pvPending(key).slice(); a.push({text:String(text||'').trim(),time:new Date()}); _pvPending.set(key,a); }
-function pvClear(key){ _pvPending.delete(key); }
+function pvQueueMedia(key,kind,title){ const a=pvPendingMedia(key).slice(); a.push({kind:String(kind||'gif'),title:String(title||'reaction').slice(0,160),time:new Date()}); _pvPendingMedia.set(key,a); }
+function pvClear(key){ _pvPending.delete(key); _pvPendingMedia.delete(key); }
 
 // Перезапись JSON-тега сообщения по позиции (tel:sms или tel:out маркер юзера).
 // После записи позиции соседних тегов устаревают — но render() пересканирует чат.
@@ -2059,7 +2063,7 @@ function renderThread(screen) {
             <input type="file" id="gp-attach-file" accept="image/*" style="display:none">
             <button class="gp-iconbtn${_smsDraftVoice ? ' gp-voice-armed' : ''}" id="gp-voice-toggle" title="Голосовое сообщение">${ic('fa-microphone')}</button>
             <textarea id="gp-input" rows="1" placeholder="${_smsDraftVoice ? 'Расшифровка голосового...' : 'Сообщение...'}"></textarea>
-            <button class="gp-send" id="gp-send" title="Добавить в лесенку" ${sending ? 'disabled' : ''}>${ic('fa-paper-plane')}</button><button class="gp-send gp-send-ai" id="gp-send-ai" title="Отправить лесенку персонажу" ${(sending || !pvPending(t.key).length) ? 'disabled' : ''}>${ic('fa-wand-magic-sparkles')}</button>
+            <button class="gp-send" id="gp-send" title="Добавить в лесенку" ${sending ? 'disabled' : ''}>${ic('fa-paper-plane')}</button><button class="gp-send gp-send-ai" id="gp-send-ai" title="Отправить лесенку персонажу" ${(sending || !pvHasPending(t.key)) ? 'disabled' : ''}>${ic('fa-wand-magic-sparkles')}</button>
         </div>`;
 
     const msgs = screen.querySelector('#gp-msgs');
@@ -7204,28 +7208,23 @@ async function sendUserGiphy(key, g) {
     if (sending || !g?.url) return;
     const t=getThread(key); if(!t) return;
     const name=t.name||key, isGroup=!!t.isGroup;
+    // Media selection is LOCAL ONLY. Never call the LLM on a tap: user explicitly
+    // decides when to spend context/tokens with ✨, same contract as the text ladder.
     addLocalSms({dir:'out', name, chat:isGroup?name:'', text:'', gif:g.url, meme:g.title||'', mediaKind:g.kind||'gif'});
-    sending=true; typingKey=key; _pvThreadRenderFrozen=true; render();
-    try {
-        updatePhoneInjection();
-        const ctx=SillyTavern.getContext();
-        const label=g.kind==='sticker'?'animated sticker':'GIF/meme reaction';
-        const prompt=isGroup
-          ? `The group chat «${name}» just received an ${label} from ${ctx?.name1||'User'} described as: "${String(g.title||'reaction').slice(0,140)}". React naturally as group members. Reply ONLY with hidden tel:sms tags with the "chat" field. No visible prose.`
-          : `${name} just received an ${label} from ${ctx?.name1||'User'} described as: "${String(g.title||'reaction').slice(0,140)}". React naturally in character. Reply ONLY with hidden tel:sms tags. No visible prose.`;
-        const raw=await generateQuietPrompt(prompt,false,false);
-        if(raw?.trim()) await insertGhostReply(name,raw.trim(),isGroup?name:'');
-    } catch(e){ console.error('[PocketVerse] user GIPHY send failed',e); toast('Не удалось получить ответ','fa-circle-exclamation'); }
-    finally { _pvThreadRenderFrozen=false; sending=false; typingKey=null; render(); updateFabBadge(); }
+    pvQueueMedia(key, g.kind||'gif', g.title||'reaction');
+    toast('GIF отправлена локально · ✨ когда захочешь ответ персонажа', 'fa-wand-magic-sparkles');
+    render(); updateFabBadge();
 }
 
 async function flushPending(key) {
     if (sending) return;
     const pending = pvPending(key);
-    if (!pending.length) return;
+    const pendingMedia = pvPendingMedia(key);
+    if (!pending.length && !pendingMedia.length) return;
     const t = getThread(key); if (!t) return;
     const batch = pending.map(x => x.text).filter(Boolean);
-    if (!batch.length) return;
+    const mediaBatch = pendingMedia.map(x => `${x.kind === 'sticker' ? 'animated sticker' : 'GIF/meme reaction'}: "${x.title}"`);
+    if (!batch.length && !mediaBatch.length) return;
     // Сначала записываем каждую реплику как отдельное сообщение пользователя. Это НЕ вызывает модель.
     // Затем делаем ровно один generateQuietPrompt на всю лесенку.
     sending = true;
@@ -7238,10 +7237,11 @@ async function flushPending(key) {
         applyChatHiding(); typingKey = key; render(); updatePhoneInjection();
         _pvThreadRenderFrozen = true;
         const ctx = SillyTavern.getContext();
-        const ladder = batch.map((x,i)=>`${i+1}. ${x}`).join('\n');
+        const items = [...batch.map(x => `text: ${x}`), ...mediaBatch];
+        const ladder = items.map((x,i)=>`${i+1}. ${x}`).join('\n');
         const quietPrompt = isGroup
-            ? `Continue the roleplay. The group chat «${name}» (members: ${(t.members || []).join(', ')}) received a sequence of ${batch.length} messages from ${ctx?.name1 || 'User'}, in this exact order:\n${ladder}\nReact to the whole sequence naturally. Reply as group members ONLY with hidden tel:sms tags with the "chat" field (RULE 3 — PHONE-ONLY MODE). One tag per bubble; several members may text. No visible prose.`
-            : `Continue the roleplay. ${name} received a sequence of ${batch.length} SMS messages from ${ctx?.name1 || 'User'}, in this exact order:\n${ladder}\nReact naturally to the whole sequence, not each line as a separate API turn. Reply in-character ONLY with hidden tel:sms tags (RULE 3 — PHONE-ONLY MODE). Use 1-4 short message bubbles when natural. No visible prose.`;
+            ? `The group chat «${name}» (members: ${(t.members || []).join(', ')}) just received ${items.length} phone item(s) from ${ctx?.name1 || 'User'}, in this exact order:\n${ladder}\nReact naturally as group members. Keep it like real texting: usually 1-3 short bubbles, no narration. Reply ONLY with hidden tel:sms tags with the "chat" field. No visible prose.`
+            : `${name} just received ${items.length} phone item(s) from ${ctx?.name1 || 'User'}, in this exact order:\n${ladder}\nReact naturally in character like a real private chat. Usually 1-3 short bubbles; do not narrate. Reply ONLY with hidden tel:sms tags. No visible prose.`;
         const rawReply = await generateQuietPrompt(quietPrompt, false, false);
         if (rawReply && rawReply.trim()) await insertGhostReply(name, rawReply.trim(), isGroup ? name : '');
     } catch(e) {

@@ -1,0 +1,7 @@
+PocketVerse v1.1.1 MEDIA UX
+- GIF/sticker tap is local-only: 0 LLM calls on selection.
+- Only the explicit ✨ button sends queued text/media to the language model.
+- GIF bubbles reduced substantially; stickers smaller still.
+- GIPHY picker expanded vertically for mobile browsing.
+- Media is described compactly to the model; the binary GIF is never sent to the LLM.
+- RP isolation remains unchanged.
