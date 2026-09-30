@@ -1,7 +1,7 @@
 import { generateRaw, user_avatar, getThumbnailUrl, saveSettingsDebounced } from '../../../../script.js';
 import { saveBase64AsFile } from '../../../utils.js';
 import { extensionNames, extension_settings } from '../../../extensions.js';
-import { getMeta, saveMeta, keyOf, scanChat, getSettings, stripThink, textMentionsName, stripHandle, isBanned, displayName, getRpDateTime, extractTemporalContext, isUserName, isAppJournal } from './state.js';
+import { getMeta, saveMeta, keyOf, scanChat, getSettings, stripThink, textMentionsName, nameAliases, stripHandle, isBanned, displayName, getRpDateTime, extractTemporalContext, isUserName, isAppJournal } from './state.js';
 import { lang } from './i18n.js';
 import { getBank, addTransaction } from './bank.js';
 import { logReq, logOk, logFail } from './debug-log.js';
@@ -3529,8 +3529,9 @@ export async function getMediaIdentityDiagnostics() {
             const avatarPrimary = !!(entry.primary?.enabled !== false && avatarFallback);
             x.reference = explicitPrimary || extraImage || avatarPrimary;
             x.referenceKind = explicitPrimary ? 'saved primary' : (extraImage ? 'additional image' : (avatarPrimary ? 'avatar fallback' : ''));
-            x.description = !!String(entry.primary?.description || '').trim()
-                || !!(entry.appearanceItems || []).some(v => v?.enabled !== false && v?.type === 'text' && String(v?.description || '').trim());
+            const textParts = [String(entry.primary?.description || '').trim(), ...(entry.appearanceItems || []).filter(v => v?.enabled !== false && v?.type === 'text').map(v => String(v?.description || '').trim())].filter(Boolean);
+            x.descriptionText = textParts.join(' ').trim();
+            x.description = !!x.descriptionText;
             x.source = x.reference ? `SIP ${x.referenceKind || 'reference library'}` : (x.description ? 'SIP appearance text' : 'Card/RP fallback');
         } else x.source = 'Card/RP fallback';
         return x;
@@ -3646,7 +3647,9 @@ export async function resolveMediaSubjectsDiagnostic(sceneText = '') {
         if (!x?.name) return;
         // SIP users often keep aliases directly in the Name field: "Кира, Кир, Kira".
         const explicit = [...splitAliases(x.name), ...(x.aliases || []).flatMap(splitAliases)];
-        const names = [...new Set(explicit.flatMap(russianNameForms).map(v=>String(v||'').trim()).filter(Boolean))];
+        // Add the same common-name nickname dictionary used elsewhere in PocketVerse, then case forms.
+        const expanded = explicit.flatMap(v => [v, ...nameAliases(v)]);
+        const names = [...new Set(expanded.flatMap(russianNameForms).map(v=>String(v||'').trim()).filter(Boolean))];
         identities.push({ ...x, role, names });
     };
     add(d.character, 'character');
@@ -3665,6 +3668,15 @@ export async function resolveMediaSubjectsDiagnostic(sceneText = '') {
         .replace(/ph/g,'f').replace(/ck/g,'k').replace(/qu/g,'kv')
         .replace(/[^a-z0-9]+/g,'');
     const rawKeyText = latinize(raw).normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+    // Conservative Russian nickname/case root: Кира / Кире / Кирюша / Кирочка -> кир.
+    // Used only as a fallback after exact aliases, and only for Cyrillic words with a >=3-letter root.
+    const ruRoot = v => {
+        let w=String(v||'').toLowerCase().replace(/ё/g,'е').replace(/[^а-я-]/g,'');
+        w=w.replace(/(енька|онька|очка|ечка|юшка|ушка|юша|уша|чик|ик|ка)$/u,'');
+        w=w.replace(/(ами|ями|ого|ему|ому|ой|ей|ою|ею|ам|ям|ах|ях|ом|ем|у|ю|а|я|ы|и|е)$/u,'');
+        return w.length>=3?w:'';
+    };
+    const rawWords = raw.match(/[А-ЯЁа-яё-]{3,}/gu) || [];
     const mentioned = [];
     for (const id of identities) {
         let hit = null;
@@ -3680,6 +3692,13 @@ export async function resolveMediaSubjectsDiagnostic(sceneText = '') {
                         const rr = new RegExp(`(^|[^a-z0-9])${rxEsc(vk)}(?=$|[^a-z0-9])`, 'i');
                         const tm = rr.exec(rawKeyText);
                         if (tm && (!hit || tm.index < hit.index)) hit={index:tm.index, matched:n, crossScript:true};
+                    }
+                }
+                if (!hit && /[А-ЯЁа-яё]/u.test(n)) {
+                    const root=ruRoot(n);
+                    if (root) {
+                        const wi=rawWords.findIndex(w=>ruRoot(w)===root);
+                        if (wi>=0) { const word=rawWords[wi]; const pos=raw.indexOf(word); hit={index:pos>=0?pos:999999, matched:word, russianForm:true}; }
                     }
                 }
             }
@@ -3698,7 +3717,8 @@ export async function resolveMediaSubjectsDiagnostic(sceneText = '') {
 
     const normalized=visible.map(x=>({
         name:x.name, role:x.role, key:x.key||'', reference:!!x.reference,
-        referenceKind:x.referenceKind||'', description:!!x.description, source:x.source||'',
+        referenceKind:x.referenceKind||'', description:!!x.description, descriptionText:String(x.descriptionText||''), source:x.source||'',
+        matched:x.matched||'', aliases:x.names||[],
         fallback:x.reference?'exact reference':(x.description?'saved appearance':'Card/RP description')
     }));
 
@@ -3726,19 +3746,37 @@ export async function buildMediaSceneBlueprintDiagnostic(sceneText = '') {
         `CAMERA: ${r.camera}.`,
         `VISIBLE SUBJECTS ONLY: ${names.length ? names.join(', ') : 'no known identity resolved'}.`,
         ...identityLines,
-        'Preserve the action, pose, relative positions, facial expressions, clothing, props, location, background, time of day and lighting stated or clearly implied by the scene.',
-        'Do not replace, merge, duplicate or gender-swap named characters. Do not add the photographer if they are behind the camera.',
-        'Do not invent extra people. Keep spatial continuity and make the result look like one believable captured moment.',
+        'Profiles/references define stable appearance. The current RP scene defines action, expression, pose, clothing state, props and environment.',
+        'Preserve only what is visible in this captured moment. Do not replace, merge, duplicate or gender-swap named characters.',
+        'Do not add the photographer if they are behind the camera. Do not invent extra people.',
         'Rendering style is NOT specified here: use the currently selected Silly Images Plus style.'
     ].join('\n');
-    const nai = [
-        `scene: ${scene}`,
-        `camera: ${r.camera}`,
-        names.length ? `characters: ${names.join(', ')}` : '',
-        'identity: exact references only, no character mixing, no duplicate people',
-        'environment: preserve location, background, props, clothing, time and lighting from scene',
-        'composition: coherent single moment, correct relative positions, correct subject count'
-    ].filter(Boolean).join(', ');
-    return { ...r, naturalPrompt:natural, novelAiGuide:nai };
+
+    // NovelAI compiler follows the working Scene Blocks V5 grammar:
+    // base scene | one self-contained block per visible character.
+    // It deliberately does NOT inject artists/quality/style: SIP owns the selected style prefix.
+    const countByRole = { girl:0, boy:0, other:0 };
+    const genderFor = x => {
+        const t = `${x.descriptionText||''} ${x.name||''}`.toLowerCase();
+        if (/\b(female|woman|girl)\b|женщ|девуш/u.test(t) || x.role==='user') return 'girl';
+        if (/\b(male|man|boy)\b|мужч|парен/u.test(t)) return 'boy';
+        return 'other';
+    };
+    const charBlocks = (r.visible || []).map(x => {
+        const g=genderFor(x); countByRole[g]++;
+        const appearance=String(x.descriptionText||'').replace(/[\r\n|]+/g,' ').replace(/\s+/g,' ').trim();
+        const identity = `${g}, ${x.name}`;
+        const source = x.reference ? 'exact SIP reference identity' : (appearance ? 'saved SIP appearance' : 'Character Card or RP appearance');
+        return `${identity}, ${source}${appearance ? `, ${appearance}` : ''}, preserve current visible clothing, pose, facial expression, gaze direction and action from the scene`;
+    });
+    const counts=[];
+    if(countByRole.girl) counts.push(`${countByRole.girl}girl${countByRole.girl>1?'s':''}`);
+    if(countByRole.boy) counts.push(`${countByRole.boy}boy${countByRole.boy>1?'s':''}`);
+    if(countByRole.other) counts.push(`${countByRole.other}other`);
+    const camera = r.camera.includes('front camera') ? 'selfie, front camera' : (r.camera.includes('behind camera') ? 'photographed scene, photographer behind camera and not visible' : 'scene');
+    const base=[counts.join(' ') || `${Math.max(1,names.length)} subjects`, camera, scene || 'current RP moment', 'coherent single moment', 'correct relative positions', 'scene-internal gaze unless selfie explicitly requires camera gaze', 'preserve factual location background props time and lighting from scene'].join(', ');
+    const nai=[base, ...charBlocks].join(' | ');
+    const naiRules='SIP style prefix stays untouched. PocketVerse supplies content only. One base block + one character block per visible subject; no foreign reference; no duplicate identity; no invented people.';
+    return { ...r, naturalPrompt:natural, novelAiGuide:nai, novelAiRules:naiRules };
 }
 

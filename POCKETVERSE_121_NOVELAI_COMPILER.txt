@@ -1,0 +1,9 @@
+PocketVerse v1.2.1 — NovelAI Prompt Compiler
+
+- Uses working Scene Blocks V5 grammar: base scene | one block per visible character.
+- SIP keeps ownership of provider, exact references and selected style prefix.
+- PocketVerse does not inject artists/quality/style terms.
+- Adds conservative Russian case/diminutive matching fallback (e.g. Кира/Кире/Кирюша) after exact aliases.
+- Keeps cross-script matching Hanabi/Ханаби and Seraphina/Серафина.
+- Profiles/references define stable appearance; current RP defines action/expression/clothing state/environment.
+- Diagnostic only: does not generate and does not touch RP.
