@@ -30,6 +30,7 @@ import {
     generateChannels, generateChannelPosts, generateChannelComments, generateMyChannelFeedback, generatePersonChannel,
     generateAnonFeed, generateAnonComments, resolveAnonAuthor, generateTinderDeck,
     getMediaIdentityDiagnostics,
+    resolveMediaSubjectsDiagnostic,
 } from './social.js';
 import { getSystemsView, deferEvent, declineEvent, selectStoryEvent, acceptAdOffer, declineAdOffer, attachActiveAd, getReputationStatus } from './social-events.js';
 import { maybeScamSms } from './scam.js';
@@ -1219,7 +1220,11 @@ function renderBrain(screen) {
             <div><b>👤 Persona</b><strong>≈ ${b.counts.persona}</strong><small>диагностика</small></div>
             <div><b>📖 ST: последние 24 хода</b><strong>≈ ${b.counts.rp}</strong><small>диагностика · НЕ расход PocketVerse</small></div>
           </div>
-          <div class="gp-brain-control gp-media-lab"><b>📸 Media Identity Lab · SAFE</b><small>Только проверка маршрута. Ничего не генерирует и не трогает RP.</small><div id="gp-media-diag">Проверяю Silly Images Plus…</div></div>
+          <div class="gp-brain-control gp-media-lab"><b>📸 Media Identity Lab · SAFE</b><small>Только проверка маршрута. Ничего не генерирует и не трогает RP.</small><div id="gp-media-diag">Проверяю Silly Images Plus…</div>
+          <div class="gp-subject-lab"><b>🎬 Visible Subjects Resolver · SAFE</b><small>Напиши сцену обычными словами — проверим, кто реально попадёт в кадр и чей reference будет выбран.</small>
+          <textarea id="gp-subject-scene" rows="3" placeholder="Например: Seraphina делает селфи вместе с Hanabi"></textarea>
+          <button id="gp-subject-test">Проверить кадр</button>
+          <div id="gp-subject-result"><small>Без модели и генерации — только локальная проверка identity.</small></div></div></div>
           <div class="gp-brain-warning"><b>Phone Context Budget:</b> ✨ теперь использует изолированный generateRaw-контекст вместо полного RP-чата. Lite ≈ до 1–1.5k входа · Balanced ≈ 2.5–4k · Deep ≈ 5–7k (оценка зависит от карточки/истории). Большая цифра RP ниже остаётся только диагностикой ST и целиком в телефонный запрос не копируется.</div>
           <details class="gp-brain-details" open><summary>📱 Что PocketVerse добавляет прямо сейчас</summary><pre>${esc(b.prompt)}</pre></details>
           <details class="gp-brain-details"><summary>🎭 Character Card</summary><pre>${esc(b.cardText || 'Недоступно в текущем контексте.')}</pre></details>
@@ -1244,6 +1249,16 @@ function renderBrain(screen) {
     };
     ['#gp-bc-photo','#gp-bc-meme','#gp-bc-groups','#gp-bc-autophoto','#gp-bc-automeme'].forEach(q => screen.querySelector(q)?.addEventListener('change', () => { save(); renderBrain(screen); }));
     screen.querySelector('#gp-bc-save')?.addEventListener('click', () => { save(); renderBrain(screen); });
+    screen.querySelector('#gp-subject-test')?.addEventListener('click', async () => {
+        const box=screen.querySelector('#gp-subject-result');
+        if(!box)return;
+        box.textContent='Разбираю кадр локально…';
+        try{
+            const r=await resolveMediaSubjectsDiagnostic(screen.querySelector('#gp-subject-scene')?.value||'');
+            const rows=(r.visible||[]).map(x=>`<div class="gp-subject-row"><b>${esc(x.name)}</b> <small>${esc(x.role)}</small><br>Reference: ${x.reference?'✅':'—'}${x.referenceKind?` <small>(${esc(x.referenceKind)})</small>`:''} · Appearance: ${x.description?'✅':'—'}<br><small>Маршрут: ${esc(x.fallback)} · ${esc(x.source||'fallback')}</small></div>`).join('');
+            box.innerHTML=`<div><b>Автор:</b> ${esc(r.author)}</div><div><b>Камера:</b> ${esc(r.camera)}</div><div><b>В кадре:</b> ${(r.visible||[]).length?esc(r.visible.map(x=>x.name).join(' + ')):'⚠️ не определено'}</div>${rows||'<div class="gp-subject-warn">⚠️ Известный identity не распознан. Чужой reference подставлен не будет.</div>'}`;
+        }catch(e){box.textContent=`Resolver: ${e?.message||e}`;}
+    });
     (async () => {
         const box = screen.querySelector('#gp-media-diag'); if (!box) return;
         try {

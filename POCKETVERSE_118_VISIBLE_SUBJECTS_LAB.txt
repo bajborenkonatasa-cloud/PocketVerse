@@ -1,0 +1,2 @@
+PocketVerse v1.1.8 — Visible Subjects Resolver Lab 4
+SAFE local identity routing; no LLM, no image generation, no RP mutation.

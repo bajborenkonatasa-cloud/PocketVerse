@@ -3622,3 +3622,53 @@ export async function getMediaIdentityDiagnostics() {
     return out;
 }
 
+
+
+// ── PocketVerse Media Bridge v2: SAFE Visible Subjects Resolver ──
+export async function resolveMediaSubjectsDiagnostic(sceneText = '') {
+    const d = await getMediaIdentityDiagnostics();
+    const raw = String(sceneText || '').trim();
+
+    const identities = [];
+    const add = (x, role) => {
+        if (!x?.name) return;
+        identities.push({ ...x, role, names:[x.name, ...(x.aliases || [])].map(v=>String(v||'').trim()).filter(Boolean) });
+    };
+    add(d.character, 'character');
+    add(d.user, 'user');
+    for (const n of (d.npcLibrary || [])) add(n, 'npc');
+
+    const rxEsc = v => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const mentioned = [];
+    for (const id of identities) {
+        let hit = null;
+        for (const n of id.names) {
+            const rx = new RegExp(`(^|[^\\p{L}\\p{N}_])${rxEsc(n)}(?=$|[^\\p{L}\\p{N}_])`, 'iu');
+            const m = rx.exec(raw);
+            if (m && (!hit || m.index < hit.index)) hit={index:m.index, matched:n};
+        }
+        if (hit) mentioned.push({...id, mentionIndex:hit.index, matched:hit.matched});
+    }
+    mentioned.sort((a,b)=>a.mentionIndex-b.mentionIndex);
+
+    const selfie = /\bselfie\b|\bселфи\b|фото\s+(?:вместе\s+)?с\b|совместн\w*\s+фото/iu.test(raw);
+    const photoVerb = /photograph(?:s|ed|ing)?|takes?\s+(?:a\s+)?photo|сфотограф\w*|фотографир\w*|снимает|снял[аи]?/iu.test(raw);
+
+    const author = mentioned[0] || d.character;
+    let visible = [...mentioned];
+    if (photoVerb && !selfie && mentioned.length >= 2) visible = mentioned.slice(1);
+    if (!visible.length && selfie && author?.name) visible=[author];
+
+    const normalized=visible.map(x=>({
+        name:x.name, role:x.role, key:x.key||'', reference:!!x.reference,
+        referenceKind:x.referenceKind||'', description:!!x.description, source:x.source||'',
+        fallback:x.reference?'exact reference':(x.description?'saved appearance':'Card/RP description')
+    }));
+
+    return {
+        author:author?.name||'не определён',
+        camera:selfie?'front camera / selfie':(photoVerb?`${author?.name||'author'} / behind camera`:'scene / not specified'),
+        visible:normalized,
+        safe:true
+    };
+}

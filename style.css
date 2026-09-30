@@ -4408,3 +4408,10 @@ img[data-zoom] { cursor: zoom-in; }
 /* PocketVerse v1.1.4 — Media Identity Lab */
 #gp-phone .gp-media-lab #gp-media-diag{margin-top:8px;padding:10px 12px;border:1px solid rgba(255,255,255,.09);border-radius:12px;background:rgba(0,0,0,.16);font-size:11px;line-height:1.55;word-break:break-word}
 #gp-phone .gp-media-lab code{font-size:10px;opacity:.8}
+
+#gp-phone .gp-subject-lab{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
+#gp-phone .gp-subject-lab>small{display:block;opacity:.58;margin:4px 0 8px}
+#gp-phone #gp-subject-scene{width:100%;box-sizing:border-box;min-height:68px;resize:vertical;margin:5px 0 7px;padding:9px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.18);color:inherit;font:inherit}
+#gp-phone #gp-subject-test{width:100%;margin-bottom:8px}
+#gp-phone #gp-subject-result{padding:9px 10px;border-radius:10px;background:rgba(0,0,0,.15);line-height:1.5}
+#gp-phone .gp-subject-row{margin-top:7px;padding:7px 8px;border-radius:9px;border:1px solid rgba(255,255,255,.08)}
