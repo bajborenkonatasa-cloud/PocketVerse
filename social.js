@@ -3654,6 +3654,17 @@ export async function resolveMediaSubjectsDiagnostic(sceneText = '') {
     for (const n of (d.npcLibrary || [])) add(n, 'npc');
 
     const rxEsc = v => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Cross-script identity key: Hanabi ↔ Ханаби, Seraphina ↔ Серафина.
+    // This is ONLY for matching identities; stored names/references are never renamed.
+    const cyrToLat = {
+        'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'e','ж':'zh','з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'h','ц':'ts','ч':'ch','ш':'sh','щ':'sch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya'
+    };
+    const latinize = v => String(v || '').toLowerCase().split('').map(ch => cyrToLat[ch] ?? ch).join('');
+    const identityKey = v => latinize(v)
+        .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/ph/g,'f').replace(/ck/g,'k').replace(/qu/g,'kv')
+        .replace(/[^a-z0-9]+/g,'');
+    const rawKeyText = latinize(raw).normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
     const mentioned = [];
     for (const id of identities) {
         let hit = null;
@@ -3661,8 +3672,19 @@ export async function resolveMediaSubjectsDiagnostic(sceneText = '') {
             const rx = new RegExp(`(^|[^\\p{L}\\p{N}_])${rxEsc(n)}(?=$|[^\\p{L}\\p{N}_])`, 'iu');
             const m = rx.exec(raw);
             if (m && (!hit || m.index < hit.index)) hit={index:m.index, matched:n};
+            if (!m) {
+                const k = identityKey(n);
+                if (k.length >= 4) {
+                    const variants = [...new Set([k, k.replace(/f/g,'ph'), k.replace(/ph/g,'f')])];
+                    for (const vk of variants) {
+                        const rr = new RegExp(`(^|[^a-z0-9])${rxEsc(vk)}(?=$|[^a-z0-9])`, 'i');
+                        const tm = rr.exec(rawKeyText);
+                        if (tm && (!hit || tm.index < hit.index)) hit={index:tm.index, matched:n, crossScript:true};
+                    }
+                }
+            }
         }
-        if (hit) mentioned.push({...id, mentionIndex:hit.index, matched:hit.matched});
+        if (hit) mentioned.push({...id, mentionIndex:hit.index, matched:hit.matched, crossScript:!!hit.crossScript});
     }
     mentioned.sort((a,b)=>a.mentionIndex-b.mentionIndex);
 
@@ -3687,3 +3709,36 @@ export async function resolveMediaSubjectsDiagnostic(sceneText = '') {
         safe:true
     };
 }
+
+// Local-only Scene Blueprint: builds a provider-neutral scene prompt without calling a model.
+// SIP still owns provider/style/reference transport; PocketVerse only describes WHAT is in frame.
+export async function buildMediaSceneBlueprintDiagnostic(sceneText = '') {
+    const scene = String(sceneText || '').trim();
+    const r = await resolveMediaSubjectsDiagnostic(scene);
+    const names = (r.visible || []).map(x => x.name);
+    const identityLines = (r.visible || []).map(x => {
+        const src = x.reference ? 'use exact SIP reference' : (x.description ? 'use saved SIP appearance' : 'use Character Card / RP appearance');
+        return `- ${x.name}: ${src}; preserve identity exactly.`;
+    });
+    const natural = [
+        'Create one coherent image of the described RP moment.',
+        `SCENE: ${scene || 'No scene description supplied.'}`,
+        `CAMERA: ${r.camera}.`,
+        `VISIBLE SUBJECTS ONLY: ${names.length ? names.join(', ') : 'no known identity resolved'}.`,
+        ...identityLines,
+        'Preserve the action, pose, relative positions, facial expressions, clothing, props, location, background, time of day and lighting stated or clearly implied by the scene.',
+        'Do not replace, merge, duplicate or gender-swap named characters. Do not add the photographer if they are behind the camera.',
+        'Do not invent extra people. Keep spatial continuity and make the result look like one believable captured moment.',
+        'Rendering style is NOT specified here: use the currently selected Silly Images Plus style.'
+    ].join('\n');
+    const nai = [
+        `scene: ${scene}`,
+        `camera: ${r.camera}`,
+        names.length ? `characters: ${names.join(', ')}` : '',
+        'identity: exact references only, no character mixing, no duplicate people',
+        'environment: preserve location, background, props, clothing, time and lighting from scene',
+        'composition: coherent single moment, correct relative positions, correct subject count'
+    ].filter(Boolean).join(', ');
+    return { ...r, naturalPrompt:natural, novelAiGuide:nai };
+}
+

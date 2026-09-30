@@ -30,7 +30,7 @@ import {
     generateChannels, generateChannelPosts, generateChannelComments, generateMyChannelFeedback, generatePersonChannel,
     generateAnonFeed, generateAnonComments, resolveAnonAuthor, generateTinderDeck,
     getMediaIdentityDiagnostics,
-    resolveMediaSubjectsDiagnostic,
+    resolveMediaSubjectsDiagnostic, buildMediaSceneBlueprintDiagnostic,
 } from './social.js';
 import { getSystemsView, deferEvent, declineEvent, selectStoryEvent, acceptAdOffer, declineAdOffer, attachActiveAd, getReputationStatus } from './social-events.js';
 import { maybeScamSms } from './scam.js';
@@ -1223,7 +1223,7 @@ function renderBrain(screen) {
           <div class="gp-brain-control gp-media-lab"><b>📸 Media Identity Lab · SAFE</b><small>Только проверка маршрута. Ничего не генерирует и не трогает RP.</small><div id="gp-media-diag">Проверяю Silly Images Plus…</div>
           <div class="gp-subject-lab"><b>🎬 Visible Subjects Resolver · SAFE</b><small>Напиши сцену обычными словами — проверим, кто реально попадёт в кадр и чей reference будет выбран.</small>
           <textarea id="gp-subject-scene" rows="3" placeholder="Например: Seraphina делает селфи вместе с Hanabi"></textarea>
-          <button id="gp-subject-test">Проверить кадр</button>
+          <button id="gp-subject-test">Проверить кадр + промпт</button>
           <div id="gp-subject-result"><small>Без модели и генерации — только локальная проверка identity.</small></div></div></div>
           <div class="gp-brain-warning"><b>Phone Context Budget:</b> ✨ теперь использует изолированный generateRaw-контекст вместо полного RP-чата. Lite ≈ до 1–1.5k входа · Balanced ≈ 2.5–4k · Deep ≈ 5–7k (оценка зависит от карточки/истории). Большая цифра RP ниже остаётся только диагностикой ST и целиком в телефонный запрос не копируется.</div>
           <details class="gp-brain-details" open><summary>📱 Что PocketVerse добавляет прямо сейчас</summary><pre>${esc(b.prompt)}</pre></details>
@@ -1254,9 +1254,9 @@ function renderBrain(screen) {
         if(!box)return;
         box.textContent='Разбираю кадр локально…';
         try{
-            const r=await resolveMediaSubjectsDiagnostic(screen.querySelector('#gp-subject-scene')?.value||'');
+            const r=await buildMediaSceneBlueprintDiagnostic(screen.querySelector('#gp-subject-scene')?.value||'');
             const rows=(r.visible||[]).map(x=>`<div class="gp-subject-row"><b>${esc(x.name)}</b> <small>${esc(x.role)}</small><br>Reference: ${x.reference?'✅':'—'}${x.referenceKind?` <small>(${esc(x.referenceKind)})</small>`:''} · Appearance: ${x.description?'✅':'—'}<br><small>Маршрут: ${esc(x.fallback)} · ${esc(x.source||'fallback')}</small></div>`).join('');
-            box.innerHTML=`<div><b>Автор:</b> ${esc(r.author)}</div><div><b>Камера:</b> ${esc(r.camera)}</div><div><b>В кадре:</b> ${(r.visible||[]).length?esc(r.visible.map(x=>x.name).join(' + ')):'⚠️ не определено'}</div>${rows||'<div class="gp-subject-warn">⚠️ Известный identity не распознан. Чужой reference подставлен не будет.</div>'}`;
+            box.innerHTML=`<div><b>Автор:</b> ${esc(r.author)}</div><div><b>Камера:</b> ${esc(r.camera)}</div><div><b>В кадре:</b> ${(r.visible||[]).length?esc(r.visible.map(x=>x.name).join(' + ')):'⚠️ не определено'}</div>${rows||'<div class="gp-subject-warn">⚠️ Известный identity не распознан. Чужой reference подставлен не будет.</div>'}<details class="gp-brain-details" open><summary>🍌 Scene Blueprint · Banana / vision</summary><pre>${esc(r.naturalPrompt||'')}</pre></details><details class="gp-brain-details"><summary>🌙 Scene Guide · NovelAI</summary><pre>${esc(r.novelAiGuide||'')}</pre></details>`;
         }catch(e){box.textContent=`Resolver: ${e?.message||e}`;}
     });
     (async () => {
