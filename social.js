@@ -2933,7 +2933,11 @@ async function _generatePostImage(post, onStatus = null, signal = null) {
         // Booru-режим: стиль/кадр из настроек (может быть тег-строкой) + сцена в теги
         if (onStatus) onStatus('Составляю теги...');
         const tags = await sceneToBooruTags(post, { anonymous });
-        const framing = (post.framing || (post.kind === 'of' ? (st.imgPromptOf || '') : (st.imgPromptIg || ''))).trim();
+        // Structured PocketVerse scene compiler already owns camera/framing/environment.
+        // Never prepend the Instagram/OF transport label ("social media post", etc.)
+        // to a real RP scene: NovelAI treats those words as visible image content/UI.
+        // Anonymous public posts still use the legacy framing path.
+        const framing = anonymous ? (post.framing || (post.kind === 'of' ? (st.imgPromptOf || '') : (st.imgPromptIg || ''))).trim() : '';
         prompt = [framing, tags].filter(Boolean).join(', ') || buildImagePrompt(post, { anonymous, allowChar: wantChar });
         // Теги — англоязычные, имён в них не остаётся: без этого NPC-реф
         // в booru-режиме не подцепился бы никогда
@@ -3767,14 +3771,17 @@ export async function generateMediaVisualBlueprint(sceneText = '', options = {})
       `JSON SCHEMA:\n`+
       `{"camera":"","framing":"","angle":"","environment":"","lighting":"","subjects":[{"id":"character1","name":"","gender":"female|male|other","appearance":"","clothing":"","pose":"","expression":"","gaze":"","position":"","action":""}],"interaction":"","actionTags":"","props":"","continuity":""}\n\n`+
       `CAMERA ROUTE: ${r.camera}. ${String(options.cameraHint||'')}\nSOURCE: ${String(options.source||'visual-lab')}\nPHOTO IDEA:\n${scene}`;
-    const raw=await socialGen(prompt,{maxTokens:700});
+    const raw=await socialGen(prompt,{maxTokens:2200});
     let clean=String(raw||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
     // Models sometimes wrap otherwise-valid JSON in prose. Salvage the outer object.
     const a=clean.indexOf('{'), z=clean.lastIndexOf('}'); if(a>=0&&z>a) clean=clean.slice(a,z+1);
     let data;
     try{data=JSON.parse(clean);}catch(e){
-        // Never dead-end the editor: keep a safe structured shell and expose raw LLM.
-        data={camera:r.camera||'',framing:'',angle:'',environment:'',lighting:'',atmosphere:'',subjects:[],interaction:'',actionTags:'',props:'',continuity:`RAW_LLM: ${String(raw||'').slice(0,5000)}`};
+        // CRITICAL: never silently compile an empty shell into "3others | other...".
+        // That used to send garbage to NovelAI whenever Gemini spent the output budget on thoughts.
+        const err = new Error('Visual Blueprint не получен: модель не вернула валидный JSON. Генерация остановлена, мусорный prompt в NovelAI не отправлен.');
+        err.rawVisualBlueprint = String(raw||'').slice(0,5000);
+        throw err;
     }
     const byName=(Array.isArray(data.subjects)?data.subjects:[]);
     const outSubjects=[];

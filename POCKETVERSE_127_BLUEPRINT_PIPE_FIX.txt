@@ -1,0 +1,1 @@
+PocketVerse v1.2.7: fixes the real image prompt pipeline. Visual Blueprint gets a sufficient output budget; invalid/truncated JSON aborts instead of compiling 3others/other garbage; Instagram/OF transport framing is no longer prepended to structured RP image prompts. SIP/provider code is untouched.
