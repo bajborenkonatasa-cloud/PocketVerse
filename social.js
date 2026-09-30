@@ -3492,3 +3492,59 @@ export function getSocialActivitySummary() {
 
     return lines.join('\n');
 }
+
+
+// ── PocketVerse Media Bridge v1: безопасная диагностика identity/reference ──
+// НИЧЕГО не генерирует. Нужна, чтобы до подключения авто-фото видеть,
+// какой backend/style активен и есть ли точный reference текущего Character Card.
+export async function getMediaIdentityDiagnostics() {
+    const st = getSettings();
+    const cfg = imgBucket() || {};
+    const model = effectiveModel(cfg) || cfgModel(cfg) || '';
+    let provider = String(cfg.apiType || '').trim() || 'unknown';
+    let styleId = String(st.imageGenStyleId || cfg.activeStyleId || '').trim();
+    let styleName = '';
+    try {
+        const style = (cfg.styles || []).find(x => x && x.id === styleId);
+        styleName = String(style?.name || styleId || '').trim();
+    } catch (_) {}
+    const out = {
+        extension: '', provider, model, styleId, styleName,
+        character: { name:'', key:'', reference:false, description:false, source:'none' },
+        rule: 'reference > saved appearance > card/RP description > never foreign fallback',
+    };
+    try {
+        const mod = await loadImageExt();
+        out.extension = String(mod?.folder || '(builtin)');
+        if (mod && !mod.builtin && mod.folder) {
+            const base = `/scripts/extensions/third-party/${mod.folder}`;
+            try {
+                const refs = await import(`${base}/src/references.js`);
+                const ctx = SillyTavern.getContext();
+                const id = ctx?.characterId;
+                const ch = (id !== undefined && id !== null && Number(id) >= 0) ? ctx?.characters?.[id] : null;
+                if (ch) {
+                    out.character.name = String(ch.name || 'Character');
+                    if (typeof refs.getCharacterReferenceKeyForCharacter === 'function') {
+                        out.character.key = refs.getCharacterReferenceKeyForCharacter(ch, id);
+                    }
+                    if (out.character.key && typeof refs.getCharacterLibraryEntry === 'function') {
+                        const entry = refs.getCharacterLibraryEntry('character', out.character.key, undefined, { create:false });
+                        if (entry) {
+                            out.character.reference = !!(entry.primary?.enabled !== false && entry.primary?.imagePath)
+                                || !!(entry.appearanceItems || []).some(x => x?.enabled !== false && x?.type === 'image' && x?.imagePath);
+                            out.character.description = !!String(entry.primary?.description || '').trim()
+                                || !!(entry.appearanceItems || []).some(x => x?.enabled !== false && x?.type === 'text' && String(x?.description || '').trim());
+                            out.character.source = out.character.reference ? 'SIP reference library' : (out.character.description ? 'SIP appearance text' : 'card/RP fallback');
+                        } else out.character.source = 'card/RP fallback';
+                    }
+                }
+            } catch (e) {
+                out.character.source = 'SIP reference API unavailable';
+            }
+        }
+    } catch (e) {
+        out.extension = 'not found';
+    }
+    return out;
+}

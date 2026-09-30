@@ -1218,6 +1218,7 @@ function renderBrain(screen) {
             <div><b>👤 Persona</b><strong>≈ ${b.counts.persona}</strong><small>диагностика</small></div>
             <div><b>📖 ST: последние 24 хода</b><strong>≈ ${b.counts.rp}</strong><small>диагностика · НЕ расход PocketVerse</small></div>
           </div>
+          <div class="gp-brain-control gp-media-lab"><b>📸 Media Identity Lab · SAFE</b><small>Только проверка маршрута. Ничего не генерирует и не трогает RP.</small><div id="gp-media-diag">Проверяю Silly Images Plus…</div></div>
           <div class="gp-brain-warning"><b>Phone Context Budget:</b> ✨ теперь использует изолированный generateRaw-контекст вместо полного RP-чата. Lite ≈ до 1–1.5k входа · Balanced ≈ 2.5–4k · Deep ≈ 5–7k (оценка зависит от карточки/истории). Большая цифра RP ниже остаётся только диагностикой ST и целиком в телефонный запрос не копируется.</div>
           <details class="gp-brain-details" open><summary>📱 Что PocketVerse добавляет прямо сейчас</summary><pre>${esc(b.prompt)}</pre></details>
           <details class="gp-brain-details"><summary>🎭 Character Card</summary><pre>${esc(b.cardText || 'Недоступно в текущем контексте.')}</pre></details>
@@ -1242,6 +1243,21 @@ function renderBrain(screen) {
     };
     ['#gp-bc-photo','#gp-bc-meme','#gp-bc-groups','#gp-bc-autophoto','#gp-bc-automeme'].forEach(q => screen.querySelector(q)?.addEventListener('change', () => { save(); renderBrain(screen); }));
     screen.querySelector('#gp-bc-save')?.addEventListener('click', () => { save(); renderBrain(screen); });
+    (async () => {
+        const box = screen.querySelector('#gp-media-diag'); if (!box) return;
+        try {
+            const d = await getMediaIdentityDiagnostics();
+            const yes = v => v ? '✅ найден' : '— нет';
+            box.innerHTML = `<div><b>Картинки:</b> ${esc(d.extension || 'не найдено')}</div>`
+              + `<div><b>Backend:</b> ${esc(d.provider)} · ${esc(d.model || 'модель не определена')}</div>`
+              + `<div><b>Стиль:</b> ${esc(d.styleName || 'как в основном чате')}</div>`
+              + `<div><b>Текущий Character:</b> ${esc(d.character.name || 'не выбран')}</div>`
+              + `<div><b>Identity key:</b> <code>${esc(d.character.key || '—')}</code></div>`
+              + `<div><b>Reference:</b> ${yes(d.character.reference)} · <b>Appearance:</b> ${yes(d.character.description)}</div>`
+              + `<div><b>Источник:</b> ${esc(d.character.source)}</div>`
+              + `<small>Правило: reference → appearance → Card/RP → никогда чужой reference.</small>`;
+        } catch (e) { box.textContent = `Диагностика: ${e?.message || e}`; }
+    })();
 }
 
 // ── Домашний экран ──

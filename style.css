@@ -4404,3 +4404,7 @@ img[data-zoom] { cursor: zoom-in; }
 #gp-phone .gp-gif-grid button{min-height:78px!important;max-height:105px!important;}
 #gp-phone .gp-gif-grid img{height:100%!important;max-height:105px!important;object-fit:cover!important;}
 #gp-phone .gp-gif-hint{text-align:center;font-size:8px;opacity:.5;padding:6px 0 1px;}
+
+/* PocketVerse v1.1.4 — Media Identity Lab */
+#gp-phone .gp-media-lab #gp-media-diag{margin-top:8px;padding:10px 12px;border:1px solid rgba(255,255,255,.09);border-radius:12px;background:rgba(0,0,0,.16);font-size:11px;line-height:1.55;word-break:break-word}
+#gp-phone .gp-media-lab code{font-size:10px;opacity:.8}
