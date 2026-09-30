@@ -3746,23 +3746,28 @@ export async function generateMediaVisualBlueprint(sceneText = '', options = {})
     // task (4k+ prompt tokens in a three-person beach test). Scene Blocks works well
     // because the latest RP state + relevant identities are enough.
     const rp = rpContextBlock(6, { publicOnly:false });
-    const prompt=`POCKETVERSE VISUAL SCENE ENGINE — follow Scene Blocks Lite discipline.\n`+
-      `CURRENT RP (authoritative only for facts visible NOW):\n${rp || '(no recent RP excerpt)'}\n\n`+
-      `The PHOTO IDEA below is an instruction layered on the current RP. Resolve it using the RP excerpt above. Do not reduce it to a generic caption.\n`+
-      `Return concise ENGLISH visual facts. Never omit an explicitly requested visible subject. Never merge two identities. Never invent an extra person.\n`+
-      `STRICT COUNT: the subjects array must contain exactly the AUTHORITATIVE VISIBLE SUBJECTS below — one object per identity, no extras, no duplicates.\n`+
-      `Reference images anchor identity/face only. Current RP/photo idea decides clothing, pose, expression, action, position, camera, background and light.\n`+
-      `If an identity has KNOWN APPEARANCE, preserve those visible traits. If no image reference can be transported, that text is especially important.\n`+
-      `For multiple characters, keep every person's appearance/clothing/action/expression/gaze/position in their OWN block.\n`+
-      `For physical interaction say exactly who does what to whom and the contact/relative position.\n`+
-      `Do NOT invent clothing, jewelry, props, scenery, poses or expressions. If the PHOTO IDEA/RP does not specify a dynamic detail, keep that field empty. Stable appearance may be translated/condensed from KNOWN APPEARANCE.\n`+
-      `No artists, quality tags, rendering medium, palette, lighting STYLE or aesthetic terms: Silly Images Plus owns style. Factual light/time/weather is allowed.\n`+
-      `English only, including appearance. Translate any Russian source details.\n`+
-      `Return ONLY valid JSON with this exact shape:\n`+
-      `{"camera":"","framing":"","angle":"","environment":"","lighting":"","atmosphere":"","subjects":[{"id":"character1","name":"","gender":"female|male|other","appearance":"","clothing":"","pose":"","expression":"","gaze":"","position":"","action":""}],"interaction":"","actionTags":"","props":"","continuity":""}\n\n`+
-      `AUTHORITATIVE VISIBLE SUBJECTS — ALL must remain in the image:\n${identity||'(resolver found none; infer only people explicitly named in PHOTO IDEA)'}\n`+
+    const prompt=`POCKETVERSE IMAGE PROMPT WRITER — output the visual scene, not commentary.\n`+
+      `Use the latest RP below as authoritative continuity, then apply PHOTO IDEA as the requested snapshot.\n`+
+      `CURRENT RP:\n${rp || '(no recent RP excerpt)'}\n\n`+
+      `VISIBLE CAST IS LOCKED. Return EXACTLY these identities, once each, and nobody else:\n${identity||'(resolver found none; infer only explicitly named people in PHOTO IDEA)'}\n\n`+
+      `RULES:\n`+
+      `- English only. Return ONLY valid JSON matching the schema below. No analysis, markdown or explanations.\n`+
+      `- One visual snapshot. PHOTO IDEA + latest RP decide the actual location/background, current clothing or undressed state, pose, expression, gaze, action, relative position, camera/framing and factual light.\n`+
+      `- NEVER merge identities, duplicate a person, invent background people, or omit a locked visible subject.\n`+
+      `- Every subject object is SELF-CONTAINED: name + compact identifying appearance + CURRENT visible clothing/state + pose + position + action + expression + gaze. Keep each person's traits in that person's object only.\n`+
+      `- KNOWN APPEARANCE is identity evidence. Translate and COMPRESS it into concrete visible traits; do not copy biography, lore, measurements that are not visually useful, or repeat the same traits elsewhere.\n`+
+      `- If RP/PHOTO IDEA changes clothing, pose, expression or action, CURRENT scene wins over a static reference/avatar. A reference anchors identity/face, not current clothing.\n`+
+      `- Base environment must explicitly preserve the requested place (beach means visible sea/shore; cafe means visible cafe, etc.). Do not replace it with a social-media UI, poster, watermark, text, crowd or unrelated background.\n`+
+      `- No readable text, logos, captions, watermarks, social-media interface or speech bubbles unless PHOTO IDEA explicitly requests visible text.\n`+
+      `- No artists, quality tags, medium, rendering style, palette or aesthetic tags. Silly Images Plus owns style. Factual daylight/night/interior light is allowed.\n`+
+      `- Interaction: state it once, precisely. For complex physical contact also return matching Danbooru Action Tags using source#action / target#action or mutual#action.\n`+
+      `- Gaze stays inside the scene unless PHOTO IDEA explicitly says selfie/camera gaze.\n`+
+      `- NSFW: DO NOT censor or euphemize established adult sexual activity. Preserve the RP level exactly, do not escalate it. Use direct clinical/Danbooru terms for the established act, anatomy/contact, fluids and clothing state. If explicit sex is established, actionTags may include exact source#/target#/mutual# tags and continuity should preserve the exact contact.\n`+
+      `- Be concise. Do not write prose essays. Each field should contain only generation-useful visual facts.\n\n`+
+      `JSON SCHEMA:\n`+
+      `{"camera":"","framing":"","angle":"","environment":"","lighting":"","subjects":[{"id":"character1","name":"","gender":"female|male|other","appearance":"","clothing":"","pose":"","expression":"","gaze":"","position":"","action":""}],"interaction":"","actionTags":"","props":"","continuity":""}\n\n`+
       `CAMERA ROUTE: ${r.camera}. ${String(options.cameraHint||'')}\nSOURCE: ${String(options.source||'visual-lab')}\nPHOTO IDEA:\n${scene}`;
-    const raw=await socialGen(prompt,{maxTokens:1100});
+    const raw=await socialGen(prompt,{maxTokens:700});
     let clean=String(raw||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
     // Models sometimes wrap otherwise-valid JSON in prose. Salvage the outer object.
     const a=clean.indexOf('{'), z=clean.lastIndexOf('}'); if(a>=0&&z>a) clean=clean.slice(a,z+1);
@@ -3801,7 +3806,7 @@ export function compileMediaBlueprint(blueprint, provider='novelai') {
         // The LLM already translated/condensed KNOWN APPEARANCE into appearance.
         // Do not append stableAppearance again: that duplicated long descriptions
         // and made NovelAI split one identity into additional people.
-        const fields=[gs[i],text(s.appearance),text(s.clothing),text(s.pose),text(s.position),text(s.action),text(s.expression),text(s.gaze)].filter(Boolean);
+        const fields=[gs[i],text(s.name),text(s.appearance),text(s.clothing),text(s.pose),text(s.position),text(s.action),text(s.expression),text(s.gaze)].filter(Boolean);
         return fields.join(', ');
     });
     // Keep interaction exactly once. Action tags are useful only when the planner
