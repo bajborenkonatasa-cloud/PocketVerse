@@ -1252,11 +1252,17 @@ function renderBrain(screen) {
             box.innerHTML = `<div><b>Картинки:</b> ${esc(d.extension || 'не найдено')}</div>`
               + `<div><b>Backend:</b> ${esc(d.provider)} · ${esc(d.model || 'модель не определена')}</div>`
               + `<div><b>Стиль:</b> ${esc(d.styleName || 'как в основном чате')}</div>`
-              + `<div><b>Текущий Character:</b> ${esc(d.character.name || 'не выбран')}</div>`
-              + `<div><b>Identity key:</b> <code>${esc(d.character.key || '—')}</code></div>`
+              + `<hr><div><b>🎭 Character:</b> ${esc(d.character.name || 'не выбран')}</div>`
+              + `<div><b>Key:</b> <code>${esc(d.character.key || '—')}</code></div>`
               + `<div><b>Reference:</b> ${yes(d.character.reference)} · <b>Appearance:</b> ${yes(d.character.description)}</div>`
               + `<div><b>Источник:</b> ${esc(d.character.source)}</div>`
-              + `<small>Правило: reference → appearance → Card/RP → никогда чужой reference.</small>`;
+              + `<hr><div><b>👤 User Persona:</b> ${esc(d.user?.name || 'не определена')}</div>`
+              + `<div><b>Key:</b> <code>${esc(d.user?.key || '—')}</code></div>`
+              + `<div><b>Reference:</b> ${yes(d.user?.reference)} · <b>Appearance:</b> ${yes(d.user?.description)}</div>`
+              + `<div><b>Источник:</b> ${esc(d.user?.source || '—')}</div>`
+              + `<hr><div><b>🧩 SIP library:</b> ${Number(d.libraryCounts?.characters||0)} character · ${Number(d.libraryCounts?.users||0)} user · ${Number(d.libraryCounts?.npcCandidates||0)} NPC-кандидатов</div>`
+              + `${(d.npcLibrary||[]).length ? `<div class="gp-media-npcs">${d.npcLibrary.slice(0,8).map(n => `${esc(n.name)} ${n.reference?'🖼️':'—'} ${n.description?'📝':''}`).join(' · ')}</div>` : '<div class="gp-media-npcs">NPC/reference-записей пока не найдено.</div>'}`
+              + `<small>В генерацию пойдут только реально видимые субъекты. Character/User доступны системе, но не подмешиваются автоматически. Правило: exact reference → appearance → Card/RP → никогда чужой reference.</small>`;
         } catch (e) { box.textContent = `Диагностика: ${e?.message || e}`; }
     })();
 }

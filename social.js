@@ -3501,18 +3501,38 @@ export async function getMediaIdentityDiagnostics() {
     const st = getSettings();
     const cfg = imgBucket() || {};
     const model = effectiveModel(cfg) || cfgModel(cfg) || '';
-    let provider = String(cfg.apiType || '').trim() || 'unknown';
-    let styleId = String(st.imageGenStyleId || cfg.activeStyleId || '').trim();
+    const provider = String(cfg.apiType || '').trim() || 'unknown';
+    const styleId = String(st.imageGenStyleId || cfg.activeStyleId || '').trim();
     let styleName = '';
     try {
         const style = (cfg.styles || []).find(x => x && x.id === styleId);
         styleName = String(style?.name || styleId || '').trim();
     } catch (_) {}
+
+    const blankIdentity = (kind='') => ({ kind, name:'', key:'', reference:false, description:false, source:'none' });
     const out = {
-        extension: '', provider, model, styleId, styleName,
-        character: { name:'', key:'', reference:false, description:false, source:'none' },
-        rule: 'reference > saved appearance > card/RP description > never foreign fallback',
+        extension:'', provider, model, styleId, styleName,
+        character: blankIdentity('character'),
+        user: blankIdentity('user'),
+        npcLibrary: [],
+        libraryCounts: { characters:0, users:0, npcCandidates:0 },
+        rule:'visible subjects only → exact reference → saved appearance → Card/RP description → never foreign fallback',
     };
+
+    const summarizeEntry = (entry, fallbackName, key, kind) => {
+        const x = blankIdentity(kind);
+        x.name = String(entry?.displayName || fallbackName || key || '').trim();
+        x.key = String(key || '').trim();
+        if (entry) {
+            x.reference = !!(entry.primary?.enabled !== false && entry.primary?.imagePath)
+                || !!(entry.appearanceItems || []).some(v => v?.enabled !== false && v?.type === 'image' && v?.imagePath);
+            x.description = !!String(entry.primary?.description || '').trim()
+                || !!(entry.appearanceItems || []).some(v => v?.enabled !== false && v?.type === 'text' && String(v?.description || '').trim());
+            x.source = x.reference ? 'SIP reference library' : (x.description ? 'SIP appearance text' : 'Card/RP fallback');
+        } else x.source = 'Card/RP fallback';
+        return x;
+    };
+
     try {
         const mod = await loadImageExt();
         out.extension = String(mod?.folder || '(builtin)');
@@ -3523,28 +3543,47 @@ export async function getMediaIdentityDiagnostics() {
                 const ctx = SillyTavern.getContext();
                 const id = ctx?.characterId;
                 const ch = (id !== undefined && id !== null && Number(id) >= 0) ? ctx?.characters?.[id] : null;
-                if (ch) {
-                    out.character.name = String(ch.name || 'Character');
-                    if (typeof refs.getCharacterReferenceKeyForCharacter === 'function') {
-                        out.character.key = refs.getCharacterReferenceKeyForCharacter(ch, id);
-                    }
-                    if (out.character.key && typeof refs.getCharacterLibraryEntry === 'function') {
-                        const entry = refs.getCharacterLibraryEntry('character', out.character.key, undefined, { create:false });
-                        if (entry) {
-                            out.character.reference = !!(entry.primary?.enabled !== false && entry.primary?.imagePath)
-                                || !!(entry.appearanceItems || []).some(x => x?.enabled !== false && x?.type === 'image' && x?.imagePath);
-                            out.character.description = !!String(entry.primary?.description || '').trim()
-                                || !!(entry.appearanceItems || []).some(x => x?.enabled !== false && x?.type === 'text' && String(x?.description || '').trim());
-                            out.character.source = out.character.reference ? 'SIP reference library' : (out.character.description ? 'SIP appearance text' : 'card/RP fallback');
-                        } else out.character.source = 'card/RP fallback';
-                    }
+
+                if (ch && typeof refs.getCharacterReferenceKeyForCharacter === 'function') {
+                    const key = refs.getCharacterReferenceKeyForCharacter(ch, id);
+                    const entry = typeof refs.getCharacterLibraryEntry === 'function'
+                        ? refs.getCharacterLibraryEntry('char', key, undefined, { create:false }) : null;
+                    out.character = summarizeEntry(entry, ch.name || 'Character', key, 'character');
+                }
+
+                if (typeof refs.getCurrentUserReferenceKey === 'function') {
+                    const key = await refs.getCurrentUserReferenceKey();
+                    const entry = typeof refs.getCharacterLibraryEntry === 'function'
+                        ? refs.getCharacterLibraryEntry('user', key, undefined, { create:false }) : null;
+                    let userName = '';
+                    try { userName = String(ctx?.name1 || ctx?.userName || '').trim(); } catch (_) {}
+                    out.user = summarizeEntry(entry, userName || entry?.displayName || 'User Persona', key, 'user');
+                }
+
+                if (typeof refs.getCharacterReferenceLibrary === 'function') {
+                    const lib = refs.getCharacterReferenceLibrary();
+                    const chars = lib?.characters || {};
+                    const users = lib?.users || {};
+                    out.libraryCounts.characters = Object.keys(chars).length;
+                    out.libraryCounts.users = Object.keys(users).length;
+                    const currentKey = out.character.key;
+                    out.npcLibrary = Object.entries(chars)
+                        .filter(([key]) => key !== currentKey)
+                        .map(([key, entry]) => summarizeEntry(entry, entry?.displayName || key, key, 'npc'))
+                        .filter(x => x.reference || x.description || x.name)
+                        .slice(0, 24);
+                    out.libraryCounts.npcCandidates = out.npcLibrary.length;
                 }
             } catch (e) {
                 out.character.source = 'SIP reference API unavailable';
+                out.user.source = 'SIP reference API unavailable';
+                out.error = String(e?.message || e);
             }
         }
     } catch (e) {
         out.extension = 'not found';
+        out.error = String(e?.message || e);
     }
     return out;
 }
+
