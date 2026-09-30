@@ -2775,44 +2775,36 @@ function buildImagePrompt(post, { anonymous = false, allowChar = false } = {}) {
 // long hair, ... Конвертируем сцену одним текстовым запросом.
 async function sceneToBooruTags(post, { anonymous }) {
     const scene = [post.imgDesc, post.caption].filter(Boolean).join('. ') || `photo posted by ${post.author}`;
-    const nsfw = post.kind === 'of'
-        ? 'This is adult NSFW content — include explicit danbooru tags matching the scene, do not sanitize.'
-        : '';
-    let who = anonymous
-        ? 'The subject is a random stranger — use generic appearance tags, NOT any specific named main character.'
-        : '';
-    if (post.mms) {
-        who += ` The photo was taken and sent by ${post.author}; the recipient ${getUserName()} is NOT in the frame — do not add tags describing them unless the scene explicitly includes them.`;
+    if (anonymous) {
+        // Public/random accounts must stay detached from RP identities.
+        const prompt = `Convert this image idea into ONE line of English Danbooru-style content tags.\nScene: ${scene}\nUse only visible facts: subject count, generic appearance, clothing, pose/action, expression/gaze, relative position, camera/framing, essential environment and factual light. No artist/style/quality tags. English only. Output only the comma-separated prompt.`;
+        return String(await socialGen(prompt, { maxTokens: 700 }) || '').replace(/```[a-z]*|```/gi,'').replace(/[\r\n]+/g,', ').trim();
     }
-    if (post._behindCamera) {
-        who += ` The photo was TAKEN by ${getUserName()} — they are behind the camera, NOT in the frame; tag ONLY what the scene describes, do not add tags describing them.`;
-    }
-    const prompt = `Convert this scene into ONE line of English Danbooru-style image tags for an anime image model (NovelAI).
-Scene: ${scene}
 
-Rules:
-- Start with subject count (1girl / 1boy / 2girls / 1girl 1boy / etc.), add "solo" if only one person.
-- Then: appearance (hair length+color, eye color, body), clothing OR state of undress, pose, facial expression, setting/background, lighting.
-- End with quality tags (masterpiece, best quality, highly detailed).
-- Comma-separated, lowercase, ENGLISH ONLY, tags NOT sentences, no Russian, no explanations.
-- Setting matters: clothing, interior, street and season tags must fit the story's country, era and place.
-${who} ${nsfw}
-Output ONLY the comma-separated tags.`;
+    // PocketVerse 1.2.3: the REAL Instagram/MMS generation now uses the same
+    // scene-first idea as Scene Blocks.  First understand the RP moment with
+    // Card/Persona/Lore/recent chat, then compile that blueprint locally.
+    const planned = await generateMediaVisualBlueprint(scene, {
+        cameraHint: post._behindCamera ? `${post._cameraName || post.author || 'author'} is behind camera and must not appear unless explicitly visible` : '',
+        source: post.mms ? 'messages' : 'instagram',
+    });
+    const prompt = compileMediaBlueprint(planned.blueprint, 'novelai');
     try {
-        const raw = await socialGen(prompt, { maxTokens: 400 });
-        const tags = String(raw || '')
-            .replace(/<!--[\s\S]*?-->/g, '')
-            .replace(/^[^:]*tags?:\s*/i, '')
-            .replace(/[\n\r]+/g, ', ')
-            .replace(/["'`]/g, '')
-            .replace(/\s*,\s*/g, ', ')
-            .replace(/(,\s*)+/g, ', ')
-            .trim().replace(/^,|,$/g, '').trim();
-        return tags;
-    } catch (e) {
-        console.warn('[GlassPhone] sceneToBooruTags failed:', e);
-        return '';
-    }
+        localStorage.setItem('pocketverse.visual.lastJob', JSON.stringify({
+            scene,
+            source: post.mms ? 'messages' : 'instagram',
+            author: post.author || '',
+            rawLlm: planned.raw || '',
+            blueprint: planned.blueprint,
+            novelai: prompt,
+            banana: compileMediaBlueprint(planned.blueprint, 'banana'),
+            routing: { author: planned.author, camera: planned.camera, visible: planned.visible },
+            exactFinalPrompt: prompt,
+            edited: false,
+            ts: Date.now(),
+        }));
+    } catch (_) {}
+    return prompt;
 }
 
 // Профиль подключения картинко-расширения, выбранный ДЛЯ ТЕЛЕФОНА
@@ -3734,46 +3726,64 @@ export async function resolveMediaSubjectsDiagnostic(sceneText = '') {
 
 // LLM Visual Blueprint: one isolated call converts an RP/photo idea into provider-neutral ENGLISH visual facts.
 // Identity/reference routing remains deterministic and is NEVER delegated to the model.
-export async function generateMediaVisualBlueprint(sceneText = '') {
+export async function generateMediaVisualBlueprint(sceneText = '', options = {}) {
     const scene=String(sceneText||'').trim();
     if(!scene) throw new Error('Сначала напиши сцену.');
     const r=await resolveMediaSubjectsDiagnostic(scene);
-    const subjects=(r.visible||[]).map((x,i)=>({
-        id:`character${i+1}`, name:x.name, role:x.role,
-        identitySource:x.reference?'SIP_REFERENCE':(x.description?'SIP_APPEARANCE':'CARD_RP'),
-        stableAppearance:String(x.descriptionText||'').replace(/[\r\n]+/g,' ').slice(0,1800)
-    }));
+    const rc=await richContext({publicOnly:false});
+    const subjects=(r.visible||[]).map((x,i)=>{
+        let stable=String(x.descriptionText||'').replace(/[\r\n]+/g,' ').trim();
+        // SIP text wins. If it has no text description, use the actual Character
+        // Card / Persona instead of leaving the image model blind (important for
+        // Naistera NovelAI where image references are unavailable).
+        if(!stable && x.role==='character') stable=String(rc.charDesc||'').replace(/[\r\n]+/g,' ').trim();
+        if(!stable && x.role==='user') stable=String(rc.persona||'').replace(/[\r\n]+/g,' ').trim();
+        return {id:`character${i+1}`,name:x.name,role:x.role,identitySource:x.reference?'SIP_REFERENCE':(x.description?'SIP_APPEARANCE':'CARD_RP'),stableAppearance:stable.slice(0,2600)};
+    });
     const identity=subjects.map(x=>`${x.id}: ${x.name} [${x.role}] source=${x.identitySource}${x.stableAppearance?`\nKNOWN APPEARANCE: ${x.stableAppearance}`:''}`).join('\n\n');
-    const prompt=`POCKETVERSE VISUAL BLUEPRINT. This is an isolated image-planning request, not roleplay prose.\n`+
-      `Convert the user's scene into concrete ENGLISH visual facts for image generation. The input may be Russian.\n`+
-      `Never add a person not listed in VISIBLE SUBJECTS. Never swap identities. A photographer behind camera is NOT visible.\n`+
-      `Reference images anchor identity/face only; they do NOT decide current clothing, pose, expression, action, camera, light or background.\n`+
-      `Use the scene/current state for those changing details. If a changing detail is unknown, use an empty string instead of inventing it.\n`+
-      `Do not output artist names, quality tags, model names, rendering styles, or negative prompts. Silly Images Plus owns style.\n`+
-      `For interactions state exact relative positions and who acts on whom. For selfie/photo state camera/framing/gaze explicitly.\n`+
-      `Return ONLY valid JSON, no markdown, in exactly this shape:\n`+
-      `{"camera":"","framing":"","angle":"","environment":"","lighting":"","atmosphere":"","subjects":[{"id":"character1","name":"","appearance":"","clothing":"","pose":"","expression":"","gaze":"","position":"","action":""}],"interaction":"","props":"","continuity":""}\n\n`+
-      `VISIBLE SUBJECTS (authoritative):\n${identity||'(none resolved)'}\n\nCAMERA ROUTE: ${r.camera}\nUSER SCENE:\n${scene}`;
-    const raw=await generateRaw({prompt,responseLength:900,trimNames:false});
-    const clean=String(raw||'').replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
-    let data; try{ data=JSON.parse(clean); }catch(e){ throw new Error('Модель вернула Blueprint не в JSON. Нажми ещё раз или покажи мне ответ.'); }
-    const byId=new Map(subjects.map(x=>[x.id,x]));
+    const header=await taskHeader('prepare ONE image prompt for the exact current RP/photo moment. Use the recent RP excerpt as authoritative continuity for current clothing, actions, expressions, relationships, location and objects.');
+    const prompt=`${header}\n\nPOCKETVERSE VISUAL SCENE ENGINE — same scene-first discipline as Scene Blocks.\n`+
+      `The PHOTO IDEA below is an instruction layered on the current RP. Resolve it using the RP excerpt above. Do not reduce it to a generic caption.\n`+
+      `Return concrete ENGLISH visual facts. Never omit an explicitly requested visible subject. Never merge two identities. Never invent an extra person.\n`+
+      `Reference images anchor identity/face only. Current RP/photo idea decides clothing, pose, expression, action, position, camera, background and light.\n`+
+      `If an identity has KNOWN APPEARANCE, preserve those visible traits. If no image reference can be transported, that text is especially important.\n`+
+      `For multiple characters, keep every person's appearance/clothing/action/expression/gaze/position in their OWN block.\n`+
+      `For physical interaction say exactly who does what to whom and the contact/relative position.\n`+
+      `No artists, quality tags, rendering medium, palette or aesthetic style: Silly Images Plus owns style.\n`+
+      `English only, including appearance. Translate any Russian source details.\n`+
+      `Return ONLY valid JSON with this exact shape:\n`+
+      `{"camera":"","framing":"","angle":"","environment":"","lighting":"","atmosphere":"","subjects":[{"id":"character1","name":"","gender":"female|male|other","appearance":"","clothing":"","pose":"","expression":"","gaze":"","position":"","action":""}],"interaction":"","actionTags":"","props":"","continuity":""}\n\n`+
+      `AUTHORITATIVE VISIBLE SUBJECTS — ALL must remain in the image:\n${identity||'(resolver found none; infer only people explicitly named in PHOTO IDEA)'}\n`+
+      `CAMERA ROUTE: ${r.camera}. ${String(options.cameraHint||'')}\nSOURCE: ${String(options.source||'visual-lab')}\nPHOTO IDEA:\n${scene}`;
+    const raw=await socialGen(prompt,{maxTokens:1800});
+    let clean=String(raw||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+    // Models sometimes wrap otherwise-valid JSON in prose. Salvage the outer object.
+    const a=clean.indexOf('{'), z=clean.lastIndexOf('}'); if(a>=0&&z>a) clean=clean.slice(a,z+1);
+    let data;
+    try{data=JSON.parse(clean);}catch(e){
+        // Never dead-end the editor: keep a safe structured shell and expose raw LLM.
+        data={camera:r.camera||'',framing:'',angle:'',environment:'',lighting:'',atmosphere:'',subjects:[],interaction:'',actionTags:'',props:'',continuity:`RAW_LLM: ${String(raw||'').slice(0,5000)}`};
+    }
+    const byName=(Array.isArray(data.subjects)?data.subjects:[]);
     const outSubjects=[];
     for(let i=0;i<subjects.length;i++){
-        const fixed=subjects[i], got=Array.isArray(data.subjects)?(data.subjects.find(x=>x?.id===fixed.id)||data.subjects[i]||{}):{};
+        const fixed=subjects[i];
+        const got=byName.find(x=>x?.id===fixed.id)||byName.find(x=>String(x?.name||'').toLowerCase()===fixed.name.toLowerCase())||byName[i]||{};
         outSubjects.push({...got,id:fixed.id,name:fixed.name,role:fixed.role,identitySource:fixed.identitySource,stableAppearance:fixed.stableAppearance});
     }
-    return {...r, blueprint:{
-        camera:String(data.camera||r.camera||''), framing:String(data.framing||''), angle:String(data.angle||''),
-        environment:String(data.environment||''), lighting:String(data.lighting||''), atmosphere:String(data.atmosphere||''),
-        subjects:outSubjects, interaction:String(data.interaction||''), props:String(data.props||''), continuity:String(data.continuity||'')
+    // If resolver failed but LLM found explicit people, retain them rather than erasing the scene.
+    if(!subjects.length && byName.length) outSubjects.push(...byName.map((x,i)=>({...x,id:x.id||`character${i+1}`})));
+    return {...r,raw:String(raw||''),requestPrompt:prompt,blueprint:{
+        camera:String(data.camera||r.camera||''),framing:String(data.framing||''),angle:String(data.angle||''),
+        environment:String(data.environment||''),lighting:String(data.lighting||''),atmosphere:String(data.atmosphere||''),
+        subjects:outSubjects,interaction:String(data.interaction||''),actionTags:String(data.actionTags||''),props:String(data.props||''),continuity:String(data.continuity||'')
     }};
 }
 
 export function compileMediaBlueprint(blueprint, provider='novelai') {
     const b=blueprint||{}; const ss=Array.isArray(b.subjects)?b.subjects:[];
     const text=v=>String(v||'').replace(/[\r\n|]+/g,' ').replace(/\s+/g,' ').trim();
-    const gender=s=>{const t=`${s.stableAppearance||''} ${s.appearance||''}`.toLowerCase(); if(/\b(female|woman|girl)\b|женщ|девуш/u.test(t))return'girl'; if(/\b(male|man|boy)\b|мужч|парен/u.test(t))return'boy'; return'person';};
+    const gender=s=>{const declared=String(s.gender||'').toLowerCase(); if(/female|woman|girl/.test(declared))return'girl'; if(/male|man|boy/.test(declared))return'boy'; const t=`${s.stableAppearance||''} ${s.appearance||''}`.toLowerCase(); if(/\b(female|woman|girl)\b|женщ|девуш/u.test(t))return'girl'; if(/\b(male|man|boy)\b|мужч|парен/u.test(t))return'boy'; return'person';};
     const gs=ss.map(gender), counts=[]; for(const g of ['girl','boy','person']){const n=gs.filter(x=>x===g).length;if(n)counts.push(`${n}${g}${n>1?'s':''}`)}
     const base=[counts.join(' '),text(b.camera),text(b.framing),text(b.angle),text(b.environment),text(b.lighting),text(b.atmosphere),text(b.props)].filter(Boolean).join(', ');
     const blocks=ss.map((s,i)=>{
@@ -3781,8 +3791,8 @@ export function compileMediaBlueprint(blueprint, provider='novelai') {
         const fields=[`${gs[i]}, ${text(s.name)}`, stable, current, text(s.clothing), text(s.pose), text(s.expression), text(s.gaze), text(s.position), text(s.action)].filter(Boolean);
         return `character${i+1}: ${fields.join(', ')}`;
     });
-    const interaction=text(b.interaction), continuity=text(b.continuity);
-    const nai=[base,...blocks,interaction?`interaction: ${interaction}`:'',continuity?`continuity: ${continuity}`:''].filter(Boolean).join(' | ');
+    const interaction=text(b.interaction), actionTags=text(b.actionTags), continuity=text(b.continuity);
+    const nai=[base,...blocks,interaction?`interaction: ${interaction}`:'',actionTags?`action tags: ${actionTags}`:'',continuity?`continuity: ${continuity}`:''].filter(Boolean).join(' | ');
     const natural=[`Create one coherent image.`,base?`Camera and scene: ${base}.`:'',...ss.map((s,i)=>`${s.name}: ${[text(s.stableAppearance),text(s.appearance),text(s.clothing),text(s.pose),text(s.expression),text(s.gaze),text(s.position),text(s.action)].filter(Boolean).join(', ')}.`),interaction?`Interaction: ${interaction}.`:'',continuity?`Continuity: ${continuity}.`:'','Use the active Silly Images Plus style. Do not add extra people.'].filter(Boolean).join('\n');
     return provider==='banana'?natural:nai;
 }
