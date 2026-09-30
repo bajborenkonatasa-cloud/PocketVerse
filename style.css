@@ -4415,3 +4415,10 @@ img[data-zoom] { cursor: zoom-in; }
 #gp-phone #gp-subject-test{width:100%;margin-bottom:8px}
 #gp-phone #gp-subject-result{padding:9px 10px;border-radius:10px;background:rgba(0,0,0,.15);line-height:1.5}
 #gp-phone .gp-subject-row{margin-top:7px;padding:7px 8px;border-radius:9px;border:1px solid rgba(255,255,255,.08)}
+/* PocketVerse v1.2.2 · editable Visual Blueprint Lab */
+#gp-phone .gp-visual-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:7px 0}
+#gp-phone .gp-visual-editor{margin-top:10px;padding:10px;border:1px solid rgba(255,255,255,.10);border-radius:12px;background:rgba(0,0,0,.14)}
+#gp-phone .gp-visual-editor>small{display:block;opacity:.62;margin:3px 0 7px}
+#gp-phone .gp-visual-editor>b{display:block;margin:10px 0 5px}
+#gp-phone .gp-visual-editor textarea{width:100%;box-sizing:border-box;resize:vertical;padding:9px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.22);color:inherit;font:10px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
+#gp-phone .gp-visual-safe{margin-top:8px!important;padding:8px;border-radius:9px;background:rgba(255,210,90,.07)}

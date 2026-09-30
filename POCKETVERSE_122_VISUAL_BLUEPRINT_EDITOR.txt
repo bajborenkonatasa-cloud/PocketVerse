@@ -1,0 +1,8 @@
+PocketVerse v1.2.2 — Visual Blueprint Editor
+- isolated LLM English Visual Blueprint
+- deterministic visible-subject/reference routing
+- editable Blueprint JSON
+- local NovelAI + Banana compilers
+- editable final prompts
+- local saved snapshot; manual edits are preserved
+- SAFE: no image generation yet

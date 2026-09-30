@@ -3730,6 +3730,63 @@ export async function resolveMediaSubjectsDiagnostic(sceneText = '') {
     };
 }
 
+
+
+// LLM Visual Blueprint: one isolated call converts an RP/photo idea into provider-neutral ENGLISH visual facts.
+// Identity/reference routing remains deterministic and is NEVER delegated to the model.
+export async function generateMediaVisualBlueprint(sceneText = '') {
+    const scene=String(sceneText||'').trim();
+    if(!scene) throw new Error('Сначала напиши сцену.');
+    const r=await resolveMediaSubjectsDiagnostic(scene);
+    const subjects=(r.visible||[]).map((x,i)=>({
+        id:`character${i+1}`, name:x.name, role:x.role,
+        identitySource:x.reference?'SIP_REFERENCE':(x.description?'SIP_APPEARANCE':'CARD_RP'),
+        stableAppearance:String(x.descriptionText||'').replace(/[\r\n]+/g,' ').slice(0,1800)
+    }));
+    const identity=subjects.map(x=>`${x.id}: ${x.name} [${x.role}] source=${x.identitySource}${x.stableAppearance?`\nKNOWN APPEARANCE: ${x.stableAppearance}`:''}`).join('\n\n');
+    const prompt=`POCKETVERSE VISUAL BLUEPRINT. This is an isolated image-planning request, not roleplay prose.\n`+
+      `Convert the user's scene into concrete ENGLISH visual facts for image generation. The input may be Russian.\n`+
+      `Never add a person not listed in VISIBLE SUBJECTS. Never swap identities. A photographer behind camera is NOT visible.\n`+
+      `Reference images anchor identity/face only; they do NOT decide current clothing, pose, expression, action, camera, light or background.\n`+
+      `Use the scene/current state for those changing details. If a changing detail is unknown, use an empty string instead of inventing it.\n`+
+      `Do not output artist names, quality tags, model names, rendering styles, or negative prompts. Silly Images Plus owns style.\n`+
+      `For interactions state exact relative positions and who acts on whom. For selfie/photo state camera/framing/gaze explicitly.\n`+
+      `Return ONLY valid JSON, no markdown, in exactly this shape:\n`+
+      `{"camera":"","framing":"","angle":"","environment":"","lighting":"","atmosphere":"","subjects":[{"id":"character1","name":"","appearance":"","clothing":"","pose":"","expression":"","gaze":"","position":"","action":""}],"interaction":"","props":"","continuity":""}\n\n`+
+      `VISIBLE SUBJECTS (authoritative):\n${identity||'(none resolved)'}\n\nCAMERA ROUTE: ${r.camera}\nUSER SCENE:\n${scene}`;
+    const raw=await generateRaw({prompt,responseLength:900,trimNames:false});
+    const clean=String(raw||'').replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+    let data; try{ data=JSON.parse(clean); }catch(e){ throw new Error('Модель вернула Blueprint не в JSON. Нажми ещё раз или покажи мне ответ.'); }
+    const byId=new Map(subjects.map(x=>[x.id,x]));
+    const outSubjects=[];
+    for(let i=0;i<subjects.length;i++){
+        const fixed=subjects[i], got=Array.isArray(data.subjects)?(data.subjects.find(x=>x?.id===fixed.id)||data.subjects[i]||{}):{};
+        outSubjects.push({...got,id:fixed.id,name:fixed.name,role:fixed.role,identitySource:fixed.identitySource,stableAppearance:fixed.stableAppearance});
+    }
+    return {...r, blueprint:{
+        camera:String(data.camera||r.camera||''), framing:String(data.framing||''), angle:String(data.angle||''),
+        environment:String(data.environment||''), lighting:String(data.lighting||''), atmosphere:String(data.atmosphere||''),
+        subjects:outSubjects, interaction:String(data.interaction||''), props:String(data.props||''), continuity:String(data.continuity||'')
+    }};
+}
+
+export function compileMediaBlueprint(blueprint, provider='novelai') {
+    const b=blueprint||{}; const ss=Array.isArray(b.subjects)?b.subjects:[];
+    const text=v=>String(v||'').replace(/[\r\n|]+/g,' ').replace(/\s+/g,' ').trim();
+    const gender=s=>{const t=`${s.stableAppearance||''} ${s.appearance||''}`.toLowerCase(); if(/\b(female|woman|girl)\b|женщ|девуш/u.test(t))return'girl'; if(/\b(male|man|boy)\b|мужч|парен/u.test(t))return'boy'; return'person';};
+    const gs=ss.map(gender), counts=[]; for(const g of ['girl','boy','person']){const n=gs.filter(x=>x===g).length;if(n)counts.push(`${n}${g}${n>1?'s':''}`)}
+    const base=[counts.join(' '),text(b.camera),text(b.framing),text(b.angle),text(b.environment),text(b.lighting),text(b.atmosphere),text(b.props)].filter(Boolean).join(', ');
+    const blocks=ss.map((s,i)=>{
+        const stable=text(s.stableAppearance), current=text(s.appearance);
+        const fields=[`${gs[i]}, ${text(s.name)}`, stable, current, text(s.clothing), text(s.pose), text(s.expression), text(s.gaze), text(s.position), text(s.action)].filter(Boolean);
+        return `character${i+1}: ${fields.join(', ')}`;
+    });
+    const interaction=text(b.interaction), continuity=text(b.continuity);
+    const nai=[base,...blocks,interaction?`interaction: ${interaction}`:'',continuity?`continuity: ${continuity}`:''].filter(Boolean).join(' | ');
+    const natural=[`Create one coherent image.`,base?`Camera and scene: ${base}.`:'',...ss.map((s,i)=>`${s.name}: ${[text(s.stableAppearance),text(s.appearance),text(s.clothing),text(s.pose),text(s.expression),text(s.gaze),text(s.position),text(s.action)].filter(Boolean).join(', ')}.`),interaction?`Interaction: ${interaction}.`:'',continuity?`Continuity: ${continuity}.`:'','Use the active Silly Images Plus style. Do not add extra people.'].filter(Boolean).join('\n');
+    return provider==='banana'?natural:nai;
+}
+
 // Local-only Scene Blueprint: builds a provider-neutral scene prompt without calling a model.
 // SIP still owns provider/style/reference transport; PocketVerse only describes WHAT is in frame.
 export async function buildMediaSceneBlueprintDiagnostic(sceneText = '') {

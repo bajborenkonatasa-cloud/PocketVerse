@@ -30,7 +30,7 @@ import {
     generateChannels, generateChannelPosts, generateChannelComments, generateMyChannelFeedback, generatePersonChannel,
     generateAnonFeed, generateAnonComments, resolveAnonAuthor, generateTinderDeck,
     getMediaIdentityDiagnostics,
-    resolveMediaSubjectsDiagnostic, buildMediaSceneBlueprintDiagnostic,
+    resolveMediaSubjectsDiagnostic, buildMediaSceneBlueprintDiagnostic, generateMediaVisualBlueprint, compileMediaBlueprint,
 } from './social.js';
 import { getSystemsView, deferEvent, declineEvent, selectStoryEvent, acceptAdOffer, declineAdOffer, attachActiveAd, getReputationStatus } from './social-events.js';
 import { maybeScamSms } from './scam.js';
@@ -1222,9 +1222,18 @@ function renderBrain(screen) {
           </div>
           <div class="gp-brain-control gp-media-lab"><b>📸 Media Identity Lab · SAFE</b><small>Только проверка маршрута. Ничего не генерирует и не трогает RP.</small><div id="gp-media-diag">Проверяю Silly Images Plus…</div>
           <div class="gp-subject-lab"><b>🎬 Visible Subjects Resolver · SAFE</b><small>Напиши сцену обычными словами — проверим, кто реально попадёт в кадр и чей reference будет выбран.</small>
-          <textarea id="gp-subject-scene" rows="3" placeholder="Например: Seraphina делает селфи вместе с Hanabi"></textarea>
-          <button id="gp-subject-test">Проверить кадр + промпт</button>
-          <div id="gp-subject-result"><small>Без модели и генерации — только локальная проверка identity.</small></div></div></div>
+          <textarea id="gp-subject-scene" rows="3" placeholder="Например: Серафина делает селфи вместе с Ханаби"></textarea>
+          <div class="gp-visual-actions"><button id="gp-subject-test">1 · Проверить identity</button><button id="gp-blueprint-ai">2 · ✨ Собрать EN Blueprint</button></div>
+          <div id="gp-subject-result"><small>Сначала identity, затем один изолированный LLM-запрос собирает английский Visual Blueprint.</small></div>
+          <div id="gp-visual-editor" class="gp-visual-editor" hidden>
+            <b>🧩 Visual Blueprint Editor</b><small>Можно править руками. Эти правки модель сама не переписывает.</small>
+            <textarea id="gp-blueprint-edit" rows="12" spellcheck="false"></textarea>
+            <div class="gp-visual-actions"><button id="gp-blueprint-compile">🪄 Пересобрать промпты</button><button id="gp-blueprint-save">💾 Сохранить</button></div>
+            <b>🌙 NovelAI · editable final prompt</b><textarea id="gp-nai-edit" rows="10" spellcheck="false"></textarea>
+            <b>🍌 Banana / vision · editable final prompt</b><textarea id="gp-banana-edit" rows="10" spellcheck="false"></textarea>
+            <div class="gp-visual-actions"><button id="gp-prompts-save">💾 Сохранить мои prompt</button><button id="gp-visual-reset">↺ Сбросить снимок</button></div>
+            <small class="gp-visual-safe">SAFE TEST: сейчас это редактор/компилятор. Кнопку реальной генерации подключим после проверки финального prompt, чтобы не жечь запросы кривым кадром.</small>
+          </div></div></div>
           <div class="gp-brain-warning"><b>Phone Context Budget:</b> ✨ теперь использует изолированный generateRaw-контекст вместо полного RP-чата. Lite ≈ до 1–1.5k входа · Balanced ≈ 2.5–4k · Deep ≈ 5–7k (оценка зависит от карточки/истории). Большая цифра RP ниже остаётся только диагностикой ST и целиком в телефонный запрос не копируется.</div>
           <details class="gp-brain-details" open><summary>📱 Что PocketVerse добавляет прямо сейчас</summary><pre>${esc(b.prompt)}</pre></details>
           <details class="gp-brain-details"><summary>🎭 Character Card</summary><pre>${esc(b.cardText || 'Недоступно в текущем контексте.')}</pre></details>
@@ -1249,6 +1258,34 @@ function renderBrain(screen) {
     };
     ['#gp-bc-photo','#gp-bc-meme','#gp-bc-groups','#gp-bc-autophoto','#gp-bc-automeme'].forEach(q => screen.querySelector(q)?.addEventListener('change', () => { save(); renderBrain(screen); }));
     screen.querySelector('#gp-bc-save')?.addEventListener('click', () => { save(); renderBrain(screen); });
+    const visualKey='PocketVerse.visualLab.last';
+    const showVisualEditor = job => {
+        const ed=screen.querySelector('#gp-visual-editor'); if(!ed||!job)return;
+        ed.hidden=false;
+        screen.querySelector('#gp-blueprint-edit').value=JSON.stringify(job.blueprint||{},null,2);
+        screen.querySelector('#gp-nai-edit').value=job.novelai||'';
+        screen.querySelector('#gp-banana-edit').value=job.banana||'';
+    };
+    try{const saved=JSON.parse(localStorage.getItem(visualKey)||'null');if(saved)showVisualEditor(saved);}catch(e){}
+    screen.querySelector('#gp-blueprint-ai')?.addEventListener('click', async()=>{
+        const box=screen.querySelector('#gp-subject-result'); const btn=screen.querySelector('#gp-blueprint-ai');
+        if(box)box.textContent='✨ Модель разбирает сцену в английский Visual Blueprint…'; if(btn)btn.disabled=true;
+        try{
+            const scene=screen.querySelector('#gp-subject-scene')?.value||'';
+            const r=await generateMediaVisualBlueprint(scene);
+            const job={scene,blueprint:r.blueprint,novelai:compileMediaBlueprint(r.blueprint,'novelai'),banana:compileMediaBlueprint(r.blueprint,'banana'),routing:{author:r.author,camera:r.camera,visible:r.visible},edited:false,ts:Date.now()};
+            localStorage.setItem(visualKey,JSON.stringify(job)); showVisualEditor(job);
+            if(box)box.innerHTML=`<div><b>✅ Blueprint готов.</b> Теперь правь его или финальный prompt руками.</div><div><b>В кадре:</b> ${esc((r.visible||[]).map(x=>x.name).join(' + ')||'не определено')}</div>`;
+        }catch(e){if(box)box.textContent=`Blueprint: ${e?.message||e}`;}finally{if(btn)btn.disabled=false;}
+    });
+    screen.querySelector('#gp-blueprint-compile')?.addEventListener('click',()=>{
+        const box=screen.querySelector('#gp-subject-result');
+        try{const bp=JSON.parse(screen.querySelector('#gp-blueprint-edit')?.value||'{}');screen.querySelector('#gp-nai-edit').value=compileMediaBlueprint(bp,'novelai');screen.querySelector('#gp-banana-edit').value=compileMediaBlueprint(bp,'banana');if(box)box.textContent='🪄 Промпты пересобраны из твоего Blueprint. Без LLM.';}catch(e){if(box)box.textContent='JSON Blueprint: '+(e?.message||e);}
+    });
+    const saveVisual=()=>{try{const old=JSON.parse(localStorage.getItem(visualKey)||'{}');old.blueprint=JSON.parse(screen.querySelector('#gp-blueprint-edit')?.value||'{}');old.novelai=screen.querySelector('#gp-nai-edit')?.value||'';old.banana=screen.querySelector('#gp-banana-edit')?.value||'';old.edited=true;old.ts=Date.now();localStorage.setItem(visualKey,JSON.stringify(old));const box=screen.querySelector('#gp-subject-result');if(box)box.textContent='💾 Сохранено. Твои ручные правки не будут перезаписаны автоматически.';}catch(e){const box=screen.querySelector('#gp-subject-result');if(box)box.textContent='Сохранение: '+(e?.message||e);}};
+    screen.querySelector('#gp-blueprint-save')?.addEventListener('click',saveVisual);
+    screen.querySelector('#gp-prompts-save')?.addEventListener('click',saveVisual);
+    screen.querySelector('#gp-visual-reset')?.addEventListener('click',()=>{localStorage.removeItem(visualKey);const ed=screen.querySelector('#gp-visual-editor');if(ed)ed.hidden=true;const box=screen.querySelector('#gp-subject-result');if(box)box.textContent='Снимок Visual Lab очищен.';});
     screen.querySelector('#gp-subject-test')?.addEventListener('click', async () => {
         const box=screen.querySelector('#gp-subject-result');
         if(!box)return;
