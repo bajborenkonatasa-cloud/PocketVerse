@@ -3630,9 +3630,24 @@ export async function resolveMediaSubjectsDiagnostic(sceneText = '') {
     const raw = String(sceneText || '').trim();
 
     const identities = [];
+    const splitAliases = v => String(v || '').split(/[,;\n|/]+/u).map(x => x.trim()).filter(Boolean);
+    const russianNameForms = name => {
+        const n = String(name || '').trim();
+        if (!/^[А-ЯЁа-яё-]+$/u.test(n) || n.length < 3) return [n];
+        const out = new Set([n]);
+        // Lightweight name-case support for identity matching only; never changes the stored identity.
+        if (/а$/iu.test(n)) { const stem=n.slice(0,-1); [stem+'у',stem+'ы',stem+'е',stem+'ой',stem+'ою'].forEach(x=>out.add(x)); }
+        else if (/я$/iu.test(n)) { const stem=n.slice(0,-1); [stem+'ю',stem+'и',stem+'е',stem+'ей',stem+'ею'].forEach(x=>out.add(x)); }
+        else if (/й$/iu.test(n)) { const stem=n.slice(0,-1); [stem+'я',stem+'ю',stem+'ем',stem+'е'].forEach(x=>out.add(x)); }
+        else if (/[бвгджзклмнпрстфхцчшщ]$/iu.test(n)) { [n+'а',n+'у',n+'ом',n+'е'].forEach(x=>out.add(x)); }
+        return [...out];
+    };
     const add = (x, role) => {
         if (!x?.name) return;
-        identities.push({ ...x, role, names:[x.name, ...(x.aliases || [])].map(v=>String(v||'').trim()).filter(Boolean) });
+        // SIP users often keep aliases directly in the Name field: "Кира, Кир, Kira".
+        const explicit = [...splitAliases(x.name), ...(x.aliases || []).flatMap(splitAliases)];
+        const names = [...new Set(explicit.flatMap(russianNameForms).map(v=>String(v||'').trim()).filter(Boolean))];
+        identities.push({ ...x, role, names });
     };
     add(d.character, 'character');
     add(d.user, 'user');
@@ -3651,7 +3666,7 @@ export async function resolveMediaSubjectsDiagnostic(sceneText = '') {
     }
     mentioned.sort((a,b)=>a.mentionIndex-b.mentionIndex);
 
-    const selfie = /\bselfie\b|\bселфи\b|фото\s+(?:вместе\s+)?с\b|совместн\w*\s+фото/iu.test(raw);
+    const selfie = /(?:^|[^\p{L}\p{N}_])selfie(?=$|[^\p{L}\p{N}_])|селфи|фото\s+(?:вместе\s+)?с(?:\s|$)|совместн\w*\s+селфи|совместн\w*\s+фото/iu.test(raw);
     const photoVerb = /photograph(?:s|ed|ing)?|takes?\s+(?:a\s+)?photo|сфотограф\w*|фотографир\w*|снимает|снял[аи]?/iu.test(raw);
 
     const author = mentioned[0] || d.character;
