@@ -1,0 +1,1 @@
+PocketVerse v1.2.6: official NovelAI V4+ pipe grammar; OC names removed from generator prompt; no trailing interaction segment; Brain shows diagnostic Undesired Content. Native SIP provider companion patch required for true structured base/character prompts and UC.

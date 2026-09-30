@@ -30,7 +30,7 @@ import {
     generateChannels, generateChannelPosts, generateChannelComments, generateMyChannelFeedback, generatePersonChannel,
     generateAnonFeed, generateAnonComments, resolveAnonAuthor, generateTinderDeck,
     getMediaIdentityDiagnostics,
-    resolveMediaSubjectsDiagnostic, buildMediaSceneBlueprintDiagnostic, generateMediaVisualBlueprint, compileMediaBlueprint,
+    resolveMediaSubjectsDiagnostic, buildMediaSceneBlueprintDiagnostic, generateMediaVisualBlueprint, compileMediaBlueprint, buildNovelAiUndesiredContent,
 } from './social.js';
 import { getSystemsView, deferEvent, declineEvent, selectStoryEvent, acceptAdOffer, declineAdOffer, attachActiveAd, getReputationStatus } from './social-events.js';
 import { maybeScamSms } from './scam.js';
@@ -1229,7 +1229,7 @@ function renderBrain(screen) {
             <b>🧩 Visual Blueprint Editor</b><small>Можно править руками. Эти правки модель сама не переписывает.</small>
             <textarea id="gp-blueprint-edit" rows="12" spellcheck="false"></textarea>
             <div class="gp-visual-actions"><button id="gp-blueprint-compile">🪄 Пересобрать промпты</button><button id="gp-blueprint-save">💾 Сохранить</button></div>
-            <b>🌙 NovelAI · editable final prompt</b><textarea id="gp-nai-edit" rows="10" spellcheck="false"></textarea>
+            <b>🌙 NovelAI · editable final prompt</b><textarea id="gp-nai-edit" rows="10" spellcheck="false"></textarea><b>🚫 NovelAI · Undesired Content</b><textarea id="gp-nai-uc" rows="6" spellcheck="false" readonly></textarea><small>Автоматически: официальный Human Focus-подобный UC + защита от лишних людей по числу персонажей. Для диагностики.</small>
             <b>🍌 Banana / vision · editable final prompt</b><textarea id="gp-banana-edit" rows="10" spellcheck="false"></textarea>
             <div class="gp-visual-actions"><button id="gp-prompts-save">💾 Сохранить мои prompt</button><button id="gp-visual-reset">↺ Сбросить снимок</button></div>
             <small class="gp-visual-safe">SAFE TEST: сейчас это редактор/компилятор. Кнопку реальной генерации подключим после проверки финального prompt, чтобы не жечь запросы кривым кадром.</small>
@@ -1263,7 +1263,7 @@ function renderBrain(screen) {
         const ed=screen.querySelector('#gp-visual-editor'); if(!ed||!job)return;
         ed.hidden=false;
         screen.querySelector('#gp-blueprint-edit').value=JSON.stringify(job.blueprint||{},null,2);
-        screen.querySelector('#gp-nai-edit').value=job.novelai||'';
+        screen.querySelector('#gp-nai-edit').value=job.novelai||''; const uc=screen.querySelector('#gp-nai-uc'); if(uc) uc.value=job.novelaiUC||buildNovelAiUndesiredContent(job.blueprint||{});
         screen.querySelector('#gp-banana-edit').value=job.banana||'';
     };
     try{const saved=JSON.parse(localStorage.getItem(visualKey)||'null');if(saved)showVisualEditor(saved);}catch(e){}
@@ -1273,14 +1273,14 @@ function renderBrain(screen) {
         try{
             const scene=screen.querySelector('#gp-subject-scene')?.value||'';
             const r=await generateMediaVisualBlueprint(scene);
-            const job={scene,blueprint:r.blueprint,novelai:compileMediaBlueprint(r.blueprint,'novelai'),banana:compileMediaBlueprint(r.blueprint,'banana'),routing:{author:r.author,camera:r.camera,visible:r.visible},edited:false,ts:Date.now()};
+            const job={scene,blueprint:r.blueprint,novelai:compileMediaBlueprint(r.blueprint,'novelai'),novelaiUC:buildNovelAiUndesiredContent(r.blueprint),banana:compileMediaBlueprint(r.blueprint,'banana'),routing:{author:r.author,camera:r.camera,visible:r.visible},edited:false,ts:Date.now()};
             localStorage.setItem(visualKey,JSON.stringify(job)); showVisualEditor(job);
             if(box)box.innerHTML=`<div><b>✅ Blueprint готов.</b> Теперь правь его или финальный prompt руками.</div><div><b>В кадре:</b> ${esc((r.visible||[]).map(x=>x.name).join(' + ')||'не определено')}</div>`;
         }catch(e){if(box)box.textContent=`Blueprint: ${e?.message||e}`;}finally{if(btn)btn.disabled=false;}
     });
     screen.querySelector('#gp-blueprint-compile')?.addEventListener('click',()=>{
         const box=screen.querySelector('#gp-subject-result');
-        try{const bp=JSON.parse(screen.querySelector('#gp-blueprint-edit')?.value||'{}');screen.querySelector('#gp-nai-edit').value=compileMediaBlueprint(bp,'novelai');screen.querySelector('#gp-banana-edit').value=compileMediaBlueprint(bp,'banana');if(box)box.textContent='🪄 Промпты пересобраны из твоего Blueprint. Без LLM.';}catch(e){if(box)box.textContent='JSON Blueprint: '+(e?.message||e);}
+        try{const bp=JSON.parse(screen.querySelector('#gp-blueprint-edit')?.value||'{}');screen.querySelector('#gp-nai-edit').value=compileMediaBlueprint(bp,'novelai'); const uc=screen.querySelector('#gp-nai-uc'); if(uc) uc.value=buildNovelAiUndesiredContent(bp); screen.querySelector('#gp-banana-edit').value=compileMediaBlueprint(bp,'banana');if(box)box.textContent='🪄 Промпты пересобраны из твоего Blueprint. Без LLM.';}catch(e){if(box)box.textContent='JSON Blueprint: '+(e?.message||e);}
     });
     const saveVisual=()=>{try{const old=JSON.parse(localStorage.getItem(visualKey)||'{}');old.blueprint=JSON.parse(screen.querySelector('#gp-blueprint-edit')?.value||'{}');old.novelai=screen.querySelector('#gp-nai-edit')?.value||'';old.banana=screen.querySelector('#gp-banana-edit')?.value||'';old.edited=true;old.ts=Date.now();localStorage.setItem(visualKey,JSON.stringify(old));const box=screen.querySelector('#gp-subject-result');if(box)box.textContent='💾 Сохранено. Твои ручные правки не будут перезаписаны автоматически.';}catch(e){const box=screen.querySelector('#gp-subject-result');if(box)box.textContent='Сохранение: '+(e?.message||e);}};
     screen.querySelector('#gp-blueprint-save')?.addEventListener('click',saveVisual);

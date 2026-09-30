@@ -3799,28 +3799,36 @@ export function compileMediaBlueprint(blueprint, provider='novelai') {
     const gs=ss.map(gender), counts=[];
     for(const g of ['girl','boy','other']){const n=gs.filter(x=>x===g).length;if(n)counts.push(`${n}${g}${n>1?'s':''}`)}
 
-    // Scene Blocks Lite rule: subject count exists ONCE in the base.  The base has
-    // only shared scene + neutral framing.  No names/descriptions are repeated here.
+    // Native NovelAI multi-character grammar (official V4+ docs):
+    // BASE | CHARACTER 1 | CHARACTER 2 ...
+    // Subject count belongs ONLY to BASE. Character blocks start with girl/boy/other,
+    // never with OC names: names are PocketVerse resolver IDs, not visual concepts.
     const base=[counts.join(', '),text(b.framing),text(b.angle),text(b.camera),text(b.environment),text(b.lighting)].filter(Boolean).join(', ');
     const blocks=ss.map((s,i)=>{
-        // The LLM already translated/condensed KNOWN APPEARANCE into appearance.
-        // Do not append stableAppearance again: that duplicated long descriptions
-        // and made NovelAI split one identity into additional people.
-        const fields=[gs[i],text(s.name),text(s.appearance),text(s.clothing),text(s.pose),text(s.position),text(s.action),text(s.expression),text(s.gaze)].filter(Boolean);
+        const fields=[gs[i],text(s.appearance),text(s.clothing),text(s.pose),text(s.position),text(s.action),text(s.expression),text(s.gaze)].filter(Boolean);
         return fields.join(', ');
     });
-    // Keep interaction exactly once. Action tags are useful only when the planner
-    // actually supplied source#/target#/mutual# syntax; prose labelled "action tags"
-    // is worse for NovelAI than omitting it.
-    const interaction=text(b.interaction);
-    const rawAction=text(b.actionTags);
-    const actionTags=/(?:source|target|mutual)#[a-z0-9_'-]+/i.test(rawAction) ? rawAction : '';
-    const nai=[base,...blocks,interaction,actionTags].filter(Boolean).join(' | ');
+    // Do NOT append a fourth prose segment that repeats all subjects. In NovelAI
+    // pipe syntax every segment after BASE is a character prompt; an interaction
+    // summary there can literally become an extra character. Interaction/contact
+    // must already be expressed inside the involved character blocks by the planner.
+    const nai=[base,...blocks].filter(Boolean).join(' | ');
 
-    // Instruction-following vision models benefit from natural language, but still
-    // receive exactly the resolved subjects and no invented extras.
-    const natural=[`Create one coherent image containing exactly ${ss.length} visible ${ss.length===1?'person':'people'}: ${ss.map(x=>x.name).join(', ')}.`,base?`Scene: ${base}.`:'',...ss.map((s,i)=>`${s.name}: ${[text(s.appearance),text(s.clothing),text(s.pose),text(s.position),text(s.action),text(s.expression),text(s.gaze)].filter(Boolean).join(', ')}.`),interaction?`Interaction: ${interaction}.`:'','Use the active Silly Images Plus style. Do not add background people or duplicate any subject.'].filter(Boolean).join('\n');
+    const natural=[`Create one coherent image containing exactly ${ss.length} visible ${ss.length===1?'person':'people'}: ${ss.map(x=>x.name).join(', ')}.`,base?`Scene: ${base}.`:'',...ss.map((s,i)=>`${s.name}: ${[text(s.appearance),text(s.clothing),text(s.pose),text(s.position),text(s.action),text(s.expression),text(s.gaze)].filter(Boolean).join(', ')}.`),'Use the active Silly Images Plus style. Do not add background people or duplicate any subject.'].filter(Boolean).join('\n');
     return provider==='banana'?natural:nai;
+}
+
+export function buildNovelAiUndesiredContent(blueprint) {
+    const b=blueprint||{}; const ss=Array.isArray(b.subjects)?b.subjects:[];
+    const gender=s=>{const d=String(s.gender||'').toLowerCase();if(/female|woman|girl/.test(d))return'girl';if(/male|man|boy/.test(d))return'boy';return'other';};
+    const girls=ss.filter(s=>gender(s)==='girl').length, boys=ss.filter(s=>gender(s)==='boy').length, others=ss.length-girls-boys;
+    const uc=['lowres','artistic error','film grain','scan artifacts','worst quality','bad quality','jpeg artifacts','very displeasing','chromatic aberration','dithering','halftone','screentone','multiple views','logo','too many watermarks','negative space','blank page','@_@','mismatched pupils','glowing eyes','bad anatomy','bad hands','extra fingers','fewer fingers','extra limbs','missing limbs','duplicate','cloned face','crowd','background people'];
+    if(girls===1) uc.push('2girls','3girls','4girls','5girls','6+girls','multiple girls');
+    else if(girls===2) uc.push('3girls','4girls','5girls','6+girls','multiple girls');
+    else if(girls===3) uc.push('4girls','5girls','6+girls','multiple girls');
+    if(boys===0) uc.push('1boy','2boys','multiple boys');
+    if(others===0) uc.push('1other','2others','multiple others');
+    return [...new Set(uc)].join(', ');
 }
 
 // Local-only Scene Blueprint: builds a provider-neutral scene prompt without calling a model.
