@@ -3741,21 +3741,28 @@ export async function generateMediaVisualBlueprint(sceneText = '', options = {})
         return {id:`character${i+1}`,name:x.name,role:x.role,identitySource:x.reference?'SIP_REFERENCE':(x.description?'SIP_APPEARANCE':'CARD_RP'),stableAppearance:stable.slice(0,2600)};
     });
     const identity=subjects.map(x=>`${x.id}: ${x.name} [${x.role}] source=${x.identitySource}${x.stableAppearance?`\nKNOWN APPEARANCE: ${x.stableAppearance}`:''}`).join('\n\n');
-    const header=await taskHeader('prepare ONE image prompt for the exact current RP/photo moment. Use the recent RP excerpt as authoritative continuity for current clothing, actions, expressions, relationships, location and objects.');
-    const prompt=`${header}\n\nPOCKETVERSE VISUAL SCENE ENGINE — same scene-first discipline as Scene Blocks.\n`+
+    // Image planning gets a deliberately SMALL context. The previous build reused
+    // taskHeader(), which dragged character/lore/world boilerplate into a tiny image
+    // task (4k+ prompt tokens in a three-person beach test). Scene Blocks works well
+    // because the latest RP state + relevant identities are enough.
+    const rp = rpContextBlock(6, { publicOnly:false });
+    const prompt=`POCKETVERSE VISUAL SCENE ENGINE — follow Scene Blocks Lite discipline.\n`+
+      `CURRENT RP (authoritative only for facts visible NOW):\n${rp || '(no recent RP excerpt)'}\n\n`+
       `The PHOTO IDEA below is an instruction layered on the current RP. Resolve it using the RP excerpt above. Do not reduce it to a generic caption.\n`+
-      `Return concrete ENGLISH visual facts. Never omit an explicitly requested visible subject. Never merge two identities. Never invent an extra person.\n`+
+      `Return concise ENGLISH visual facts. Never omit an explicitly requested visible subject. Never merge two identities. Never invent an extra person.\n`+
+      `STRICT COUNT: the subjects array must contain exactly the AUTHORITATIVE VISIBLE SUBJECTS below — one object per identity, no extras, no duplicates.\n`+
       `Reference images anchor identity/face only. Current RP/photo idea decides clothing, pose, expression, action, position, camera, background and light.\n`+
       `If an identity has KNOWN APPEARANCE, preserve those visible traits. If no image reference can be transported, that text is especially important.\n`+
       `For multiple characters, keep every person's appearance/clothing/action/expression/gaze/position in their OWN block.\n`+
       `For physical interaction say exactly who does what to whom and the contact/relative position.\n`+
-      `No artists, quality tags, rendering medium, palette or aesthetic style: Silly Images Plus owns style.\n`+
+      `Do NOT invent clothing, jewelry, props, scenery, poses or expressions. If the PHOTO IDEA/RP does not specify a dynamic detail, keep that field empty. Stable appearance may be translated/condensed from KNOWN APPEARANCE.\n`+
+      `No artists, quality tags, rendering medium, palette, lighting STYLE or aesthetic terms: Silly Images Plus owns style. Factual light/time/weather is allowed.\n`+
       `English only, including appearance. Translate any Russian source details.\n`+
       `Return ONLY valid JSON with this exact shape:\n`+
       `{"camera":"","framing":"","angle":"","environment":"","lighting":"","atmosphere":"","subjects":[{"id":"character1","name":"","gender":"female|male|other","appearance":"","clothing":"","pose":"","expression":"","gaze":"","position":"","action":""}],"interaction":"","actionTags":"","props":"","continuity":""}\n\n`+
       `AUTHORITATIVE VISIBLE SUBJECTS — ALL must remain in the image:\n${identity||'(resolver found none; infer only people explicitly named in PHOTO IDEA)'}\n`+
       `CAMERA ROUTE: ${r.camera}. ${String(options.cameraHint||'')}\nSOURCE: ${String(options.source||'visual-lab')}\nPHOTO IDEA:\n${scene}`;
-    const raw=await socialGen(prompt,{maxTokens:1800});
+    const raw=await socialGen(prompt,{maxTokens:1100});
     let clean=String(raw||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
     // Models sometimes wrap otherwise-valid JSON in prose. Salvage the outer object.
     const a=clean.indexOf('{'), z=clean.lastIndexOf('}'); if(a>=0&&z>a) clean=clean.slice(a,z+1);
@@ -3783,17 +3790,31 @@ export async function generateMediaVisualBlueprint(sceneText = '', options = {})
 export function compileMediaBlueprint(blueprint, provider='novelai') {
     const b=blueprint||{}; const ss=Array.isArray(b.subjects)?b.subjects:[];
     const text=v=>String(v||'').replace(/[\r\n|]+/g,' ').replace(/\s+/g,' ').trim();
-    const gender=s=>{const declared=String(s.gender||'').toLowerCase(); if(/female|woman|girl/.test(declared))return'girl'; if(/male|man|boy/.test(declared))return'boy'; const t=`${s.stableAppearance||''} ${s.appearance||''}`.toLowerCase(); if(/\b(female|woman|girl)\b|женщ|девуш/u.test(t))return'girl'; if(/\b(male|man|boy)\b|мужч|парен/u.test(t))return'boy'; return'person';};
-    const gs=ss.map(gender), counts=[]; for(const g of ['girl','boy','person']){const n=gs.filter(x=>x===g).length;if(n)counts.push(`${n}${g}${n>1?'s':''}`)}
-    const base=[counts.join(' '),text(b.camera),text(b.framing),text(b.angle),text(b.environment),text(b.lighting),text(b.atmosphere),text(b.props)].filter(Boolean).join(', ');
+    const gender=s=>{const declared=String(s.gender||'').toLowerCase(); if(/female|woman|girl/.test(declared))return'girl'; if(/male|man|boy/.test(declared))return'boy'; const t=`${s.appearance||''} ${s.stableAppearance||''}`.toLowerCase(); if(/\b(female|woman|girl)\b|женщ|девуш/u.test(t))return'girl'; if(/\b(male|man|boy)\b|мужч|парен/u.test(t))return'boy'; return'other';};
+    const gs=ss.map(gender), counts=[];
+    for(const g of ['girl','boy','other']){const n=gs.filter(x=>x===g).length;if(n)counts.push(`${n}${g}${n>1?'s':''}`)}
+
+    // Scene Blocks Lite rule: subject count exists ONCE in the base.  The base has
+    // only shared scene + neutral framing.  No names/descriptions are repeated here.
+    const base=[counts.join(', '),text(b.framing),text(b.angle),text(b.camera),text(b.environment),text(b.lighting)].filter(Boolean).join(', ');
     const blocks=ss.map((s,i)=>{
-        const stable=text(s.stableAppearance), current=text(s.appearance);
-        const fields=[`${gs[i]}, ${text(s.name)}`, stable, current, text(s.clothing), text(s.pose), text(s.expression), text(s.gaze), text(s.position), text(s.action)].filter(Boolean);
-        return `character${i+1}: ${fields.join(', ')}`;
+        // The LLM already translated/condensed KNOWN APPEARANCE into appearance.
+        // Do not append stableAppearance again: that duplicated long descriptions
+        // and made NovelAI split one identity into additional people.
+        const fields=[gs[i],text(s.appearance),text(s.clothing),text(s.pose),text(s.position),text(s.action),text(s.expression),text(s.gaze)].filter(Boolean);
+        return fields.join(', ');
     });
-    const interaction=text(b.interaction), actionTags=text(b.actionTags), continuity=text(b.continuity);
-    const nai=[base,...blocks,interaction?`interaction: ${interaction}`:'',actionTags?`action tags: ${actionTags}`:'',continuity?`continuity: ${continuity}`:''].filter(Boolean).join(' | ');
-    const natural=[`Create one coherent image.`,base?`Camera and scene: ${base}.`:'',...ss.map((s,i)=>`${s.name}: ${[text(s.stableAppearance),text(s.appearance),text(s.clothing),text(s.pose),text(s.expression),text(s.gaze),text(s.position),text(s.action)].filter(Boolean).join(', ')}.`),interaction?`Interaction: ${interaction}.`:'',continuity?`Continuity: ${continuity}.`:'','Use the active Silly Images Plus style. Do not add extra people.'].filter(Boolean).join('\n');
+    // Keep interaction exactly once. Action tags are useful only when the planner
+    // actually supplied source#/target#/mutual# syntax; prose labelled "action tags"
+    // is worse for NovelAI than omitting it.
+    const interaction=text(b.interaction);
+    const rawAction=text(b.actionTags);
+    const actionTags=/(?:source|target|mutual)#[a-z0-9_'-]+/i.test(rawAction) ? rawAction : '';
+    const nai=[base,...blocks,interaction,actionTags].filter(Boolean).join(' | ');
+
+    // Instruction-following vision models benefit from natural language, but still
+    // receive exactly the resolved subjects and no invented extras.
+    const natural=[`Create one coherent image containing exactly ${ss.length} visible ${ss.length===1?'person':'people'}: ${ss.map(x=>x.name).join(', ')}.`,base?`Scene: ${base}.`:'',...ss.map((s,i)=>`${s.name}: ${[text(s.appearance),text(s.clothing),text(s.pose),text(s.position),text(s.action),text(s.expression),text(s.gaze)].filter(Boolean).join(', ')}.`),interaction?`Interaction: ${interaction}.`:'','Use the active Silly Images Plus style. Do not add background people or duplicate any subject.'].filter(Boolean).join('\n');
     return provider==='banana'?natural:nai;
 }
 
