@@ -1254,14 +1254,14 @@ function renderBrain(screen) {
               + `<div><b>Стиль:</b> ${esc(d.styleName || 'как в основном чате')}</div>`
               + `<hr><div><b>🎭 Character:</b> ${esc(d.character.name || 'не выбран')}</div>`
               + `<div><b>Key:</b> <code>${esc(d.character.key || '—')}</code></div>`
-              + `<div><b>Reference:</b> ${yes(d.character.reference)} · <b>Appearance:</b> ${yes(d.character.description)}</div>`
+              + `<div><b>Reference:</b> ${yes(d.character.reference)}${d.character.referenceKind?` <small>(${esc(d.character.referenceKind)})</small>`:''} · <b>Appearance:</b> ${yes(d.character.description)}</div>`
               + `<div><b>Источник:</b> ${esc(d.character.source)}</div>`
               + `<hr><div><b>👤 User Persona:</b> ${esc(d.user?.name || 'не определена')}</div>`
               + `<div><b>Key:</b> <code>${esc(d.user?.key || '—')}</code></div>`
-              + `<div><b>Reference:</b> ${yes(d.user?.reference)} · <b>Appearance:</b> ${yes(d.user?.description)}</div>`
+              + `<div><b>Reference:</b> ${yes(d.user?.reference)}${d.user?.referenceKind?` <small>(${esc(d.user.referenceKind)})</small>`:''} · <b>Appearance:</b> ${yes(d.user?.description)}</div>`
               + `<div><b>Источник:</b> ${esc(d.user?.source || '—')}</div>`
-              + `<hr><div><b>🧩 SIP library:</b> ${Number(d.libraryCounts?.characters||0)} character · ${Number(d.libraryCounts?.users||0)} user · ${Number(d.libraryCounts?.npcCandidates||0)} NPC-кандидатов</div>`
-              + `${(d.npcLibrary||[]).length ? `<div class="gp-media-npcs">${d.npcLibrary.slice(0,8).map(n => `${esc(n.name)} ${n.reference?'🖼️':'—'} ${n.description?'📝':''}`).join(' · ')}</div>` : '<div class="gp-media-npcs">NPC/reference-записей пока не найдено.</div>'}`
+              + `<hr><div><b>🧩 SIP library:</b> ${Number(d.libraryCounts?.characters||0)} character · ${Number(d.libraryCounts?.users||0)} user · ${Number(d.libraryCounts?.npcCandidates||0)} Additional/NPC refs</div>`
+              + `${(d.npcLibrary||[]).length ? `<div class="gp-media-npcs">${d.npcLibrary.slice(0,10).map(n => `${esc(n.name)}${n.aliases?.length?` <small>(${esc(n.aliases.slice(0,3).join(', '))})</small>`:''} ${n.reference?'🖼️':'—'} ${n.description?'📝':''}`).join(' · ')}</div>` : '<div class="gp-media-npcs">Additional/NPC references пока не найдены.</div>'}`
               + `<small>В генерацию пойдут только реально видимые субъекты. Character/User доступны системе, но не подмешиваются автоматически. Правило: exact reference → appearance → Card/RP → никогда чужой reference.</small>`;
         } catch (e) { box.textContent = `Диагностика: ${e?.message || e}`; }
     })();
