@@ -2394,10 +2394,15 @@ function renderThread(screen) {
         const removing = m.react === r.id;
         _reactPickerFor = null;
         logAct('реакция', `${removing ? 'снять' : r.id} · ${m.dir === 'in' ? 'входящее' : 'своё'} #${m.idx}`);
-        const ok = await rewriteSmsTag(m, t, (j) => {
-            if (removing) delete j.react;
-            else j.react = r.id;
-        });
+        // PocketVerse-local SMS (quiet phone replies / local history) have no tel:sms
+        // marker in SillyTavern chat[], so rewriteSmsTag() can never persist them.
+        // Persist their reaction directly in localSms, exactly like generated media does.
+        const ok = m.localId
+            ? updateLocalSms(m.localId, { react: removing ? null : r.id })
+            : await rewriteSmsTag(m, t, (j) => {
+                if (removing) delete j.react;
+                else j.react = r.id;
+            });
         if (!ok) {
             toast('Не получилось', 'fa-circle-exclamation');
             render();
