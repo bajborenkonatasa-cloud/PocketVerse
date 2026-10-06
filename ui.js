@@ -7410,16 +7410,16 @@ async function pvPlanVideoCircle(t) {
     const ctx = SillyTavern.getContext?.() || {};
     const user = String(ctx?.name1 || 'User');
     const name = String(t?.name || ctx?.name2 || 'Character');
-    const recentSms = (Array.isArray(t?.messages) ? t.messages.slice(-12) : [])
+    const recentSms = (Array.isArray(t?.messages) ? t.messages.slice(-8) : [])
         .map(m => `${m?.dir === 'out' ? user : (m?.from || name)}: ${String(m?.text || '').replace(/\s+/g,' ').trim()}`)
-        .filter(x => !x.endsWith(': ')).join('\n').slice(-3200);
-    const recentRp = (Array.isArray(ctx?.chat) ? ctx.chat.slice(-5) : [])
+        .filter(x => !x.endsWith(': ')).join('\n').slice(-1800);
+    const recentRp = (Array.isArray(ctx?.chat) ? ctx.chat.slice(-3) : [])
         .map(m => `${m?.is_user ? user : (ctx?.name2 || name)}: ${String(m?.mes || '').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,700)}`)
         .join('\n');
     let card='';
     try {
         const ch = Array.isArray(ctx.characters) && ctx.characterId != null ? ctx.characters[ctx.characterId] : null;
-        if (ch) card=[ch.name,ch.description,ch.personality].filter(Boolean).join('\n').slice(0,4200);
+        if (ch) card=[ch.name,ch.description,ch.personality].filter(Boolean).join('\n').slice(0,1600);
     } catch(_) {}
     const prompt = `PRIVATE POCKETVERSE VIDEO-CIRCLE DRAFT. Do NOT roleplay prose. Plan one short Telegram-like round video message that ${name} could naturally record for ${user} RIGHT NOW.\n`+
         `The spoken line must sound exactly like the character and fit a very short round video. Aim for about 4-8 seconds of natural speech (Veo reference-video is 8 seconds; Grok can be longer later), and use the language from the recent phone chat. Do not invent a dramatic event just to justify video.\n`+
@@ -7428,9 +7428,24 @@ async function pvPlanVideoCircle(t) {
         (card ? `CHARACTER CARD EXCERPT:\n${card}\n\n` : '')+
         (recentRp ? `RECENT RP:\n${recentRp}\n\n` : '')+
         (recentSms ? `RECENT PHONE CHAT:\n${recentSms}\n` : '');
-    const raw = await generateRaw({prompt, responseLength:320, trimNames:false});
-    const j = pvExtractJsonObject(raw);
-    if (!j) throw new Error('Модель не вернула понятный черновик');
+    // Gemini thinking tokens count against the output budget. 320 was too small:
+    // the model could spend the whole budget thinking and truncate the JSON.
+    // Keep the context compact and leave enough room for thinking + the tiny JSON.
+    let raw = await generateRaw({prompt, responseLength:720, trimNames:false});
+    let j = pvExtractJsonObject(raw);
+    // One resilient retry only when the first answer was truncated/unparseable.
+    // The retry deliberately contains no RP/card dump: it asks for the same tiny draft
+    // from a compact summary, so we don't repeatedly pay for a huge context.
+    if (!j) {
+        const retryPrompt = `POCKETVERSE VIDEO-CIRCLE JSON RETRY. Output ONLY one valid JSON object, no analysis, markdown or prose.\n`+
+            `Keys: speaker, speech, scene, visibleCharacters.\n`+
+            `Speaker: ${name}. Recipient: ${user}. Speech must be natural and short (4-8 seconds), in the phone-chat language. Scene: only visible camera facts. Do not invent NPCs.\n`+
+            (recentSms ? `Recent phone chat:\n${recentSms.slice(-1200)}\n` : '')+
+            `JSON now:`;
+        raw = await generateRaw({prompt:retryPrompt, responseLength:900, trimNames:false});
+        j = pvExtractJsonObject(raw);
+    }
+    if (!j) throw new Error('Модель снова оборвала JSON — попробуй ещё раз');
     return {
         speaker: String(j.speaker || name).trim().slice(0,80),
         speech: String(j.speech || '').trim().slice(0,500),
