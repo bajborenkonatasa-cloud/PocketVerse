@@ -2137,6 +2137,7 @@ function renderThread(screen) {
             <button class="gp-iconbtn gp-gif-btn" id="gp-gif" title="GIF · мем · стикер">GIF</button>
             <input type="file" id="gp-attach-file" accept="image/*" style="display:none">
             <button class="gp-iconbtn${_smsDraftVoice ? ' gp-voice-armed' : ''}" id="gp-voice-toggle" title="Голосовое сообщение">${ic('fa-microphone')}</button>
+            <button class="gp-iconbtn gp-video-circle-btn" id="gp-video-circle" title="Подготовить кружочек">⭕</button>
             <textarea id="gp-input" rows="1" placeholder="${_smsDraftVoice ? 'Расшифровка голосового...' : 'Сообщение...'}"></textarea>
             <button class="gp-send" id="gp-send" title="Добавить в лесенку" ${sending ? 'disabled' : ''}>${ic('fa-paper-plane')}</button><button class="gp-send gp-send-ai" id="gp-send-ai" title="Отправить лесенку персонажу" ${(sending || !pvHasPending(t.key)) ? 'disabled' : ''}>${ic('fa-wand-magic-sparkles')}</button>
         </div>`;
@@ -2238,6 +2239,21 @@ function renderThread(screen) {
     screen.querySelector('#gp-attach-clear')?.addEventListener('click', () => {
         _smsDraftImage = null;
         render();
+    });
+
+    // Кружочек: сначала только бесплатный текстовый черновик. Видео API здесь не вызывается.
+    screen.querySelector('#gp-video-circle')?.addEventListener('click', async () => {
+        const btn=screen.querySelector('#gp-video-circle');
+        if (btn?.disabled) return;
+        if (btn) btn.disabled=true;
+        toast('Готовлю черновик кружочка…', 'fa-video');
+        try {
+            const draft=await pvPlanVideoCircle(t);
+            pvOpenVideoCircleSheet(screen,t,draft);
+        } catch(e) {
+            console.error('[PocketVerse] video circle draft failed:',e);
+            toast(`Кружочек: ${String(e?.message||e).slice(0,90)}`, 'fa-circle-exclamation');
+        } finally { if(btn) btn.disabled=false; }
     });
 
     // Микрофон: следующее сообщение уйдёт голосовым (текст = расшифровка).
@@ -7351,6 +7367,78 @@ async function pvGeneratePhoneReply(t, items, isGroup = false) {
     const req = pvPhoneRawPrompt(t, items, isGroup);
     console.info('[PocketVerse] controlled phone request', { mode:req.mode, chars:req.prompt.length, approxTokens:Math.round(req.prompt.length/4), responseLength:req.responseLength });
     return await generateRaw({ prompt:req.prompt, responseLength:req.responseLength, trimNames:false });
+}
+
+
+// ── PocketVerse Video Circle Drafts ──────────────────────────────────────────
+// Stage 1 is deliberately planning-only: the language model may draft WHAT the
+// character would record, but no paid video provider is contacted until the user
+// explicitly chooses one in the approval sheet. Provider transport is added in
+// the next stage, keeping paid generation impossible by accident.
+function pvExtractJsonObject(raw) {
+    const text = String(raw || '').replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    const a = text.indexOf('{'), b = text.lastIndexOf('}');
+    if (a < 0 || b <= a) return null;
+    try { return JSON.parse(text.slice(a, b + 1)); } catch (_) { return null; }
+}
+
+async function pvPlanVideoCircle(t) {
+    const ctx = SillyTavern.getContext?.() || {};
+    const user = String(ctx?.name1 || 'User');
+    const name = String(t?.name || ctx?.name2 || 'Character');
+    const recentSms = (Array.isArray(t?.messages) ? t.messages.slice(-12) : [])
+        .map(m => `${m?.dir === 'out' ? user : (m?.from || name)}: ${String(m?.text || '').replace(/\s+/g,' ').trim()}`)
+        .filter(x => !x.endsWith(': ')).join('\n').slice(-3200);
+    const recentRp = (Array.isArray(ctx?.chat) ? ctx.chat.slice(-5) : [])
+        .map(m => `${m?.is_user ? user : (ctx?.name2 || name)}: ${String(m?.mes || '').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,700)}`)
+        .join('\n');
+    let card='';
+    try {
+        const ch = Array.isArray(ctx.characters) && ctx.characterId != null ? ctx.characters[ctx.characterId] : null;
+        if (ch) card=[ch.name,ch.description,ch.personality].filter(Boolean).join('\n').slice(0,4200);
+    } catch(_) {}
+    const prompt = `PRIVATE POCKETVERSE VIDEO-CIRCLE DRAFT. Do NOT roleplay prose. Plan one short Telegram-like round video message that ${name} could naturally record for ${user} RIGHT NOW.\n`+
+        `The spoken line must sound exactly like the character, be short enough for roughly 3-10 seconds, and may be in the language used in the recent phone chat. Do not invent a dramatic event just to justify video.\n`+
+        `The scene must describe only visible/actionable video facts: sender, current location if known, current clothing if known, phone-camera framing, pose/action, expression/gaze, and any NPC visibly present. Preserve exact character/NPC names. Never invent an NPC merely to fill the frame.\n`+
+        `Return ONLY JSON with keys: speaker, speech, scene, visibleCharacters. visibleCharacters is an array of exact names.\n\n`+
+        (card ? `CHARACTER CARD EXCERPT:\n${card}\n\n` : '')+
+        (recentRp ? `RECENT RP:\n${recentRp}\n\n` : '')+
+        (recentSms ? `RECENT PHONE CHAT:\n${recentSms}\n` : '');
+    const raw = await generateRaw({prompt, responseLength:320, trimNames:false});
+    const j = pvExtractJsonObject(raw);
+    if (!j) throw new Error('Модель не вернула понятный черновик');
+    return {
+        speaker: String(j.speaker || name).trim().slice(0,80),
+        speech: String(j.speech || '').trim().slice(0,500),
+        scene: String(j.scene || '').trim().slice(0,1200),
+        visibleCharacters: Array.isArray(j.visibleCharacters) ? j.visibleCharacters.map(x=>String(x).trim()).filter(Boolean).slice(0,8) : [name],
+    };
+}
+
+function pvOpenVideoCircleSheet(screen, t, draft) {
+    screen.querySelector('.gp-video-circle-overlay')?.remove();
+    const overlay=document.createElement('div');
+    overlay.className='gp-video-circle-overlay';
+    overlay.innerHTML=`<div class="gp-video-circle-sheet">
+      <div class="gp-video-circle-head"><b>⭕ Кружочек · черновик</b><button class="gp-iconbtn" data-vc-close>${ic('fa-xmark')}</button></div>
+      <small>Сначала проверь речь и сцену. До выбора модели видео не генерируется и деньги не тратятся.</small>
+      <label>Кто записывает<input data-vc-speaker value="${esc(draft.speaker)}"></label>
+      <label>Что говорит<textarea data-vc-speech rows="3">${esc(draft.speech)}</textarea></label>
+      <label>Что видно в видео<textarea data-vc-scene rows="5">${esc(draft.scene)}</textarea></label>
+      <div class="gp-video-circle-cast"><b>В кадре:</b> ${draft.visibleCharacters.length ? draft.visibleCharacters.map(esc).join(', ') : esc(draft.speaker)}</div>
+      <div class="gp-video-circle-models"><button class="gp-primary" data-vc-model="grok">Grok Video</button><button class="gp-primary" data-vc-model="veo">Gemini Veo</button></div>
+      <div class="gp-video-circle-status">Выбери модель только когда черновик тебя устраивает.</div>
+    </div>`;
+    screen.appendChild(overlay);
+    const close=()=>overlay.remove();
+    overlay.querySelector('[data-vc-close]')?.addEventListener('click',close);
+    overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
+    overlay.querySelectorAll('[data-vc-model]').forEach(btn=>btn.addEventListener('click',()=>{
+        // Intentionally no provider request in this build.
+        const model=btn.dataset.vcModel==='veo'?'Gemini Veo':'Grok Video';
+        const status=overlay.querySelector('.gp-video-circle-status');
+        if(status) status.innerHTML=`<b>${esc(model)}</b> выбран. 👍 На этом этапе запрос НЕ отправлен и списаний нет. Следующим патчем подключим API + финальное подтверждение.`;
+    }));
 }
 
 async function flushPending(key) {
