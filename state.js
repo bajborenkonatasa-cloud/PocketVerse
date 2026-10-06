@@ -115,6 +115,9 @@ const defaultSettings = () => ({
     autoIncomingMemes: true,
     // GIPHY Search API key хранится только локально в настройках расширения и НИКОГДА не идёт LLM.
     giphyApiKey: '',
+    // Video-circle provider keys stay local in PocketVerse settings and are never sent to the RP model.
+    videoGrokApiKey: '',
+    videoGeminiApiKey: '',
     phoneGroups: true,
     // Городская анонимка «Подслушано» в каналах
     anonChannel: true,
