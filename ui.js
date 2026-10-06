@@ -7377,9 +7377,33 @@ async function pvGeneratePhoneReply(t, items, isGroup = false) {
 // the next stage, keeping paid generation impossible by accident.
 function pvExtractJsonObject(raw) {
     const text = String(raw || '').replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
-    const a = text.indexOf('{'), b = text.lastIndexOf('}');
-    if (a < 0 || b <= a) return null;
-    try { return JSON.parse(text.slice(a, b + 1)); } catch (_) { return null; }
+    // Gemini/other phone models sometimes prepend a short explanation before the JSON,
+    // or even return more than one brace block. Try every balanced object instead of
+    // taking first "{" through last "}", which made a valid draft look invalid.
+    const candidates = [];
+    let depth = 0, start = -1, inString = false, escaped = false;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (ch === '\\') escaped = true;
+            else if (ch === '"') inString = false;
+            continue;
+        }
+        if (ch === '"') { inString = true; continue; }
+        if (ch === '{') { if (depth === 0) start = i; depth++; }
+        else if (ch === '}' && depth > 0) {
+            depth--;
+            if (depth === 0 && start >= 0) { candidates.push(text.slice(start, i + 1)); start = -1; }
+        }
+    }
+    for (let i = candidates.length - 1; i >= 0; i--) {
+        try {
+            const obj = JSON.parse(candidates[i]);
+            if (obj && typeof obj === 'object' && (obj.speech || obj.scene || obj.speaker)) return obj;
+        } catch (_) {}
+    }
+    return null;
 }
 
 async function pvPlanVideoCircle(t) {
@@ -7398,7 +7422,7 @@ async function pvPlanVideoCircle(t) {
         if (ch) card=[ch.name,ch.description,ch.personality].filter(Boolean).join('\n').slice(0,4200);
     } catch(_) {}
     const prompt = `PRIVATE POCKETVERSE VIDEO-CIRCLE DRAFT. Do NOT roleplay prose. Plan one short Telegram-like round video message that ${name} could naturally record for ${user} RIGHT NOW.\n`+
-        `The spoken line must sound exactly like the character, be short enough for roughly 3-10 seconds, and may be in the language used in the recent phone chat. Do not invent a dramatic event just to justify video.\n`+
+        `The spoken line must sound exactly like the character and fit a very short round video. Aim for about 4-8 seconds of natural speech (Veo reference-video is 8 seconds; Grok can be longer later), and use the language from the recent phone chat. Do not invent a dramatic event just to justify video.\n`+
         `The scene must describe only visible/actionable video facts: sender, current location if known, current clothing if known, phone-camera framing, pose/action, expression/gaze, and any NPC visibly present. Preserve exact character/NPC names. Never invent an NPC merely to fill the frame.\n`+
         `Return ONLY JSON with keys: speaker, speech, scene, visibleCharacters. visibleCharacters is an array of exact names.\n\n`+
         (card ? `CHARACTER CARD EXCERPT:\n${card}\n\n` : '')+
