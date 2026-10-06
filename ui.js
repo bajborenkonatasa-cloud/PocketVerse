@@ -7355,7 +7355,22 @@ function pvPhoneRawPrompt(t, items, isGroup = false) {
     // Direct selfie/photo requests are commands, not a probabilistic "maybe photo" hint.
     // Keep this local/deterministic so a model cannot spend 300 thinking tokens deciding
     // whether "пришли селфи" really means "send a selfie".
-    const directPhotoRequest = /(?:пришл|скин|отправ|давай|сделай|сфот|фоткай|покаж)(?:[\s\S]{0,45})(?:селфи|фото|фотк|снимок)|(?:send|show|take|snap)(?:[\s\S]{0,35})(?:selfie|photo|pic|picture)/iu.test(incoming);
+    // A user can send a ladder like: "пришли селфи" -> "жду" and only then press ✨.
+    // In that case `items` contains only the final "жду", so looking at `incoming` alone loses
+    // the actual media command. Include all still-unanswered outgoing SMS since the last inbound.
+    const recentMsgs = Array.isArray(t?.messages) ? t.messages : [];
+    let lastInbound = -1;
+    for (let i = recentMsgs.length - 1; i >= 0; i--) {
+        if (recentMsgs[i]?.dir === 'in') { lastInbound = i; break; }
+    }
+    const unansweredUserText = recentMsgs.slice(lastInbound + 1)
+        .filter(m => m?.dir === 'out')
+        .map(m => esc(m?.text || ''))
+        .filter(Boolean)
+        .join(' | ')
+        .slice(-1800);
+    const photoIntentText = `${unansweredUserText} | ${incoming}`;
+    const directPhotoRequest = /(?:пришл|скин|отправ|давай|сделай|сфот|фоткай|покаж)(?:[\s\S]{0,45})(?:селфи|фото|фотк|снимок)|(?:send|show|take|snap)(?:[\s\S]{0,35})(?:selfie|photo|pic|picture)/iu.test(photoIntentText);
     const forcedPhotoRule = directPhotoRequest && st.phonePhotos !== false
         ? `DIRECT PHOTO REQUEST DETECTED. You MUST send a photo in this reply. Do not merely promise it. At least one tel:sms tag MUST contain both "photo" and "media". If the user asked for your selfie, media.type="selfie", media.sender="${charName}", media.visible MUST include "${charName}", media.camera="front camera selfie". Preserve the exact CURRENT RP location, clothing/state, nearby visible people, action and environment anchors. Example SHAPE only: <!--tel:sms:{"from":"${charName}","text":"short in-character caption","photo":"concrete selfie shot","media":{"type":"selfie","sender":"${charName}","visible":["${charName}"],"camera":"front camera selfie","location":"current RP location","clothing":{"${charName}":"current clothing"},"action":"visible action","pose":"pose","expression":"expression","gaze":"gaze","environment":"established anchors","continuity":"temporary visual facts"}}-->`
         : '';
@@ -7389,7 +7404,11 @@ async function pvGeneratePhoneReply(t, items, isGroup = false) {
         const name = String(t?.name || ctx?.name2 || 'Character');
         const user = String(ctx?.name1 || 'User');
         const incoming = items.map(x=>String(x||'')).join(' | ').slice(-1200);
-        const directPhoto = /(?:пришл|скин|отправ|давай|сделай|сфот|фоткай|покаж)(?:[\s\S]{0,45})(?:селфи|фото|фотк|снимок)|(?:send|show|take|snap)(?:[\s\S]{0,35})(?:selfie|photo|pic|picture)/iu.test(incoming);
+        const recentMsgs = Array.isArray(t?.messages) ? t.messages : [];
+        let lastInbound = -1;
+        for (let i = recentMsgs.length - 1; i >= 0; i--) { if (recentMsgs[i]?.dir === 'in') { lastInbound = i; break; } }
+        const unanswered = recentMsgs.slice(lastInbound + 1).filter(m=>m?.dir === 'out').map(m=>String(m?.text||'')).join(' | ').slice(-1800);
+        const directPhoto = /(?:пришл|скин|отправ|давай|сделай|сфот|фоткай|покаж)(?:[\s\S]{0,45})(?:селфи|фото|фотк|снимок)|(?:send|show|take|snap)(?:[\s\S]{0,35})(?:selfie|photo|pic|picture)/iu.test(`${unanswered} | ${incoming}`);
         const repair = `POCKETVERSE PHONE REPAIR. Output ONLY 1-3 complete <!--tel:sms:{...}--> tags. No analysis, markdown or prose. Sender=${name}; recipient=${user}. New user message: ${incoming}. `+
             (directPhoto ? `The user directly requested a selfie/photo: the reply MUST include photo plus media. For selfie use media={"type":"selfie","sender":"${name}","visible":["${name}"],"camera":"front camera selfie","location":"preserve current RP location","clothing":{"${name}":"preserve current clothing"},"action":"selfie action","pose":"natural selfie pose","expression":"in-character expression","gaze":"at phone camera","environment":"preserve established RP anchors","continuity":"do not move scene"}. ` : '')+
             `Close JSON and --> before stopping.`;

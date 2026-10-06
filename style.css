@@ -4432,3 +4432,12 @@ img[data-zoom] { cursor: zoom-in; }
 /* v2.35.0-pocketverse.30: Telegram-like round video message */
 .gp-video-circle-bubble{width:min(68vw,280px);aspect-ratio:1/1;border-radius:50%;overflow:hidden;margin:2px 0 6px;background:#090909;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
 .gp-video-circle-bubble video{width:100%;height:100%;display:block;object-fit:cover;border-radius:50%;background:#090909}
+
+/* PocketVerse .33: narrow-phone composer — more room for text, smaller media/action circles. */
+#gp-phone .gp-inputbar{gap:3px;padding-left:1px;padding-right:1px}
+#gp-phone .gp-inputbar .gp-iconbtn{width:29px;height:29px;min-width:29px;font-size:11px}
+#gp-phone .gp-inputbar .gp-gif-btn{font-size:8px!important}
+#gp-phone .gp-inputbar .gp-video-circle-btn{width:29px;height:29px;min-width:29px;font-size:13px}
+#gp-phone .gp-inputbar .gp-send{width:32px;height:32px;min-width:32px;font-size:12px}
+#gp-phone .gp-inputbar .gp-send-ai{margin-left:0}
+#gp-phone #gp-input{min-width:132px;padding:9px 12px;font-size:13.5px}
