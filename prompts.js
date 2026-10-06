@@ -180,6 +180,7 @@ function buildPrompt() {
     p += `You may also narrate the buzz in prose and show the text in your usual visible style (backticks). Duplicate as a tag ONLY what {{user}} receives. Only characters who plausibly have {{user}}'s number can text {{user}}.\n`;
     p += `NEVER emit a tel:sms whose "from" is {{user}} — their own messages are sent from the app, not written by you.\n`;
     p += `CRITICAL SCOPE: tel:sms is EXCLUSIVELY for messages arriving on {{user}}'s OWN phone. What ANY other character (including yours) gets on THEIR phone — prose only, NEVER a tag; if tagged anyway it MUST carry "to":"RecipientName" so the app discards it.\n\n`;
+    if (s.phonePhotos !== false) p += `[PHOTO INITIATIVE — SMART SELFIES] A character may spontaneously send {{user}} a photo/selfie when it is motivated by the current story or conversation — for example to show where they are, what they are doing/wearing/holding, their mood/reaction, an injury/result, to tease, reassure, prove something, answer “show me”, or share a meaningful moment. Do NOT attach photos randomly, on every reply, or merely because photos are enabled. For a SELFIE, the "photo" value MUST explicitly say that the SENDER is visible and describe only the shot: sender name, selfie/phone-camera framing, current location, current clothing, pose/action, expression/gaze, and any visible NPC(s) with exact names. Keep it concrete and visual; no biography, personality or image-quality/style tags. Example shape only: {"from":"X","text":"...","photo":"Selfie of X in ..., wearing ..., ..., NPC Y visible beside them"}. PocketVerse will resolve character/NPC identity and references separately.\n\n`;
 
     // Самый жирный блок — только в телефонный ход
     if (phoneTurn === 'now') {
@@ -274,7 +275,7 @@ function buildIdleBridge() {
     if (names.length) p += `Known contacts: ${names.join(', ')}. `;
     p += `Only when someone plausibly sends a NEW message directly to {{user}}, append <!--tel:sms:{"from":"X","text":"..."}--> at the very end. Never expose NPC→NPC or NPC→character private messages. `;
     if (s.phoneGroups !== false) p += `A group tag is allowed only for a group that includes {{user}}. `;
-    if (s.phonePhotos !== false) p += `If that incoming message naturally includes a photo, add "photo":"short visual description". `;
+    if (s.phonePhotos !== false) p += `If a photo is naturally motivated by the current story/conversation, the sender may initiate it themselves. For a selfie, "photo" must explicitly name the sender as visible and briefly state selfie framing, current place, current clothing, pose/action, expression/gaze, and any visible named NPCs. Never force photos just because they are enabled. `;
     if (s.phoneMemes) p += `If a meme/GIF is naturally sent, add "meme":"short English search phrase"; PocketVerse resolves the media separately. `;
     const custom = String(s.phoneCustomInstructions || '').trim();
     if (custom) p += `Phone preference: ${custom.slice(0, 500)} `;
@@ -290,7 +291,7 @@ function buildPhoneOnlyPrompt(mode = 'balanced') {
     if (names.length) p += `Known contacts: ${names.join(', ')}. `;
     p += `Reply with 1-3 hidden tags only: <!--tel:sms:{"from":"X","text":"..."}-->. Keep messages natural, short and in character. Never expose NPC→NPC or NPC→character private messages. `;
     if (s.phoneGroups !== false) p += `For a group containing {{user}}, add "chat":"Group name" and the real sender in "from". `;
-    if (s.phonePhotos !== false) p += `When a photo is natural, add "photo":"short visual description". `;
+    if (s.phonePhotos !== false) p += `When a photo is naturally motivated by the conversation, the sender may initiate it themselves. For a selfie, "photo" must explicitly name the sender as visible and briefly state selfie framing, current place, current clothing, pose/action, expression/gaze, and any visible named NPCs. Do not force photos every turn. `;
     if (s.phoneMemes) p += `When a reaction/meme/GIF is natural, add "meme":"short English GIPHY search phrase". Do not force media every turn. `;
     if (mode === 'balanced') p += `You may return up to 4 short bubbles when emotion or group flow calls for it. Respect the character card, current relationship and immediately relevant RP facts already supplied by SillyTavern. `;
     const custom = String(s.phoneCustomInstructions || '').trim();
