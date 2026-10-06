@@ -1266,6 +1266,15 @@ export function updateLocalSms(id, patch = {}) {
     return true;
 }
 
+export function deleteLocalSms(id) {
+    const meta = getMeta();
+    const before = (meta.localSms || []).length;
+    meta.localSms = (meta.localSms || []).filter(x => !x || String(x.id) !== String(id));
+    if (meta.localSms.length === before) return false;
+    saveMeta(); invalidateChatCache();
+    return true;
+}
+
 export function ingestQuietPhoneReply(raw, fallbackName = '', fallbackChat = '') {
     const text = String(raw || '');
     const re = /<!--\s*tel:sms:(\{[\s\S]*?\})\s*-->/gi;

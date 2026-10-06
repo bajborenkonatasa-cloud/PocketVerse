@@ -5,7 +5,7 @@ import {
     getSettings, getThreadList, getThread, markRead, addManualContact, hideContact,
     randomNumber, getTotalUnread, fmtTime, getRpDateTime, keyOf, getHiddenMessageIndexes,
     addGroup, delGroup, updateGroupMembers, renameContact, banAccount,
-    isSmsBlocked, blockSmsContact, unblockSmsContact, saveMeta, invalidateChatCache, getMeta, addLocalSms, updateLocalSms, ingestQuietPhoneReply,
+    isSmsBlocked, blockSmsContact, unblockSmsContact, saveMeta, invalidateChatCache, getMeta, addLocalSms, updateLocalSms, deleteLocalSms, ingestQuietPhoneReply,
 } from './state.js';
 import { updatePhoneInjection, getPhoneBrainSnapshot, setPhoneTurnActive } from './prompts.js';
 import {
@@ -2073,7 +2073,7 @@ function renderThread(screen) {
         const reaction = m.react ? REACTIONS.find(r => r.id === m.react) : null;
         const reactChip = reaction ? `<span class="gp-react-chip">${ic(reaction.icon)}</span>` : '';
         const photoRegenAction = (m.img && m.photoDesc)
-            ? `<button data-mmsgen="${mi}">${ic('fa-rotate-right')} Перегенерировать фото</button>` : '';
+            ? `<button data-mmsedit="${mi}">${ic('fa-pen')} Изменить фото</button><button data-mmsgen="${mi}">${ic('fa-rotate-right')} Перегенерировать фото</button>` : '';
         const picker = (_reactPickerFor === mi && _reactPickerKey === t.key)
             ? `<div class="gp-react-picker gp-action-pop"><div class="gp-reaction-row">${REACTIONS.map(r => `<button data-react="${r.id}" data-react-mi="${mi}" class="${m.react === r.id ? 'gp-selected' : ''}" title="${r.ru}">${ic(r.icon)}</button>`).join('')}</div><div class="gp-action-row"><button data-reply-mi="${mi}">${ic('fa-reply')} Ответить</button>${photoRegenAction}<button class="gp-danger" data-smsdel="${mi}">${ic('fa-trash-can')} Удалить</button></div></div>` : '';
         const next = t.messages[mi + 1];
@@ -2459,6 +2459,40 @@ function renderThread(screen) {
         if (inp) { inp.value = `↩ ${who}: ${quote}\n`; inp.focus(); }
     }));
 
+    // Редактирование визуального описания перед повторной генерацией.
+    screen.querySelectorAll('[data-mmsedit]').forEach(b => b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const mi = parseInt(b.getAttribute('data-mmsedit'));
+        const m = t.messages[mi];
+        if (!m?.photoDesc) return;
+        _reactPickerFor = null; _reactPickerKey = null;
+        screen.querySelector('.gp-photo-edit-overlay')?.remove();
+        const ov = document.createElement('div');
+        ov.className = 'gp-own-selfie-overlay gp-photo-edit-overlay';
+        ov.innerHTML = `<div class="gp-own-selfie-sheet">
+          <div class="gp-video-circle-head"><b>✏️ Изменить фото</b><button class="gp-iconbtn" data-pe-close>${ic('fa-xmark')}</button></div>
+          <small>Исправь только то, что хочешь поменять. После сохранения фото можно перегенерировать.</small>
+          <label>Описание фото<textarea data-pe-desc rows="6">${esc(m.photoDesc)}</textarea></label>
+          <button class="gp-primary" data-pe-save>${ic('fa-check')} Сохранить описание</button>
+        </div>`;
+        screen.appendChild(ov);
+        const close = () => ov.remove();
+        ov.querySelector('[data-pe-close]')?.addEventListener('click', close);
+        ov.addEventListener('click', ev => { if (ev.target === ov) close(); });
+        ov.querySelector('[data-pe-save]')?.addEventListener('click', async () => {
+            const desc = String(ov.querySelector('[data-pe-desc]')?.value || '').trim();
+            if (!desc) { toast('Описание не может быть пустым', 'fa-circle-exclamation'); return; }
+            const media = m.mediaIntent && typeof m.mediaIntent === 'object' ? {...m.mediaIntent} : null;
+            if (media) media.action = desc;
+            const ok = m.localId
+                ? updateLocalSms(m.localId, { photo: desc, ...(media ? {media} : {}) })
+                : await rewriteSmsTag(m, t, j => { j.photo = desc; if (media) j.media = media; });
+            if (!ok) { toast('Не получилось сохранить описание', 'fa-circle-exclamation'); return; }
+            m.photoDesc = desc; if (media) m.mediaIntent = media;
+            close(); toast('Описание сохранено · теперь ↻', 'fa-pen'); render();
+        });
+    }));
+
     // Генерация фото по описанию ММС (заглушка → реальная картинка).
     // Результат пишем в img прямо в tel:sms тег — переживает пересканирование.
     screen.querySelectorAll('[data-mmsgen]').forEach(b => b.addEventListener('click', async (e) => {
@@ -2495,7 +2529,9 @@ function renderThread(screen) {
             // (Раньше здесь была своя копия логики, резавшая по индексам —
             // а они посчитаны по stripThink-версии и съезжают, если модель
             // писала в <think>: картинка генерилась, но молча терялась.)
-            const saved = await rewriteSmsTag(m, t, (j) => { j.img = src; });
+            const saved = m.localId
+                ? updateLocalSms(m.localId, { img: src })
+                : await rewriteSmsTag(m, t, (j) => { j.img = src; });
             if (saved) {
                 m.img = src;              // мгновенно, до пересканирования
                 toast('Фото готово', 'fa-image');
@@ -2530,8 +2566,8 @@ function renderThread(screen) {
         if (!msg) return;
         if (!confirm('Удалить это сообщение? Оно уйдёт и из истории чата.')) return;
         logAct('удаление смс', `${msg.dir === 'in' ? 'входящее' : 'своё'} #${msg.idx}`);
-        const ok = await deleteSmsFromChat(msg);
-        if (!ok) { render(); return; }
+        const ok = msg.localId ? deleteLocalSms(msg.localId) : await deleteSmsFromChat(msg);
+        if (!ok) { toast('Не удалось удалить сообщение', 'fa-circle-exclamation'); render(); return; }
         _reactPickerFor = null;
         render();
         updatePhoneInjection();
