@@ -7483,8 +7483,8 @@ async function pvPollJson(url,headers,tries=90){
     throw new Error('Видео слишком долго генерируется');
 }
 async function pvGenerateGrokCircle(key,draft,refs){
-    const body={model:'grok-imagine-video-1.5',prompt:pvCirclePrompt(draft),duration:8,aspect_ratio:'9:16',resolution:'720p',generate_audio:true};
-    if(refs.length) body.reference_images=refs.slice(0,7).map(x=>({image:{url:x.dataUrl}}));
+    const body={model:'grok-imagine-video-1.5',prompt:pvCirclePrompt(draft),duration:8,aspect_ratio:'9:16',resolution:'720p'};
+    if(refs.length) body.reference_images=refs.slice(0,7).map(x=>({url:x.dataUrl}));
     const r=await fetch('https://api.x.ai/v1/videos/generations',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
     const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j?.error?.message||`Grok HTTP ${r.status}`);
     const id=j.request_id||j.id; if(!id) throw new Error('Grok не вернул request_id');
@@ -7494,10 +7494,10 @@ async function pvGenerateGrokCircle(key,draft,refs){
 }
 async function pvGenerateVeoCircle(key,draft,refs){
     const inst={prompt:pvCirclePrompt(draft)};
-    if(refs.length) inst.referenceImages=refs.slice(0,3).map(x=>{const q=pvDataParts(x.dataUrl);return q?{image:{inlineData:{mimeType:q.mime,data:q.data}},referenceType:'asset'}:null;}).filter(Boolean);
+    if(refs.length) inst.referenceImages=refs.slice(0,3).map(x=>{const q=pvDataParts(x.dataUrl);return q?{image:{mimeType:q.mime,bytesBase64Encoded:q.data},referenceType:'asset'}:null;}).filter(Boolean);
     const body={instances:[inst],parameters:{aspectRatio:'9:16',durationSeconds:8,resolution:'720p',numberOfVideos:1}};
     const base='https://generativelanguage.googleapis.com/v1beta';
-    const r=await fetch(`${base}/models/veo-3.1-generate-preview:predictLongRunning`,{method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const r=await fetch(`${base}/models/veo-3.1-fast-generate-preview:predictLongRunning`,{method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},body:JSON.stringify(body)});
     const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j?.error?.message||`Veo HTTP ${r.status}`); if(!j.name) throw new Error('Veo не вернул operation');
     const done=await pvPollJson(`${base}/${j.name}`,{'x-goog-api-key':key},120);
     if(done.error) throw new Error(done.error.message||'Veo: генерация не удалась');
@@ -7521,7 +7521,7 @@ function pvOpenVideoCircleSheet(screen, t, draft) {
     const liveDraft=()=>({speaker:String(overlay.querySelector('[data-vc-speaker]')?.value||draft.speaker),speech:String(overlay.querySelector('[data-vc-speech]')?.value||''),scene:String(overlay.querySelector('[data-vc-scene]')?.value||''),visibleCharacters:draft.visibleCharacters});
     overlay.querySelectorAll('[data-vc-model]').forEach(btn=>btn.addEventListener('click',()=>{
         const provider=btn.dataset.vcModel; const st=getSettings(); const isV=provider==='veo'; const box=overlay.querySelector('.gp-video-circle-confirm');
-        box.hidden=false; box.innerHTML=`<b>${isV?'Gemini Veo 3.1':'Grok Imagine Video 1.5'}</b><small>8 сек · 9:16 · 720p · со звуком · референсы персонажей из PocketVerse</small><label>API key<input type="password" data-vc-key autocomplete="off" placeholder="${isV?'Gemini API key':'xAI API key'}" value="${esc(isV?(st.videoGeminiApiKey||''):(st.videoGrokApiKey||''))}"></label><button class="gp-primary gp-video-circle-go" data-vc-go>Сгенерировать · платный запрос</button><small>Ключ хранится локально в настройках PocketVerse и не отправляется языковой модели.</small>`;
+        box.hidden=false; box.innerHTML=`<b>${isV?'Gemini Veo 3.1 Fast':'Grok Imagine Video 1.5'}</b><small>8 сек · 9:16 · 720p · со звуком · референсы персонажей из PocketVerse</small><label>API key<input type="password" data-vc-key autocomplete="off" placeholder="${isV?'Gemini API key':'xAI API key'}" value="${esc(isV?(st.videoGeminiApiKey||''):(st.videoGrokApiKey||''))}"></label><button class="gp-primary gp-video-circle-go" data-vc-go>Сгенерировать · платный запрос</button><small>Ключ хранится локально в настройках PocketVerse и не отправляется языковой модели.</small>`;
         box.querySelector('[data-vc-go]')?.addEventListener('click',async()=>{
             const key=String(box.querySelector('[data-vc-key]')?.value||'').trim(); if(!key){toast('Вставь API key выбранного видеопровайдера','fa-key');return;}
             if(isV) st.videoGeminiApiKey=key; else st.videoGrokApiKey=key; saveSettingsDebounced();
