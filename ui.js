@@ -2050,9 +2050,8 @@ function renderThread(screen) {
             // Переген доступен только для ММС с описанием (без описания нечего рисовать)
             const genKey = m.eventId || `${m.idx}:${m.tagStart}`;
             const busy = _mmsGenBusy.has(genKey);
-            const regenBtn = m.photoDesc
-                ? `<button class="gp-mms-gen" data-mmsgen="${mi}" title="Перегенерировать фото" ${busy ? 'disabled' : ''}>${ic(busy ? 'fa-spinner fa-spin' : 'fa-rotate-right')}</button>` : '';
-            media = `<div class="gp-bubble-img"><img src="${esc(m.img)}" alt="" data-zoom>${regenBtn}</div>`;
+            // Finished photos stay visually clean. Regeneration lives in the long-press action menu.
+            media = `<div class="gp-bubble-img"><img src="${esc(m.img)}" alt="" data-zoom></div>`;
         } else if (m.photoDesc) {
             const genKey = m.eventId || `${m.idx}:${m.tagStart}`;
             const busy = _mmsGenBusy.has(genKey);
@@ -2073,8 +2072,10 @@ function renderThread(screen) {
         const body = m.voice ? voiceBubbleHtml(m) : esc(m.text);
         const reaction = m.react ? REACTIONS.find(r => r.id === m.react) : null;
         const reactChip = reaction ? `<span class="gp-react-chip">${ic(reaction.icon)}</span>` : '';
+        const photoRegenAction = (m.img && m.photoDesc)
+            ? `<button data-mmsgen="${mi}">${ic('fa-rotate-right')} Перегенерировать фото</button>` : '';
         const picker = (_reactPickerFor === mi && _reactPickerKey === t.key)
-            ? `<div class="gp-react-picker gp-action-pop"><div class="gp-reaction-row">${REACTIONS.map(r => `<button data-react="${r.id}" data-react-mi="${mi}" class="${m.react === r.id ? 'gp-selected' : ''}" title="${r.ru}">${ic(r.icon)}</button>`).join('')}</div><div class="gp-action-row"><button data-reply-mi="${mi}">${ic('fa-reply')} Ответить</button><button class="gp-danger" data-smsdel="${mi}">${ic('fa-trash-can')} Удалить</button></div></div>` : '';
+            ? `<div class="gp-react-picker gp-action-pop"><div class="gp-reaction-row">${REACTIONS.map(r => `<button data-react="${r.id}" data-react-mi="${mi}" class="${m.react === r.id ? 'gp-selected' : ''}" title="${r.ru}">${ic(r.icon)}</button>`).join('')}</div><div class="gp-action-row"><button data-reply-mi="${mi}">${ic('fa-reply')} Ответить</button>${photoRegenAction}<button class="gp-danger" data-smsdel="${mi}">${ic('fa-trash-can')} Удалить</button></div></div>` : '';
         const next = t.messages[mi + 1];
         const endOfIncomingRun = m.dir === 'in' && (!next || next.dir !== 'in' || (t.isGroup && next.from !== m.from));
         const bubbleAva = endOfIncomingRun
@@ -2391,7 +2392,17 @@ function renderThread(screen) {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); queueCurrent(); }
     });
     sendBtn?.addEventListener('click', queueCurrent);
-    screen.querySelector('#gp-send-ai')?.addEventListener('click', () => flushPending(t.key));
+    // Tap ✨ = send queued text as before. Long press ✨ = compose my own generated selfie.
+    const sendAiBtn=screen.querySelector('#gp-send-ai');
+    if(sendAiBtn){
+        let holdTimer=null, held=false;
+        const openSelfie=(e)=>{ e?.preventDefault?.(); held=true; pvOpenOwnSelfieSheet(screen,t); };
+        sendAiBtn.addEventListener('touchstart',()=>{held=false; holdTimer=setTimeout(openSelfie,520);},{passive:true});
+        sendAiBtn.addEventListener('touchend',()=>{if(holdTimer)clearTimeout(holdTimer);});
+        sendAiBtn.addEventListener('touchmove',()=>{if(holdTimer)clearTimeout(holdTimer);});
+        sendAiBtn.addEventListener('contextmenu',openSelfie);
+        sendAiBtn.addEventListener('click',(e)=>{if(held){e.preventDefault();held=false;return;} flushPending(t.key);});
+    }
     screen.querySelector('#gp-regen')?.addEventListener('click', () => doRegen(t.key));
     // Медиа от персонажа резолвится после первого рендера; это не делает второй LLM-запрос.
     setTimeout(() => autoResolveIncomingMedia(t), 0);
@@ -7603,6 +7614,49 @@ function pvOpenVideoCircleSheet(screen, t, draft) {
             }catch(e){console.error('[PocketVerse] video circle generation failed',e); status.textContent=`Ошибка видео: ${String(e?.message||e).slice(0,220)}`; go.disabled=false;}
         });
     }));
+}
+
+
+function pvOpenOwnSelfieSheet(screen, t) {
+    screen.querySelector('.gp-own-selfie-overlay')?.remove();
+    const overlay=document.createElement('div');
+    overlay.className='gp-own-selfie-overlay';
+    overlay.innerHTML=`<div class="gp-own-selfie-sheet">
+      <div class="gp-video-circle-head"><b>🤳 Моё селфи</b><button class="gp-iconbtn" data-os-close>${ic('fa-xmark')}</button></div>
+      <small>Пиши сцену своими словами. Это НЕ отправляется персонажу как запрос — текст идёт в генератор изображения.</small>
+      <label>Что должно быть на фото<textarea data-os-desc rows="5" placeholder="Например: Ханаби лежит на кровати в чёрном платье, снимает себя сверху, растрёпанные волосы..."></textarea></label>
+      <label>Подпись под фото <input data-os-caption placeholder="Например: Ну как? 😏"></label>
+      <button class="gp-primary gp-own-selfie-go" data-os-go>${ic('fa-wand-magic-sparkles')} Сгенерировать и отправить</button>
+      <div class="gp-own-selfie-status" data-os-status>Будет использован текущий провайдер и стиль Silly Images Plus.</div>
+    </div>`;
+    screen.appendChild(overlay);
+    const close=()=>overlay.remove();
+    overlay.querySelector('[data-os-close]')?.addEventListener('click',close);
+    overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
+    overlay.querySelector('[data-os-go]')?.addEventListener('click',async()=>{
+        const desc=String(overlay.querySelector('[data-os-desc]')?.value||'').trim();
+        const caption=String(overlay.querySelector('[data-os-caption]')?.value||'').trim();
+        if(!desc){toast('Сначала опиши селфи','fa-image');return;}
+        const go=overlay.querySelector('[data-os-go]'), status=overlay.querySelector('[data-os-status]');
+        go.disabled=true; status.textContent='Генерирую селфи через Silly Images Plus…';
+        try{
+            if(!_imgGenReady){ const ready=await isImageGenAvailable(); if(!ready) throw new Error('Silly Images Plus недоступен'); _imgGenReady=true; }
+            const author=getUserName();
+            const mediaIntent={type:'selfie',sender:author,visible:[author],camera:'front camera selfie',action:desc,continuity:'preserve current RP appearance and scene'};
+            const src=await generatePostImage({imgDesc:desc,mediaIntent,author,ak:'user',kind:'ig',mms:false},v=>{status.textContent=v||'Генерирую…';},`own-selfie-${Date.now()}`);
+            addLocalSms({dir:'out',name:t.name,chat:t.isGroup?t.name:'',text:caption,photo:desc,media:mediaIntent,img:src});
+            status.textContent='Готово 🤳 Отправляю персонажу контекст фото…';
+            close(); render(); updatePhoneInjection();
+            // One normal phone-brain response, but the image itself was built from the user's text.
+            sending=true; typingKey=t.key; render();
+            try{
+                setPhoneTurnActive(true);
+                const items=[`selfie/photo from ${author}: ${desc}`, ...(caption?[`text: ${caption}`]:[])];
+                const rawReply=await pvGeneratePhoneReply(t,items,!!t.isGroup);
+                if(rawReply&&rawReply.trim()) await insertGhostReply(t.name,rawReply.trim(),t.isGroup?t.name:'');
+            } finally { setPhoneTurnActive(false); sending=false; typingKey=null; render(); updateFabBadge(); applyChatHiding(); }
+        }catch(e){console.error('[PocketVerse] own selfie failed',e); status.textContent='Ошибка: '+String(e?.message||e).slice(0,140); go.disabled=false;}
+    });
 }
 
 async function flushPending(key) {
