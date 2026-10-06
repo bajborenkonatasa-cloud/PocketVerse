@@ -7335,10 +7335,10 @@ function pvPhoneRawPrompt(t, items, isGroup = false) {
     } catch(e) {}
 
     const cfg = mode === 'lite'
-        ? { card: 1400, rpMsgs: 0, rpEach: 0, sms: 8, smsChars: 1800, out: 320 }
+        ? { card: 1400, rpMsgs: 0, rpEach: 0, sms: 8, smsChars: 1800, out: 1100 }
         : mode === 'deep'
-            ? { card: 9000, rpMsgs: 10, rpEach: 1100, sms: 24, smsChars: 5200, out: 700 }
-            : { card: 5000, rpMsgs: 5, rpEach: 900, sms: 14, smsChars: 3400, out: 480 };
+            ? { card: 9000, rpMsgs: 10, rpEach: 1100, sms: 24, smsChars: 5200, out: 1400 }
+            : { card: 5000, rpMsgs: 5, rpEach: 900, sms: 14, smsChars: 3400, out: 1200 };
 
     card = card.slice(0, cfg.card);
     const rp = cfg.rpMsgs ? (Array.isArray(ctx.chat) ? ctx.chat.slice(-cfg.rpMsgs) : [])
@@ -7352,6 +7352,13 @@ function pvPhoneRawPrompt(t, items, isGroup = false) {
     const photoRule = st.phonePhotos !== false ? 'You may add "photo":"short visual description" when a photo is genuinely natural.' : '';
     const groupRule = st.phoneGroups !== false ? 'For groups, every tag must contain "chat":"Group name" and the real sender in "from".' : '';
     const incoming = items.map((x,i)=>`${i+1}. ${x}`).join('\n');
+    // Direct selfie/photo requests are commands, not a probabilistic "maybe photo" hint.
+    // Keep this local/deterministic so a model cannot spend 300 thinking tokens deciding
+    // whether "пришли селфи" really means "send a selfie".
+    const directPhotoRequest = /(?:пришл|скин|отправ|давай|сделай|сфот|фоткай|покаж)(?:[\s\S]{0,45})(?:селфи|фото|фотк|снимок)|(?:send|show|take|snap)(?:[\s\S]{0,35})(?:selfie|photo|pic|picture)/iu.test(incoming);
+    const forcedPhotoRule = directPhotoRequest && st.phonePhotos !== false
+        ? `DIRECT PHOTO REQUEST DETECTED. You MUST send a photo in this reply. Do not merely promise it. At least one tel:sms tag MUST contain both "photo" and "media". If the user asked for your selfie, media.type="selfie", media.sender="${charName}", media.visible MUST include "${charName}", media.camera="front camera selfie". Preserve the exact CURRENT RP location, clothing/state, nearby visible people, action and environment anchors. Example SHAPE only: <!--tel:sms:{"from":"${charName}","text":"short in-character caption","photo":"concrete selfie shot","media":{"type":"selfie","sender":"${charName}","visible":["${charName}"],"camera":"front camera selfie","location":"current RP location","clothing":{"${charName}":"current clothing"},"action":"visible action","pose":"pose","expression":"expression","gaze":"gaze","environment":"established anchors","continuity":"temporary visual facts"}}-->`
+        : '';
 
     const prompt = `PRIVATE PHONE GENERATION. This is an isolated PocketVerse request, not prose RP.\n`+
         `User: ${user}\nContact: ${charName}${isGroup ? `\nGroup members: ${(t?.members||[]).join(', ')}` : ''}\n`+
@@ -7361,7 +7368,8 @@ function pvPhoneRawPrompt(t, items, isGroup = false) {
         `\nNEW ITEMS FROM ${user}:\n${incoming}\n\n`+
         `Reply naturally in character like real texting. Usually 1-3 short bubbles; maximum 4. No narration. `+
         `Output ONLY hidden tags: <!--tel:sms:{"from":"Name","text":"..."}-->. `+
-        `${groupRule} ${mediaRule} ${photoRule} `+
+        `${groupRule} ${mediaRule} ${photoRule} ${forcedPhotoRule} `+
+        `IMPORTANT: spend tokens on the FINAL hidden tags, not analysis. Close every JSON object and every --> tag before stopping. `+
         `Never output NPC-to-NPC private messages unless this is a group containing ${user}. Never output HeartPulse/state/reasoning. `+
         (custom ? `Phone preference: ${custom}` : '');
     return { prompt, responseLength: cfg.out, mode };
@@ -7370,7 +7378,24 @@ function pvPhoneRawPrompt(t, items, isGroup = false) {
 async function pvGeneratePhoneReply(t, items, isGroup = false) {
     const req = pvPhoneRawPrompt(t, items, isGroup);
     console.info('[PocketVerse] controlled phone request', { mode:req.mode, chars:req.prompt.length, approxTokens:Math.round(req.prompt.length/4), responseLength:req.responseLength });
-    return await generateRaw({ prompt:req.prompt, responseLength:req.responseLength, trimNames:false });
+    let raw = await generateRaw({ prompt:req.prompt, responseLength:req.responseLength, trimNames:false });
+    // Gemini may consume much of responseLength as hidden thinking and truncate the
+    // only tel:sms tag. Retry once with a compact repair request instead of showing
+    // "phone reply not recognized" after the user waited for generation.
+    const hasCompleteTag = /<!--\s*tel:sms:\{[\s\S]*?\}\s*-->/i.test(String(raw||''));
+    if (!hasCompleteTag) {
+        console.warn('[PocketVerse] phone reply truncated/unparseable; compact retry');
+        const ctx = SillyTavern.getContext?.() || {};
+        const name = String(t?.name || ctx?.name2 || 'Character');
+        const user = String(ctx?.name1 || 'User');
+        const incoming = items.map(x=>String(x||'')).join(' | ').slice(-1200);
+        const directPhoto = /(?:пришл|скин|отправ|давай|сделай|сфот|фоткай|покаж)(?:[\s\S]{0,45})(?:селфи|фото|фотк|снимок)|(?:send|show|take|snap)(?:[\s\S]{0,35})(?:selfie|photo|pic|picture)/iu.test(incoming);
+        const repair = `POCKETVERSE PHONE REPAIR. Output ONLY 1-3 complete <!--tel:sms:{...}--> tags. No analysis, markdown or prose. Sender=${name}; recipient=${user}. New user message: ${incoming}. `+
+            (directPhoto ? `The user directly requested a selfie/photo: the reply MUST include photo plus media. For selfie use media={"type":"selfie","sender":"${name}","visible":["${name}"],"camera":"front camera selfie","location":"preserve current RP location","clothing":{"${name}":"preserve current clothing"},"action":"selfie action","pose":"natural selfie pose","expression":"in-character expression","gaze":"at phone camera","environment":"preserve established RP anchors","continuity":"do not move scene"}. ` : '')+
+            `Close JSON and --> before stopping.`;
+        raw = await generateRaw({ prompt:repair, responseLength:1400, trimNames:false });
+    }
+    return raw;
 }
 
 
