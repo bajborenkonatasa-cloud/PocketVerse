@@ -2057,6 +2057,9 @@ function renderThread(screen) {
             const busy = _mmsGenBusy.has(genKey);
             media = `<div class="gp-bubble-img gp-bubble-img-gen" style="${avatarStyle((m.from || t.name) + m.photoDesc)}"><span>${ic('fa-image')}</span><i data-mmsdesc="${esc(genKey)}">${esc(m.photoDesc)}</i><button class="gp-mms-gen" data-mmsgen="${mi}" title="Сгенерировать фото" ${busy ? 'disabled' : ''}>${ic(busy ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles')}</button>${busy ? stopGenBtn(genKey) : ''}</div>`;
         }
+        if (m.videoCircle) {
+            media += `<div class="gp-video-circle-bubble"><video src="${esc(m.videoCircle)}" controls playsinline preload="metadata"></video></div>`;
+        }
         if (m.gifUrl) {
             media += `<div class="gp-bubble-img gp-giphy${m.mediaKind === 'sticker' ? ' gp-sticker' : ''}"><img src="${esc(m.gifUrl)}" alt="${esc(m.memeQuery || 'GIF')}" data-zoom><small>Powered by GIPHY</small></div>`;
         } else if (m.memeQuery) {
@@ -7510,7 +7513,7 @@ async function pvGenerateGrokCircle(key,draft,refs){
 async function pvGenerateVeoCircle(key,draft,refs){
     const inst={prompt:pvCirclePrompt(draft,draft._thread)};
     if(refs.length) inst.referenceImages=refs.slice(0,3).map(x=>{const q=pvDataParts(x.dataUrl);return q?{image:{mimeType:q.mime,bytesBase64Encoded:q.data},referenceType:'asset'}:null;}).filter(Boolean);
-    const body={instances:[inst],parameters:{aspectRatio:'9:16',durationSeconds:8,resolution:'720p',numberOfVideos:1}};
+    const body={instances:[inst],parameters:{aspectRatio:'9:16',durationSeconds:8,resolution:'720p'}};
     const base='https://generativelanguage.googleapis.com/v1beta';
     const r=await fetch(`${base}/models/veo-3.1-fast-generate-preview:predictLongRunning`,{method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},body:JSON.stringify(body)});
     const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j?.error?.message||`Veo HTTP ${r.status}`); if(!j.name) throw new Error('Veo не вернул operation');
@@ -7549,7 +7552,9 @@ function pvOpenVideoCircleSheet(screen, t, draft) {
             try{
                 const d=liveDraft(); const refs=await pvCircleRefs(t,d); if(!refs.length) throw new Error('Референс исчез — платный запрос отменён'); status.textContent=`Проверено. Референсов: ${refs.length}. Генерирую видео…`;
                 const url=isV?await pvGenerateVeoCircle(key,d,refs):await pvGenerateGrokCircle(key,d,refs);
-                status.innerHTML=`<b>Готово 🎉</b><div class="gp-video-circle-preview"><video src="${esc(url)}" controls autoplay playsinline></video></div><small>Пока это предпросмотр. Следующим маленьким шагом закрепим готовое видео прямо пузырём-кружочком в переписке.</small>`;
+                status.innerHTML=`<b>Готово 🎉</b><div class="gp-video-circle-preview"><video src="${esc(url)}" controls autoplay playsinline></video></div><small>Кружочек добавлен в переписку.</small>`;
+                addLocalSms({dir:'in', name:d.speaker||t.name, from:d.speaker||t.name, chat:t.isGroup?t.name:'', text:'', videoCircle:url});
+                setTimeout(()=>{ try{ overlay.remove(); render(); }catch(_){} },900);
             }catch(e){console.error('[PocketVerse] video circle generation failed',e); status.textContent=`Ошибка видео: ${String(e?.message||e).slice(0,220)}`; go.disabled=false;}
         });
     }));

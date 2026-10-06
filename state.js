@@ -1243,7 +1243,7 @@ export function addLocalSms(data = {}) {
         chat: data.chat ? String(data.chat).trim() : '',
         text: String(data.text || ''),
     };
-    for (const k of ['photo','img','meme','gif','mediaKind','voice','react','shot','number']) if (data[k] !== undefined) rec[k] = data[k];
+    for (const k of ['photo','img','meme','gif','mediaKind','voice','react','shot','number','videoCircle']) if (data[k] !== undefined) rec[k] = data[k];
     if (!rec.name && !rec.chat) return null;
     meta.localSms.push(rec);
     // Prevent unbounded metadata growth while retaining a large local phone history.
@@ -1257,7 +1257,7 @@ export function updateLocalSms(id, patch = {}) {
     const meta = getMeta();
     const rec = (meta.localSms || []).find(x => x && String(x.id) === String(id));
     if (!rec) return false;
-    const allowed = ['photo','img','meme','gif','mediaKind','voice','react','shot','number','text'];
+    const allowed = ['photo','img','meme','gif','mediaKind','voice','react','shot','number','videoCircle','text'];
     for (const k of allowed) if (Object.prototype.hasOwnProperty.call(patch, k)) rec[k] = patch[k];
     saveMeta(); invalidateChatCache();
     return true;
