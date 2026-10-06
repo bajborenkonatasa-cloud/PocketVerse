@@ -1925,6 +1925,7 @@ async function rewriteSmsTag(m, t, mutate) {
             j = { from: m.from, text: m.text || '' };
             if (t?.isGroup) j.chat = t.name;
             if (m.photoDesc) j.photo = m.photoDesc;
+            if (m.mediaIntent) j.media = m.mediaIntent;
             if (m.voice) j.voice = true;
             if (m.img) j.img = m.img;
             if (m.shot) j.shot = m.shot;
@@ -1991,7 +1992,7 @@ async function autoResolveIncomingMedia(t) {
             try {
                 if (await isImageGenAvailable()) {
                     const author = m.from || t.name;
-                    const src = await generatePostImage({ imgDesc:m.photoDesc, author, ak:`contact:${keyOf(author)}`, kind:'ig', mms:true }, null, key);
+                    const src = await generatePostImage({ imgDesc:m.photoDesc, mediaIntent:m.mediaIntent || null, author, ak:`contact:${keyOf(author)}`, kind:'ig', mms:true }, null, key);
                     if (src) {
                     const ok = m.localId ? updateLocalSms(m.localId, { img: src }) : await rewriteSmsTag(m, t, j => { j.img = src; });
                     if (ok) m.img = src;
@@ -2472,7 +2473,7 @@ function renderThread(screen) {
             const mine = m.dir === 'out';
             const author = mine ? getUserName() : (m.from || t.name);
             const src = await generatePostImage(
-                { imgDesc: m.photoDesc, author, ak: mine ? 'user' : `contact:${keyOf(author)}`, kind: 'ig', mms: !mine },
+                { imgDesc: m.photoDesc, mediaIntent:m.mediaIntent || null, author, ak: mine ? 'user' : `contact:${keyOf(author)}`, kind: 'ig', mms: !mine },
                 (status) => {
                     const el = document.querySelector(`[data-mmsdesc="${CSS.escape(genKey)}"]`);
                     if (el) el.textContent = status;

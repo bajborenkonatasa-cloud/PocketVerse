@@ -2770,11 +2770,36 @@ function buildImagePrompt(post, { anonymous = false, allowChar = false } = {}) {
     return body + npcNamesLine(whoText, body);
 }
 
+// PocketVerse Media Intent v2: preserve exact phone/RP facts before the image-writer call.
+// This is deliberately provider-neutral. SIP still owns style, refs and transport.
+function mediaIntentScene(post) {
+    const m = post?.mediaIntent;
+    if (!m || typeof m !== 'object') return String(post?.imgDesc || '').trim();
+    const clean = v => String(v ?? '').replace(/[\r\n|]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const parts = [];
+    const visible = Array.isArray(m.visible) ? m.visible.map(clean).filter(Boolean) : [];
+    if (clean(post.imgDesc)) parts.push(`SHOT: ${clean(post.imgDesc)}`);
+    if (clean(m.type)) parts.push(`TYPE: ${clean(m.type)}`);
+    if (clean(m.sender)) parts.push(`SENDER/CAMERA OWNER: ${clean(m.sender)}`);
+    if (visible.length) parts.push(`VISIBLE PEOPLE (LOCKED): ${visible.join(', ')}`);
+    if (clean(m.camera)) parts.push(`CAMERA: ${clean(m.camera)}`);
+    if (clean(m.location)) parts.push(`EXACT CURRENT LOCATION: ${clean(m.location)}`);
+    if (m.clothing && typeof m.clothing === 'object') {
+        const clothes = Object.entries(m.clothing).map(([k,v]) => `${clean(k)}: ${clean(v)}`).filter(x => !/:\s*$/.test(x));
+        if (clothes.length) parts.push(`CURRENT CLOTHING/STATE: ${clothes.join('; ')}`);
+    } else if (clean(m.clothing)) parts.push(`CURRENT CLOTHING/STATE: ${clean(m.clothing)}`);
+    for (const [label,key] of [['ACTION', 'action'],['POSE','pose'],['EXPRESSION','expression'],['GAZE','gaze'],['ENVIRONMENT ANCHORS','environment'],['CONTINUITY','continuity']]) {
+        if (clean(m[key])) parts.push(`${label}: ${clean(m[key])}`);
+    }
+    return parts.join('\n');
+}
+
 // ── Booru-теги: сцена → англ. danbooru-теги (для NovelAI/аниме-моделей) ──
 // NAI не понимает короткие описания на русском — нужны теги вида 1girl, solo,
 // long hair, ... Конвертируем сцену одним текстовым запросом.
 async function sceneToBooruTags(post, { anonymous }) {
-    const scene = [post.imgDesc, post.caption].filter(Boolean).join('. ') || `photo posted by ${post.author}`;
+    const preserved = mediaIntentScene(post);
+    const scene = [preserved || post.imgDesc, post.caption].filter(Boolean).join('\n') || `photo posted by ${post.author}`;
     if (anonymous) {
         // Public/random accounts must stay detached from RP identities.
         const prompt = `Convert this image idea into ONE line of English Danbooru-style content tags.\nScene: ${scene}\nUse only visible facts: subject count, generic appearance, clothing, pose/action, expression/gaze, relative position, camera/framing, essential environment and factual light. No artist/style/quality tags. English only. Output only the comma-separated prompt.`;
@@ -3756,7 +3781,7 @@ export async function generateMediaVisualBlueprint(sceneText = '', options = {})
       `VISIBLE CAST IS LOCKED. Return EXACTLY these identities, once each, and nobody else:\n${identity||'(resolver found none; infer only explicitly named people in PHOTO IDEA)'}\n\n`+
       `RULES:\n`+
       `- English only. Return ONLY valid JSON matching the schema below. No analysis, markdown or explanations.\n`+
-      `- One visual snapshot. PHOTO IDEA + latest RP decide the actual location/background, current clothing or undressed state, pose, expression, gaze, action, relative position, camera/framing and factual light.\n`+
+      `- One visual snapshot. PHOTO IDEA + latest RP decide the actual location/background, current clothing or undressed state, pose, expression, gaze, action, relative position, camera/framing and factual light.\n`+      `- If PHOTO IDEA contains EXACT CURRENT LOCATION / CURRENT CLOTHING / VISIBLE PEOPLE / ENVIRONMENT ANCHORS from PocketVerse Media Intent, those fields are LOCKED continuity facts. Preserve them literally in meaning; do not substitute a generic location or wardrobe.\n`+
       `- NEVER merge identities, duplicate a person, invent background people, or omit a locked visible subject.\n`+
       `- Every subject object is SELF-CONTAINED: name + compact identifying appearance + CURRENT visible clothing/state + pose + position + action + expression + gaze. Keep each person's traits in that person's object only.\n`+
       `- KNOWN APPEARANCE is identity evidence. Translate and COMPRESS it into concrete visible traits; do not copy biography, lore, measurements that are not visually useful, or repeat the same traits elsewhere.\n`+

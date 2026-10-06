@@ -1068,7 +1068,8 @@ function scanChatUncached() {
                     const ei = extraImageOf(msg);
                     if (ei) entry.img = ei;
                 }
-                if (j.photo) entry.photoDesc = String(j.photo).slice(0, 200);
+                if (j.photo) entry.photoDesc = String(j.photo).slice(0, 600);
+                if (j.media && typeof j.media === 'object') entry.mediaIntent = j.media;
                 if (j.meme) entry.memeQuery = String(j.meme).slice(0, 80);
                 if (j.gif) entry.gifUrl = String(j.gif).slice(0, 1200);
                 if (j.shot) entry.shot = j.shot;
@@ -1129,7 +1130,8 @@ function scanChatUncached() {
                     eventId: `${i}:${tm.index}`,
                 };
                 // ММС от персонажа: описание фото → стеклянная заглушка в пузыре
-                if (j.photo) entry.photoDesc = String(j.photo).slice(0, 200);
+                if (j.photo) entry.photoDesc = String(j.photo).slice(0, 600);
+                if (j.media && typeof j.media === 'object') entry.mediaIntent = j.media;
                 if (j.meme) entry.memeQuery = String(j.meme).slice(0, 80);
                 if (j.gif) entry.gifUrl = String(j.gif).slice(0, 1200);
                 // Голосовое: text = расшифровка, в пузыре рисуем дорожку
@@ -1209,7 +1211,8 @@ function scanChatUncached() {
             eventId: `local:${m.id || n}`,
             localId: m.id || String(n),
         };
-        if (m.photo) entry.photoDesc = String(m.photo).slice(0, 300);
+        if (m.photo) entry.photoDesc = String(m.photo).slice(0, 600);
+        if (m.media && typeof m.media === 'object') entry.mediaIntent = m.media;
         if (m.img) entry.img = m.img;
         if (m.meme) entry.memeQuery = String(m.meme).slice(0, 120);
         if (m.gif) entry.gifUrl = String(m.gif).slice(0, 1600);
@@ -1243,7 +1246,7 @@ export function addLocalSms(data = {}) {
         chat: data.chat ? String(data.chat).trim() : '',
         text: String(data.text || ''),
     };
-    for (const k of ['photo','img','meme','gif','mediaKind','voice','react','shot','number','videoCircle']) if (data[k] !== undefined) rec[k] = data[k];
+    for (const k of ['photo','media','img','meme','gif','mediaKind','voice','react','shot','number','videoCircle']) if (data[k] !== undefined) rec[k] = data[k];
     if (!rec.name && !rec.chat) return null;
     meta.localSms.push(rec);
     // Prevent unbounded metadata growth while retaining a large local phone history.
@@ -1257,7 +1260,7 @@ export function updateLocalSms(id, patch = {}) {
     const meta = getMeta();
     const rec = (meta.localSms || []).find(x => x && String(x.id) === String(id));
     if (!rec) return false;
-    const allowed = ['photo','img','meme','gif','mediaKind','voice','react','shot','number','videoCircle','text'];
+    const allowed = ['photo','media','img','meme','gif','mediaKind','voice','react','shot','number','videoCircle','text'];
     for (const k of allowed) if (Object.prototype.hasOwnProperty.call(patch, k)) rec[k] = patch[k];
     saveMeta(); invalidateChatCache();
     return true;
@@ -1273,7 +1276,7 @@ export function ingestQuietPhoneReply(raw, fallbackName = '', fallbackChat = '')
         const chat = j.chat || fallbackChat || '';
         const from = String(j.from || fallbackName || '').trim();
         if (!from) continue;
-        addLocalSms({ dir:'in', name: from, from, chat, text:j.text || '', photo:j.photo, img:j.img, meme:j.meme, gif:j.gif, voice:j.voice, shot:j.shot });
+        addLocalSms({ dir:'in', name: from, from, chat, text:j.text || '', photo:j.photo, media:j.media, img:j.img, meme:j.meme, gif:j.gif, voice:j.voice, shot:j.shot });
         accepted++;
     }
     return accepted;
