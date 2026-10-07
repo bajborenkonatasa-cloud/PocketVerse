@@ -2359,19 +2359,19 @@ async function worldPulseContext() {
 export async function generateWorldPulseCandidates(mode = 'listen') {
     const p = ensureWorldPulse();
     const active = p.active.slice(0, 5).map(x => `- ${x.title}: ${x.summary}`).join('\n');
-    const recent = p.archive.slice(0, 4).map(x => `- ${x.title}: ${x.summary}`).join('\n');
     const c = await worldPulseContext();
     const stir = mode === 'stir';
     const prompt = `POCKETVERSE WORLD PULSE. This is a tiny suggestion engine, NOT roleplay and NOT Scene Omens.\n`+
 `MODE: ${stir ? 'STIR — offer 2-3 grounded dormant possibilities because the user explicitly asks for inspiration.' : 'LISTEN — inspect quietly; returning zero threads is GOOD when nothing naturally wants to grow.'}\n`+
 `Hard rules: canon first; never invent genre-breaking escalation; never claim an unplayed event happened; threads stay dormant until user accepts them; prefer existing unresolved people/details; flirting/domestic downtime usually means silence or subtle social/relationship possibilities.\n`+
-`ACTIVE (do not duplicate):\n${active || '(none)'}\nDISMISSED/CLOSED (avoid):\n${recent || '(none)'}\n`+
+`ACTIVE THREADS — compact titles only; do not duplicate them:\n${active || '(none)'}\n`+
 (c.card ? `CHARACTER: ${c.card}\n` : '')+
 (c.persona ? `USER PERSONA: ${c.persona}\n` : '')+
 (c.lore ? `RELEVANT LORE: ${c.lore}\n` : '')+
 (c.rp ? `RECENT RP:\n${c.rp}\n` : '')+
+`LANGUAGE IS STRICT: every human-readable value (title, summary, why_now, entry_hint) MUST be written in RUSSIAN, even when the character card, lorebook or recent RP is in English. Never output English prose. Keep enum keys/values exactly as shown in the schema.\n`+
 `Return ONLY compact JSON, no analysis. ${stir ? 'Return 2-3 threads.' : 'Return 0-2 threads; use {"threads":[]} if the world is currently quiet.'}\n`+
-`Schema: {"threads":[{"title":"2-5 words","summary":"one sentence","type":"relationship|mystery|social|world|opportunity|consequence","scope":"personal|local|world","why_now":"short reason","entry_hint":"subtle future entrance"}]}`;
+`Schema: {"threads":[{"title":"2-5 слов ПО-РУССКИ","summary":"одно короткое предложение ПО-РУССКИ","type":"relationship|mystery|social|world|opportunity|consequence","scope":"personal|local|world","why_now":"короткая причина ПО-РУССКИ","entry_hint":"тонкий будущий вход ПО-РУССКИ"}]}`;
 
     // The old 1100-token request plus the full taskHeader encouraged Gemini to spend
     // nearly everything on hidden thinking. This prompt is much smaller and asks for

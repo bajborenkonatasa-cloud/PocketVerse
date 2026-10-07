@@ -844,6 +844,8 @@ function renderSocialHub(screen) {
     const active = pulse.active || [];
     const candidates = pulse.candidates || [];
     const typeIcon = t => ({relationship:'fa-heart', mystery:'fa-magnifying-glass', social:'fa-people-group', world:'fa-earth-europe', opportunity:'fa-door-open', consequence:'fa-link'})[t] || 'fa-circle-dot';
+    const typeName = t => ({relationship:'отношения', mystery:'тайна', social:'социальное', world:'мир', opportunity:'возможность', consequence:'последствие'})[t] || 'мир';
+    const scopeName = v => ({personal:'личное', local:'локальное', world:'мировое'})[v] || 'локальное';
     const modeName = m => ({background:'Фон', noticeable:'Заметно', key:'Ключевое'})[m] || 'Фон';
     screen.innerHTML = `<div class="gp-header gp-thread-header">
         <button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button>
@@ -863,7 +865,7 @@ function renderSocialHub(screen) {
         </section>
         <section class="gp-social-section gp-pulse-candidates"><h3>${ic('fa-sparkles')} Возможности</h3>
             ${candidates.length ? candidates.map(x => `<article class="gp-pulse-card gp-pulse-candidate">
-                <div class="gp-pulse-card-head"><span>${ic(typeIcon(x.type))}</span><div><b>${esc(x.title)}</b><small>${esc(x.type)} · ${esc(x.scope)}</small></div></div>
+                <div class="gp-pulse-card-head"><span>${ic(typeIcon(x.type))}</span><div><b>${esc(x.title)}</b><small>${esc(typeName(x.type))} · ${esc(scopeName(x.scope))}</small></div></div>
                 <p>${esc(x.summary)}</p>${x.whyNow ? `<em>Почему сейчас: ${esc(x.whyNow)}</em>` : ''}
                 <div class="gp-pulse-actions"><button data-pulse-accept="${esc(x.id)}">${ic('fa-plus')} Впустить</button><button data-pulse-dismiss="${esc(x.id)}">${ic('fa-xmark')} Не надо</button></div>
             </article>`).join('') : `<div class="gp-event-empty"><b>Новых нитей нет</b><span>Нажми «Прислушаться к миру». Модель посмотрит только на компактный свежий контекст, канон и релевантный лорбук.</span></div>`}
@@ -968,10 +970,20 @@ function renderStoryResult(screen) {
 
 function renderSocialJournal(screen) {
     currentScreen = 'socialjournal';
-    const entries = getSocialJournalEntries();
-    screen.innerHTML = `<div class="gp-header gp-thread-header"><button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button><div class="gp-title gp-title-app">Журнал памяти</div></div>
-    <div class="gp-feed gp-journal-screen"><div class="gp-journal-info">${ic('fa-brain')} Здесь показаны скрытые записи, которые действительно добавлены в историю чата и доступны боту и саммарайзеру.</div>
-    ${entries.length ? entries.map(e => `<article class="gp-journal-entry"><div><b>Запись #${e.index + 1}</b><small>${esc(e.time)}</small></div>${e.image ? `<img src="${esc(e.image)}" alt="Фото из записи" data-zoom>` : ''}<p>${esc(e.text)}</p></article>`).join('') : `<div class="gp-event-empty"><b>Журнал пока пуст</b><span>Новые посты, комментарии, ответы и итоги ивентов появятся здесь после записи в чат.</span></div>`}</div>`;
+    const pulse = getWorldPulse();
+    const active = Array.isArray(pulse.active) ? pulse.active : [];
+    const archive = Array.isArray(pulse.archive) ? pulse.archive : [];
+    const typeName = t => ({relationship:'отношения', mystery:'тайна', social:'социальное', world:'мир', opportunity:'возможность', consequence:'последствие'})[t] || 'мир';
+    const scopeName = v => ({personal:'личное', local:'локальное', world:'мировое'})[v] || 'локальное';
+    const reasonName = v => ({dismissed:'отклонено', closed:'завершено'})[v] || 'архив';
+    screen.innerHTML = `<div class="gp-header gp-thread-header"><button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button><div class="gp-title gp-title-app">Журнал нитей</div></div>
+    <div class="gp-feed gp-journal-screen">
+        <div class="gp-journal-info">${ic('fa-book-open')} Это локальный журнал Пульса мира. Он хранится в PocketVerse и <b>не отправляется целиком модели</b>. При поиске новых идей модель получает только короткий список активных нитей, чтобы не повторяться.</div>
+        <section class="gp-social-section"><h3>${ic('fa-location-dot')} Активные <small>${active.length}/8</small></h3>
+        ${active.length ? active.map(x => `<article class="gp-pulse-card"><div class="gp-pulse-card-head"><div><b>${esc(x.title)}</b><small>${esc(typeName(x.type))} · ${esc(scopeName(x.scope))}</small></div></div><p>${esc(x.summary)}</p></article>`).join('') : `<div class="gp-event-empty"><b>Пока пусто</b><span>Здесь появятся только нити, которые ты сама нажмёшь «Впустить».</span></div>`}</section>
+        <section class="gp-social-section"><h3>${ic('fa-box-archive')} Архив</h3>
+        ${archive.length ? archive.slice(0, 30).map(x => `<article class="gp-pulse-card"><div class="gp-pulse-card-head"><div><b>${esc(x.title)}</b><small>${esc(reasonName(x.archiveReason || x.reason || x.state))}</small></div></div><p>${esc(x.summary)}</p></article>`).join('') : `<div class="gp-event-empty"><b>Архив пуст</b><span>Отклонённые и завершённые нити останутся здесь только для тебя.</span></div>`}</section>
+    </div>`;
     screen.querySelector('#gp-back')?.addEventListener('click', () => goto('socialhub'));
 }
 
