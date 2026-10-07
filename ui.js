@@ -2126,10 +2126,10 @@ function renderThread(screen) {
             ? avatarHtml(m.from || t.name, getContactAvatar(keyOf(m.from || t.name)), 'gp-msg-avatar') : '';
         bubbles += `
         <div class="gp-msg-line ${m.dir === 'out' ? 'gp-msg-line-out' : 'gp-msg-line-in'} ${startOfIncomingRun ? 'gp-msg-run-start' : ''}">
-            <div class="gp-bubble-wrap ${m.dir === 'out' ? 'gp-out' : 'gp-in'}${reaction ? ' gp-has-react' : ''}">
+            <div class="gp-bubble-wrap ${m.dir === 'out' ? 'gp-out' : 'gp-in'}${reaction ? ' gp-has-react' : ''}${m.img ? ' gp-photo-wrap' : ''}">
                 ${m.dir === 'in' && bubbleAva ? `<div class="gp-msg-avatar-above">${bubbleAva}</div>` : ''}
                 ${picker}
-                <div class="gp-bubble${m.voice ? ' gp-bubble-voice' : ''}" data-bmi="${mi}">${senderLabel}${media}${shotHtml(m)}${body}${reactChip}</div>
+                <div class="gp-bubble${m.voice ? ' gp-bubble-voice' : ''}${m.img ? ' gp-photo-bubble' : ''}" data-bmi="${mi}">${senderLabel}${media}${shotHtml(m)}${body}${reactChip}</div>
             </div>
         </div>`;
     }

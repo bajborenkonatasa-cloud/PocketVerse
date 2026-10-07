@@ -4822,3 +4822,11 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 #gp-phone .gp-msg-avatar-above .gp-msg-avatar{width:22px!important;height:22px!important;font-size:8px!important;box-shadow:0 2px 8px rgba(0,0,0,.25);}
 #gp-phone .gp-generated-photo{width:min(92%,360px);max-width:100%;margin-right:auto;}
 #gp-phone .gp-generated-photo img{width:100%;height:auto;object-fit:contain;}
+
+/* pocketverse.49.9 — chat polish: larger run avatar + compact generated-photo cards only */
+#gp-phone .gp-msg-avatar-above{height:56px!important;align-items:center!important;margin:0 0 5px 2px!important;}
+#gp-phone .gp-msg-avatar-above .gp-msg-avatar{width:52px!important;height:52px!important;font-size:15px!important;box-shadow:0 3px 12px rgba(0,0,0,.28)!important;}
+#gp-phone .gp-msg-line .gp-bubble-wrap.gp-photo-wrap{max-width:68%!important;}
+#gp-phone .gp-photo-wrap .gp-photo-bubble{width:100%!important;max-width:100%!important;}
+#gp-phone .gp-photo-wrap .gp-generated-photo{width:100%!important;max-width:100%!important;margin:0!important;}
+#gp-phone .gp-photo-wrap .gp-generated-photo img{width:100%!important;height:auto!important;object-fit:contain!important;}
