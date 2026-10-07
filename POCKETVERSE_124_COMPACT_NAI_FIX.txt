@@ -1,1 +1,0 @@
-PocketVerse v1.2.4: compact Scene Blocks-style NovelAI compiler; exact subject count once; one block per visible identity; no repeated stableAppearance; no invented props/style; image-planning context reduced to latest 6 RP turns + relevant identities; max blueprint output reduced.
