@@ -176,7 +176,7 @@ function createFab() {
     if (document.getElementById('gp-fab')) return;
     const fab = document.createElement('div');
     fab.id = 'gp-fab';
-    fab.innerHTML = `${ic('fa-mobile-screen-button')}<span id="gp-fab-badge" class="gp-hidden"></span>`;
+    fab.innerHTML = `<span class="gp-orb-mark">◈</span><span id="gp-fab-badge" class="gp-hidden"></span>`;
     document.body.appendChild(fab);
 
     // Позиция: сохранённая ВСЕГДА зажимается в текущий вьюпорт (позиция с широкого
@@ -290,7 +290,7 @@ function createWandButton() {
         item.id = 'gp-wand-open';
         item.className = 'list-group-item flex-container flexGap5 interactable';
         item.tabIndex = 0;
-        item.innerHTML = `<i class="fa-solid fa-mobile-screen-button"></i><span>Телефон</span>`;
+        item.innerHTML = `<span class="gp-wand-orb">◈</span><span>PocketVerse</span>`;
         item.addEventListener('click', () => {
             openPhone();
         });
@@ -1158,7 +1158,7 @@ function renderLock(screen) {
                     </div>`).join('')}
             </div>
             <div class="gp-lock-bottom">
-                <div class="gp-lock-hint">${ic('fa-chevron-up')} Смахни вверх</div>
+                <div class="gp-lock-hint">◈ Войти в PocketVerse</div>
             </div>
         </div>`;
 
@@ -1169,19 +1169,9 @@ function renderLock(screen) {
     }));
     screen.querySelector('.gp-lock-hint')?.addEventListener('click', unlock);
 
-    // Смахивание вверх — пальцем и мышью
-    const lock = screen.querySelector('#gp-lock');
-    let startY = null;
-    const onDown = (y) => { startY = y; };
-    const onUp = (y) => {
-        if (startY !== null && startY - y > 55) unlock();
-        startY = null;
-    };
-    lock?.addEventListener('touchstart', (e) => onDown(e.touches[0].clientY), { passive: true });
-    lock?.addEventListener('touchend', (e) => onUp(e.changedTouches[0]?.clientY ?? 0), { passive: true });
-    lock?.addEventListener('mousedown', (e) => onDown(e.clientY));
-    lock?.addEventListener('mouseup', (e) => onUp(e.clientY));
-    lock?.addEventListener('wheel', (e) => { if (e.deltaY > 0) unlock(); }, { passive: true });
+    // PocketVerse 2.0: вход только явным тапом — никакого swipe-up жеста.
+    // Уведомления по-прежнему открываются своим тапом выше.
+    screen.querySelector('.gp-lock-hint')?.addEventListener('click', unlock);
 }
 
 // ── Brain Inspector: ничего не генерирует, только показывает текущую начинку ──
