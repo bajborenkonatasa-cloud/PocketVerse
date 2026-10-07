@@ -1,7 +1,0 @@
-PocketVerse v1.0.3 — GIF DISPLAY + NO-DISCO FIX
-
-1. Local phone messages now persist generated photos/GIFs in PocketVerse localSms metadata.
-2. No rewrite of the main SillyTavern RP message is required for local media.
-3. Messages UI is frozen during quiet phone generation and rendered once afterwards.
-4. GIPHY failures show a small diagnostic toast; successful lookup is logged in console.
-5. Scene Blocks / RP chat remain outside this media path.
