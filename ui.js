@@ -1369,13 +1369,18 @@ function renderMemories(screen) {
     currentScreen = 'memories';
     const all = getMemories();
     const items = all.filter(x => _memoryFilter === 'all' || x.type === _memoryFilter);
+    const romans = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+    const stickers = ['✦','♡','☾','✧','⌁','❀','⋆','♢'];
     const tile = (m, i) => {
-        const photo = m.img ? `<img src="${esc(m.img)}" alt="" data-zoom>` : '';
+        const photo = m.img ? `<img src="${esc(m.img)}" alt="">` : '';
         const quote = m.text ? `<div class="gp-memory-quote">${esc(m.text)}</div>` : '';
         const note = m.note ? `<div class="gp-memory-note">${esc(m.note)}</div>` : '';
         const meta = [m.rpDate, m.rpTime].filter(Boolean).join(' · ');
-        return `<article class="gp-memory-tile ${m.img ? 'gp-memory-photo' : 'gp-memory-text'}" data-memory="${esc(m.id)}">
-            <span class="gp-memory-index">${['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'][i%12]}</span>
+        const mood = `gp-scrap-${(i % 6) + 1}`;
+        return `<article class="gp-memory-tile ${m.img ? 'gp-memory-photo' : 'gp-memory-text'} ${mood}" data-memory-open="${esc(m.id)}">
+            <span class="gp-memory-tape" aria-hidden="true"></span>
+            <span class="gp-memory-index">${romans[i%12]}</span>
+            <span class="gp-memory-sticker" aria-hidden="true">${stickers[i%stickers.length]}</span>
             ${photo}<div class="gp-memory-body">${m.author ? `<b>${esc(m.author)}</b>` : ''}${quote}${note}${meta ? `<small>${esc(meta)}</small>` : ''}</div>
             <button class="gp-memory-more" data-memory-menu="${esc(m.id)}" title="Действия">⋮</button>
         </article>`;
@@ -1398,6 +1403,33 @@ function renderMemories(screen) {
         </div>`}`;
     screen.querySelector('#gp-home-btn')?.addEventListener('click', () => goto('home'));
     screen.querySelectorAll('[data-mf]').forEach(b => b.addEventListener('click',()=>{ _memoryFilter=b.dataset.mf; renderMemories(screen); }));
+
+    // Scrapbook reveal: tap any memory to unfold it like a diary page.
+    screen.querySelectorAll('[data-memory-open]').forEach(card => card.addEventListener('click', (e) => {
+        if (e.target.closest('[data-memory-menu]')) return;
+        const m = getMemories().find(x => x.id === card.dataset.memoryOpen); if (!m) return;
+        const idx = Math.max(0, all.findIndex(x => x.id === m.id));
+        const meta = [m.rpDate, m.rpTime].filter(Boolean).join(' · ');
+        const ov = document.createElement('div'); ov.className = 'gp-memory-reveal';
+        ov.innerHTML = `<div class="gp-memory-reveal-backdrop" data-memory-close></div>
+          <section class="gp-memory-page gp-scrap-${(idx%6)+1}">
+            <button class="gp-memory-close" data-memory-close>×</button>
+            <div class="gp-memory-page-top"><span>${romans[idx%12]} · ARCHIVE XII</span><i>${stickers[idx%stickers.length]}</i></div>
+            ${m.img ? `<div class="gp-memory-page-photo"><span class="gp-memory-page-tape"></span><img src="${esc(m.img)}" alt=""></div>` : ''}
+            <div class="gp-memory-page-copy">
+              ${m.author ? `<div class="gp-memory-page-author">${esc(m.author)}</div>` : ''}
+              ${m.text ? `<div class="gp-memory-page-quote">${esc(m.text)}</div>` : ''}
+              ${m.note ? `<div class="gp-memory-page-note"><span>✎</span>${esc(m.note)}</div>` : ''}
+              ${meta ? `<div class="gp-memory-page-meta">${esc(meta)}</div>` : ''}
+              ${m.thread ? `<div class="gp-memory-page-thread">⌁ ${esc(m.thread)}</div>` : ''}
+            </div>
+            <span class="gp-memory-doodle gp-doodle-a">✦</span><span class="gp-memory-doodle gp-doodle-b">♡</span><span class="gp-memory-doodle gp-doodle-c">${stickers[(idx+3)%stickers.length]}</span>
+          </section>`;
+        screen.appendChild(ov);
+        requestAnimationFrame(()=>ov.classList.add('gp-open'));
+        ov.querySelectorAll('[data-memory-close]').forEach(x=>x.addEventListener('click',()=>{ ov.classList.remove('gp-open'); setTimeout(()=>ov.remove(),220); }));
+    }));
+
     screen.querySelectorAll('[data-memory-menu]').forEach(b => b.addEventListener('click',(e)=>{
         e.stopPropagation(); const id=b.dataset.memoryMenu; const m=getMemories().find(x=>x.id===id); if(!m)return;
         const choice=prompt('Архив XII: подпись к воспоминанию.\nОставь пустым, чтобы удалить текущую подпись.\nДля удаления введи: УДАЛИТЬ', m.note||'');
