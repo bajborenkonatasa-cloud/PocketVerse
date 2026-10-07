@@ -1,7 +1,0 @@
-PocketVerse ISOLATION FIX
-
-Phone-only quiet replies and outgoing phone messages are stored in PocketVerse chat metadata (localSms).
-They are NOT inserted into SillyTavern main chat[] and do NOT call sendMessageAsUser from the phone send paths.
-This prevents phone requests from reindexing/reprinting/saving RP messages and disturbing Scene Blocks/media metadata.
-
-Legacy insertGhostReply call sites now parse tel:sms into localSms only; no ghost chat message is created.
