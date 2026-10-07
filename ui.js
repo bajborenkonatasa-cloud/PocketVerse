@@ -867,7 +867,7 @@ function renderSocialHub(screen) {
                 <p>${esc(x.summary)}</p>${x.whyNow ? `<em>Почему сейчас: ${esc(x.whyNow)}</em>` : ''}
                 <div class="gp-pulse-actions"><button data-pulse-accept="${esc(x.id)}">${ic('fa-plus')} Впустить</button><button data-pulse-dismiss="${esc(x.id)}">${ic('fa-xmark')} Не надо</button></div>
             </article>`).join('') : `<div class="gp-event-empty"><b>Новых нитей нет</b><span>Нажми «Прислушаться к миру». Модель посмотрит только на компактный свежий контекст, канон и релевантный лорбук.</span></div>`}
-            <button class="gp-event-generate" id="gp-pulse-generate" ${genBusy ? 'disabled' : ''}>${genBusy ? ic('fa-spinner fa-spin') : ic('fa-wave-square')} ${candidates.length ? 'Прислушаться снова' : 'Прислушаться к миру'}</button>
+            <div class="gp-pulse-generate-row"><button class="gp-event-generate" id="gp-pulse-generate" ${genBusy ? 'disabled' : ''}>${genBusy ? ic('fa-spinner fa-spin') : ic('fa-wave-square')} ${candidates.length ? 'Прислушаться снова' : 'Прислушаться к миру'}</button><button class="gp-event-generate gp-pulse-stir" id="gp-pulse-stir" ${genBusy ? 'disabled' : ''}>${ic('fa-wand-magic-sparkles')} Расшевелить мир</button></div>
         </section>
         <div class="gp-pulse-note">${ic('fa-shield-halved')} Нити не являются Scene Omens: они не бросают вызов текущей сцене и не разыгрываются сами.</div>
     </div>`;
@@ -875,8 +875,14 @@ function renderSocialHub(screen) {
     screen.querySelector('#gp-open-journal')?.addEventListener('click', () => goto('socialjournal'));
     screen.querySelector('#gp-pulse-generate')?.addEventListener('click', async () => {
         if (genBusy) return; genBusy = true; render();
-        try { const rows = await generateWorldPulseCandidates(); toast(rows.length ? `Мир откликнулся: ${rows.length}` : 'Сейчас мир не просит вмешательства', rows.length ? 'fa-wave-square' : 'fa-moon'); }
+        try { const rows = await generateWorldPulseCandidates('listen'); toast(rows.length ? `Мир откликнулся: ${rows.length}` : 'Сейчас мир не просит вмешательства', rows.length ? 'fa-wave-square' : 'fa-moon'); }
         catch (e) { console.error('[PocketVerse] world pulse failed:', e); toast('Не удалось прислушаться к миру', 'fa-circle-exclamation'); }
+        finally { genBusy = false; if (currentScreen === 'socialhub') render(); }
+    });
+    screen.querySelector('#gp-pulse-stir')?.addEventListener('click', async () => {
+        if (genBusy) return; genBusy = true; render();
+        try { const rows = await generateWorldPulseCandidates('stir'); toast(rows.length ? `Нашлось идей: ${rows.length}` : 'Даже сейчас мир просит оставить его в покое', rows.length ? 'fa-wand-magic-sparkles' : 'fa-moon'); }
+        catch (e) { console.error('[PocketVerse] world pulse stir failed:', e); toast('Не удалось расшевелить мир', 'fa-circle-exclamation'); }
         finally { genBusy = false; if (currentScreen === 'socialhub') render(); }
     });
     screen.querySelectorAll('[data-pulse-accept]').forEach(b => b.addEventListener('click', () => { activateWorldPulseThread(b.dataset.pulseAccept, 'background'); updatePhoneInjection(); toast('Нить впущена в мир', 'fa-link'); render(); }));

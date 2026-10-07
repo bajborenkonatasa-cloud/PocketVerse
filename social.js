@@ -2343,41 +2343,47 @@ function ensureWorldPulse() {
 }
 export function getWorldPulse() { return ensureWorldPulse(); }
 
-export async function generateWorldPulseCandidates() {
+async function worldPulseContext() {
+    // Purposefully tiny context: Pulse is a hint engine, not a second RP model.
+    const rc = await richContext({ publicOnly: false });
+    const clip = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+    const rp = rpContextBlock(8).split('\n').map(x => clip(x, 220)).filter(Boolean).join('\n');
+    return {
+        card: clip(rc.charDesc, 1200),
+        persona: clip(rc.persona, 550),
+        lore: clip(rc.wi, 1600),
+        rp: clip(rp, 1900),
+    };
+}
+
+export async function generateWorldPulseCandidates(mode = 'listen') {
     const p = ensureWorldPulse();
-    const active = p.active.slice(0, 6).map(x => `- ${x.title}: ${x.summary} [${x.mode || 'background'}]`).join('\n');
-    const recent = p.archive.slice(0, 6).map(x => `- ${x.title}: ${x.summary}`).join('\n');
-    const journal = getSocialJournalEntries().slice(0, 8).map(e => e.text).join('\n');
-    const prompt = `${await taskHeader('find a FEW optional long-running world threads that could enrich the roleplay later, without interrupting the current scene.')}
+    const active = p.active.slice(0, 5).map(x => `- ${x.title}: ${x.summary}`).join('\n');
+    const recent = p.archive.slice(0, 4).map(x => `- ${x.title}: ${x.summary}`).join('\n');
+    const c = await worldPulseContext();
+    const stir = mode === 'stir';
+    const prompt = `POCKETVERSE WORLD PULSE. This is a tiny suggestion engine, NOT roleplay and NOT Scene Omens.\n`+
+`MODE: ${stir ? 'STIR — offer 2-3 grounded dormant possibilities because the user explicitly asks for inspiration.' : 'LISTEN — inspect quietly; returning zero threads is GOOD when nothing naturally wants to grow.'}\n`+
+`Hard rules: canon first; never invent genre-breaking escalation; never claim an unplayed event happened; threads stay dormant until user accepts them; prefer existing unresolved people/details; flirting/domestic downtime usually means silence or subtle social/relationship possibilities.\n`+
+`ACTIVE (do not duplicate):\n${active || '(none)'}\nDISMISSED/CLOSED (avoid):\n${recent || '(none)'}\n`+
+(c.card ? `CHARACTER: ${c.card}\n` : '')+
+(c.persona ? `USER PERSONA: ${c.persona}\n` : '')+
+(c.lore ? `RELEVANT LORE: ${c.lore}\n` : '')+
+(c.rp ? `RECENT RP:\n${c.rp}\n` : '')+
+`Return ONLY compact JSON, no analysis. ${stir ? 'Return 2-3 threads.' : 'Return 0-2 threads; use {"threads":[]} if the world is currently quiet.'}\n`+
+`Schema: {"threads":[{"title":"2-5 words","summary":"one sentence","type":"relationship|mystery|social|world|opportunity|consequence","scope":"personal|local|world","why_now":"short reason","entry_hint":"subtle future entrance"}]}`;
 
-ACTIVE WORLD THREADS — never duplicate:
-${active || '(none)'}
-RECENTLY CLOSED / DISMISSED THEMES — avoid repetition:
-${recent || '(none)'}
-PHONE JOURNAL HINTS:
-${journal || '(empty)'}
-
-This is NOT Scene Omens. Do not create an immediate twist, challenge, choice card, or forced event. Create 2 or 3 quiet POTENTIAL THREADS the user may choose to keep. They are seeds for future world movement: an unresolved secret, relationship pressure, local mystery, social situation, faction movement, opportunity, background change, or consequence already supported by canon.
-
-GROUNDING RULES:
-- Canon first: character card, persona, triggered lorebook and recent RP are authoritative.
-- Match the setting and scale. Modern youth drama stays modern youth drama; a detective story may grow clues/suspects; medieval fantasy uses its own institutions; sci-fi uses its own world.
-- NEVER introduce a genre-breaking escalation merely to be exciting. No aliens, apocalypse, murder, magic, secret agencies, etc. unless the existing canon/setting supports them.
-- If the recent RP is simply talking/flirting/domestic downtime, prefer subtle relationship/social/background threads or return fewer threads.
-- A thread must be optional and dormant until the user activates it. It must not claim that an unplayed event already happened.
-- Prefer unresolved details already present in canon over inventing strangers or organizations.
-- Keep each item compact.
-
-Output STRICT JSON object only:
-{"threads":[{"title":"2-5 words","summary":"one concrete sentence","type":"relationship|mystery|social|world|opportunity|consequence","scope":"personal|local|world","why_now":"short canon-grounded reason","entry_hint":"one subtle way this could surface later"}]}
-${uiLangLine()}`;
-    const obj = parseJsonObject(await socialGen(prompt, { maxTokens: 1100, prefill: '{"threads":[' })) || {};
+    // The old 1100-token request plus the full taskHeader encouraged Gemini to spend
+    // nearly everything on hidden thinking. This prompt is much smaller and asks for
+    // a tiny final object. No automatic retry: one tap = one paid request.
+    const raw = await socialGen(prompt, { maxTokens: 900 });
+    const obj = parseJsonObject(raw) || {};
     const rows = Array.isArray(obj.threads) ? obj.threads : [];
-    p.candidates = rows.slice(0, 3).filter(x => x && x.title && x.summary).map((x, i) => ({
-        id: `pulse_${Date.now()}_${i}`, title: String(x.title).slice(0, 90), summary: String(x.summary).slice(0, 360),
+    p.candidates = rows.slice(0, stir ? 3 : 2).filter(x => x && x.title && x.summary).map((x, i) => ({
+        id: `pulse_${Date.now()}_${i}`, title: String(x.title).slice(0, 90), summary: String(x.summary).slice(0, 300),
         type: ['relationship','mystery','social','world','opportunity','consequence'].includes(x.type) ? x.type : 'world',
         scope: ['personal','local','world'].includes(x.scope) ? x.scope : 'local',
-        whyNow: String(x.why_now || '').slice(0, 260), entryHint: String(x.entry_hint || '').slice(0, 300), createdAt: Date.now()
+        whyNow: String(x.why_now || '').slice(0, 220), entryHint: String(x.entry_hint || '').slice(0, 260), createdAt: Date.now()
     }));
     saveMeta();
     return p.candidates;

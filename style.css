@@ -4838,3 +4838,9 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 .gp-pulse-active h3,.gp-pulse-candidates h3{display:flex;align-items:center;gap:7px}.gp-pulse-active h3 small{margin-left:auto;font-size:10px;opacity:.42;font-weight:500}
 .gp-pulse-card{padding:13px 14px;margin:9px 0;border:1px solid rgba(255,255,255,.11);border-radius:18px;background:rgba(255,255,255,.035)}
 .gp-pulse-candidate{border-style:dashed;background:rgba(99,102,241,.055)}.gp-pulse-card-head{display:flex;gap:10px;align-items:center}.gp-pulse-card-head>span{width:29px;height:29px;border-radius:10px;display:grid;place-items:center;background:rgba(129,140,248,.12);color:#9da7ff}.gp-pulse-card-head b{display:block;font-size:14px}.gp-pulse-card-head small{font-size:10px;opacity:.46;text-transform:uppercase;letter-spacing:.08em}.gp-pulse-card p{font-size:13px;line-height:1.45;margin:10px 0 7px}.gp-pulse-card em{display:block;font-size:11px;line-height:1.4;opacity:.52;font-style:normal}.gp-pulse-actions{display:flex;gap:8px;margin-top:11px}.gp-pulse-actions button{flex:1;border:1px solid rgba(129,140,248,.24);border-radius:12px;padding:8px 9px;background:rgba(99,102,241,.08);font-size:11px;color:inherit}.gp-pulse-note{margin:6px 22px 18px;text-align:center;font-size:10px;line-height:1.45;opacity:.42}
+
+/* PocketVerse .51 — World Pulse economy + manual stir */
+.gp-pulse-generate-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.gp-pulse-generate-row .gp-event-generate{margin:0;min-width:0;padding-left:10px;padding-right:10px}
+.gp-pulse-stir{background:rgba(130,92,190,.12)!important}
+@media(max-width:430px){.gp-pulse-generate-row{grid-template-columns:1fr}.gp-pulse-generate-row .gp-event-generate{min-height:46px}}
