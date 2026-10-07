@@ -1205,7 +1205,12 @@ function scanChatUncached() {
             from: m.from || undefined,
             text: String(m.text || ''),
             idx: Number(m.idx || (1000000000 + n)),
-            time: m.time ? new Date(m.time) : new Date(),
+            // Local phone records live on the RP clock too. New records store an exact
+            // rpTime snapshot; legacy records are projected onto the current RP scale.
+            time: m.rpTime ? new Date(m.rpTime) : (m.time ? realToRpDate(new Date(m.time)) : (() => {
+                const r = getRpDateTime();
+                return r ? new Date(r.year, r.month - 1, r.day, r.hours ?? 0, r.minutes ?? 0, 0, 0) : new Date();
+            })()),
             tagStart: 0,
             tagEnd: 0,
             eventId: `local:${m.id || n}`,
@@ -1236,10 +1241,14 @@ export function addLocalSms(data = {}) {
     const meta = getMeta();
     const now = Date.now();
     const id = `pv_${now}_${Math.random().toString(36).slice(2, 8)}`;
+    const rp = getRpDateTime();
+    const rpStamp = rp ? new Date(rp.year, rp.month - 1, rp.day, rp.hours ?? 0, rp.minutes ?? 0, 0, 0).getTime() : null;
     const rec = {
         id,
         idx: now,
         time: now,
+        // Exact story-clock snapshot. Never let Android time become RP chronology.
+        rpTime: rpStamp,
         dir: data.dir === 'out' ? 'out' : 'in',
         name: String(data.name || data.from || data.chat || '').trim(),
         from: data.from ? String(data.from).trim() : '',

@@ -4564,3 +4564,19 @@ img[data-zoom] { cursor: zoom-in; }
 .gp-thread-actions-title span{color:var(--gp-accent-a)}
 .gp-thread-actions button{width:100%;min-height:39px;border:0;border-bottom:1px solid rgba(255,255,255,.045);background:transparent;color:var(--pv-ink);display:flex;align-items:center;gap:11px;padding:8px 10px;text-align:left;font-size:12px}
 .gp-thread-actions button:last-child{border-bottom:0}.gp-thread-actions button i{width:17px;text-align:center;color:var(--gp-accent-a);opacity:.82}.gp-thread-actions button:active{background:rgba(var(--gp-accent-a-rgb),.10);border-radius:9px}.gp-thread-actions .gp-thread-action-danger{color:rgba(255,150,160,.9)}.gp-thread-actions .gp-thread-action-danger i{color:inherit}
+
+
+/* ═══ PocketVerse .42 · The Twelve / Connection Deck ═══ */
+#gp-phone .gp-connections-title{display:flex;flex-direction:column;align-items:flex-start;line-height:1.02}
+#gp-phone .gp-connections-title small{margin-top:5px;font-family:system-ui,sans-serif;font-size:7px;font-weight:500;letter-spacing:.28em;color:var(--gp-text-dim);opacity:.68}
+#gp-phone .gp-connection-card{min-height:76px;margin:0 10px 11px;padding:17px 34px 15px 18px;border-radius:16px 20px 16px 20px;overflow:hidden;background:linear-gradient(135deg,rgba(255,255,255,.055),rgba(255,255,255,.012) 54%,rgba(var(--gp-accent-a-rgb),.035));box-shadow:inset 0 0 0 1px rgba(255,255,255,.025),0 9px 22px rgba(0,0,0,.13)}
+#gp-phone .gp-connection-card:before{top:14px;bottom:14px;width:3px;opacity:.7}
+#gp-phone .gp-connection-card:after{content:"";position:absolute;left:18px;right:18px;bottom:8px;height:1px;background:linear-gradient(90deg,transparent,rgba(var(--gp-accent-a-rgb),.20),transparent)}
+#gp-phone .gp-card-index{position:absolute;top:7px;left:13px;font-family:Georgia,'Times New Roman',serif;font-size:9px;color:var(--gp-accent-a);opacity:.65}
+#gp-phone .gp-card-suit{position:absolute;font-family:Georgia,'Times New Roman',serif;color:var(--gp-accent-a);opacity:.52;pointer-events:none}
+#gp-phone .gp-card-suit-top{top:7px;right:10px;font-size:10px}
+#gp-phone .gp-card-suit-bottom{right:10px;bottom:7px;font-size:10px;transform:rotate(180deg)}
+#gp-phone .gp-connection-card .gp-avatar{width:48px;height:48px;box-shadow:0 0 0 2px rgba(var(--gp-accent-a-rgb),.10),0 5px 13px rgba(0,0,0,.24)}
+#gp-phone .gp-connection-card .gp-row-name{font-family:Georgia,'Times New Roman',serif;font-size:15px;letter-spacing:.01em}
+#gp-phone .gp-connection-card .gp-row-preview{margin-top:4px;font-size:11px}
+#gp-phone .gp-connection-card .gp-row-time{font-family:Georgia,'Times New Roman',serif;font-size:9px;letter-spacing:.06em;opacity:.68}

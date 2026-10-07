@@ -1782,6 +1782,15 @@ async function genGroupChats() {
     }
 }
 
+function pvRoman(n) {
+    const map = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+    return map[n % 12] || 'I';
+}
+
+function pvSuit(n) {
+    return ['♠','♦','♣','♥'][n % 4];
+}
+
 function renderList(screen) {
     currentScreen = 'list';
     // Мэтчи из Тиндера сюда не попадают, пока не обменялись номерами: их
@@ -1789,7 +1798,8 @@ function renderList(screen) {
     const list = getThreadList().filter(t => t.isGroup || !isInAppMatch(t.key));
 
     let rows = '';
-    for (const t of list) {
+    for (let ti = 0; ti < list.length; ti++) {
+        const t = list[ti];
         const lastText = t.last ? (t.last.voice ? 'Голосовое сообщение' : (t.last.text || (t.last.img || t.last.photoDesc ? 'Фото' : ''))) : '';
         const senderPrefix = t.last
             ? (t.last.dir === 'out' ? '<span class="gp-prev-you">Ты:</span> '
@@ -1799,11 +1809,15 @@ function renderList(screen) {
             ? `${senderPrefix}${esc(lastText.slice(0, 60))}`
             : '<span class="gp-prev-empty">Нет сообщений — напиши первым</span>';
         const time = t.last && t.last.time ? fmtTime(t.last.time) : '';
+        const cardNo = pvRoman(ti);
+        const suit = pvSuit(ti);
         const ava = t.isGroup
             ? `<div class="gp-avatar gp-avatar-group">${ic('fa-users')}</div>`
             : avatarHtml(t.name, getContactAvatar(t.key));
         rows += `
-        <div class="gp-row" data-key="${esc(t.key)}">
+        <div class="gp-row gp-connection-card" data-key="${esc(t.key)}">
+            <span class="gp-card-index">${cardNo}</span>
+            <span class="gp-card-suit gp-card-suit-top">${suit}</span>
             ${ava}
             <div class="gp-row-mid">
                 <div class="gp-row-name">${esc(t.name)}</div>
@@ -1813,13 +1827,14 @@ function renderList(screen) {
                 <div class="gp-row-time">${esc(time)}</div>
                 ${t.unread > 0 ? `<div class="gp-unread">${t.unread > 9 ? '9+' : t.unread}</div>` : ''}
             </div>
+            <span class="gp-card-suit gp-card-suit-bottom">${suit}</span>
         </div>`;
     }
 
     setHtmlKeepScroll(screen, '.gp-list', `
         <div class="gp-header">
             <button class="gp-iconbtn" id="gp-home-btn">${ic('fa-chevron-left')}</button>
-            <div class="gp-title">Связи</div>
+            <div class="gp-title gp-connections-title"><span>Связи</span><small>КОЛОДА СВЯЗЕЙ</small></div>
             <button class="gp-iconbtn" id="gp-gen-chats" title="Сгенерировать чаты" ${_chatsGenBusy ? 'disabled' : ''}>${ic(_chatsGenBusy ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles')}</button>
             <button class="gp-iconbtn" id="gp-add-btn" title="Добавить контакт">${ic('fa-plus')}</button>
         </div>
