@@ -6487,14 +6487,17 @@ function renderChannels(screen) {
     screen.querySelectorAll('[data-echopost]').forEach(b => b.addEventListener('click', () => {
         const post = (echo.posts || []).find(x => x.id === b.getAttribute('data-echopost'));
         if (!post) return;
-        const veil = document.createElement('div'); veil.className='gp-echo-modal';
+        // Android/WebView-safe top layer, mirroring Scene Omens' proven dialog pattern.
+        // Native <dialog>.showModal() escapes transformed/scaled PocketVerse/ST ancestors.
+        const veil = document.createElement('dialog'); veil.className='gp-echo-modal';
         veil.innerHTML=`<div class="gp-echo-open"><button class="gp-echo-close">×</button><div class="gp-echo-openkind">${esc(post.kind||'СЛЕД')}</div><div class="gp-echo-opentext">${esc(post.text||'')}</div><div class="gp-echo-stamps"><button data-stamp="ВАЖНО">ВАЖНО</button><button data-stamp="ПОДТВЕРЖДЕНО">ПОДТВЕРЖДЕНО</button><button data-stamp="???">???</button><button data-stamp="ЛОЖЬ">ЛОЖЬ</button><button data-stamp="">СНЯТЬ</button></div><small>${esc(timeAgo(post.time))}</small></div>`;
-        // Mount outside the PocketVerse screen: mobile phone shell may be transformed/scaled.
-        // A fixed modal inside that shell can render off-screen until a later reflow.
-        (document.body || document.documentElement).appendChild(veil);
-        veil.querySelector('.gp-echo-close')?.addEventListener('click',()=>veil.remove());
-        veil.addEventListener('click',(e)=>{ if(e.target===veil) veil.remove(); });
-        veil.querySelectorAll('[data-stamp]').forEach(x=>x.addEventListener('click',()=>{updateEchoPost(post.id,{status:x.getAttribute('data-stamp')});veil.remove();render();}));
+        document.documentElement.appendChild(veil);
+        try { veil.showModal(); } catch { veil.setAttribute('open',''); }
+        const closeEcho = () => { try { veil.close?.(); } catch {} veil.remove(); };
+        veil.querySelector('.gp-echo-close')?.addEventListener('click', closeEcho);
+        veil.addEventListener('click',(e)=>{ if(e.target===veil) closeEcho(); });
+        veil.addEventListener('cancel',(e)=>{ e.preventDefault(); closeEcho(); },{once:true});
+        veil.querySelectorAll('[data-stamp]').forEach(x=>x.addEventListener('click',()=>{updateEchoPost(post.id,{status:x.getAttribute('data-stamp')});closeEcho();render();}));
     }));
     screen.querySelector('#gp-echo-myvoice')?.addEventListener('click', () => {
         const text = prompt('Какой след оставить в этой арке?');
