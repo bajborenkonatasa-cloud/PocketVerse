@@ -1,7 +1,0 @@
-PocketVerse v1.2.0 — Language Identity + Scene Blueprint
-
-- Cross-script identity matching: Hanabi ↔ Ханаби, Seraphina ↔ Серафина (plus existing aliases/cases).
-- Keeps stored SIP identities/references untouched; normalization is match-only.
-- Visible Subjects Lab now builds a detailed provider-neutral Scene Blueprint for Banana/vision models.
-- Adds a separate NovelAI scene guide while leaving the active SIP style/provider/reference transport in charge.
-- SAFE: preview only; no image generation and no RP mutation from the lab.
