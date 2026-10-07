@@ -31,12 +31,9 @@ function setupSettingsPanel() {
     <div class="inline-drawer-toggle inline-drawer-header gp-settings-header">
         <div class="gp-settings-title">
             <span class="gp-settings-status-dot" aria-hidden="true"></span>
-            <span><b>PocketVerse FOUNDATION</b><small id="gp-settings-status"></small></span>
+            <span><b>♠ PocketVerse · The Twelve</b><small id="gp-settings-status"></small></span>
         </div>
-        <select id="gp-set-lang" class="text_pole gp-settings-language" aria-label="Язык / Language">
-            <option value="ru" ${s.lang !== 'en' ? 'selected' : ''}>Русский</option>
-            <option value="en" ${s.lang === 'en' ? 'selected' : ''}>English</option>
-        </select>
+        <select id="gp-set-lang" class="gp-settings-language gp-hidden" aria-label="Язык"><option value="ru" selected>Русский</option></select>
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
     </div>
     <div class="inline-drawer-content gp-settings-body">

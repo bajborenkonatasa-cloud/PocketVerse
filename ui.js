@@ -1330,10 +1330,11 @@ function renderHome(screen) {
     }
     const me = getUserName();
     const meAva = avatarHtml(me, avatarForAuthor('user'), 'gp-avatar gp-deck-avatar');
-    const card = (app, suit, title, sub, icon, extra='') => `
+    const card = (app, month, suit, title, sub, glyph, extra='') => `
         <button class="gp-deck-card ${extra}" data-app="${app}" type="button">
-            <span class="gp-deck-corner">${suit}</span>
-            <span class="gp-deck-icon">${icon}</span>
+            <span class="gp-deck-month">${month}</span>
+            <span class="gp-deck-suit">${suit}</span>
+            <span class="gp-deck-glyph" aria-hidden="true">${glyph}</span>
             <span class="gp-deck-title">${title}</span>
             <span class="gp-deck-sub">${sub}</span>
         </button>`;
@@ -1346,18 +1347,18 @@ function renderHome(screen) {
             </div>
             <div class="gp-deck-rule"><span>✦</span><b>THE TWELVE</b><span>✦</span></div>
             <div class="gp-home-grid gp-deck-grid">
-                ${card('list','♥','Связи', unread ? `${unread} новых` : 'переписки', ic('fa-comment-dots'), unread ? 'gp-card-hot' : '')}
-                ${card('tw','♠','Twitter','лента',brand('fa-x-twitter'))}
-                ${card('ig','♦','Instagram','моменты',brand('fa-instagram'))}
-                ${card(activeStoryEvent ? 'storyevent':'socialhub','✦','События',activeStoryEvent ? 'сейчас активно' : 'сюжет',ic('fa-wand-sparkles'),activeStoryEvent?'gp-card-hot':'')}
-                ${card('of','♥','OnlyFans','личное',ic('fa-heart'))}
-                ${card('chans','♣','Каналы',unreadChannels() ? `${unreadChannels()} новых` : 'эфир',ic('fa-paper-plane'))}
-                ${card('news','♠','Новости','мир',ic('fa-newspaper'))}
-                ${card('twitch','♦','Twitch',getTwitch().myStream ? 'LIVE' : 'стримы',brand('fa-twitch'),getTwitch().myStream?'gp-card-hot':'')}
-                ${card('notes','♣','Заметки',plansBadgeCount() ? `${plansBadgeCount()} дел` : 'мысли',ic('fa-note-sticky'))}
-                ${card('appearance','♦','Облик','темы',ic('fa-palette'))}
-                ${card('brain','♠','Мозг','настройки',ic('fa-brain'))}
-                ${card('memories','✦','Воспоминания','дневник',ic('fa-book-open'))}
+                ${card('list','I','♥','Связи', unread ? `${unread} новых` : 'переписки','✉', unread ? 'gp-card-hot' : '')}
+                ${card(activeStoryEvent ? 'storyevent':'socialhub','II','♦','События',activeStoryEvent ? 'сейчас активно' : 'сюжет','✦',activeStoryEvent?'gp-card-hot':'')}
+                ${card('memories','III','♠','Воспоминания','дневник','☾')}
+                ${card('ig','IV','♥','Instagram','моменты','◎')}
+                ${card('notes','V','♣','Заметки',plansBadgeCount() ? `${plansBadgeCount()} дел` : 'мысли','✎')}
+                ${card('news','VI','♦','Новости','мир','▤')}
+                ${card('chans','VII','♠','Каналы',unreadChannels() ? `${unreadChannels()} новых` : 'эфир','◇')}
+                ${card('twitch','VIII','♣','Twitch',getTwitch().myStream ? 'LIVE' : 'стримы','▷',getTwitch().myStream?'gp-card-hot':'')}
+                ${card('tw','IX','♦','Twitter','лента','#')}
+                ${card('of','X','♥','OnlyFans','личное','♡')}
+                ${card('appearance','XI','♣','Облик','темы','◐')}
+                ${card('brain','XII','♠','Мозг','настройки','⌘')}
             </div>
         </div>`;
     screen.querySelectorAll('.gp-deck-card').forEach(el => el.addEventListener('click', () => goto(el.dataset.app)));

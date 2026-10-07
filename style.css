@@ -4462,3 +4462,24 @@ img[data-zoom] { cursor: zoom-in; }
 #gp-phone .gp-deck-corner{position:absolute;top:7px;left:8px;font-family:Georgia,serif;font-size:11px;color:#dcb9ff;opacity:.68}.gp-deck-icon{font-size:21px;line-height:1;margin-top:5px;filter:drop-shadow(0 3px 7px rgba(0,0,0,.3))}.gp-deck-title{font-family:Georgia,'Times New Roman',serif;font-size:11px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}.gp-deck-sub{font-size:7.5px;letter-spacing:.7px;text-transform:uppercase;opacity:.38;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}.gp-card-hot{box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 0 16px rgba(205,105,255,.13)!important;border-color:rgba(235,167,255,.38)!important}
 #gp-phone .gp-memory-preview{margin:auto 20px;text-align:center;padding:30px 20px;border:1px solid rgba(211,172,255,.2);border-radius:20px;background:rgba(255,255,255,.025);box-shadow:inset 0 0 40px rgba(170,90,220,.035)}.gp-memory-sigil{font-size:34px;color:#d8b0ff;text-shadow:0 0 20px rgba(200,130,255,.4)}.gp-memory-preview h2{font-family:Georgia,serif;font-weight:400;margin:10px 0 8px}.gp-memory-preview p{font-size:12px;opacity:.72;line-height:1.5}.gp-memory-preview small{display:block;margin-top:12px;opacity:.4;line-height:1.45}
 @media(max-height:690px){#gp-phone .gp-deck-home{padding-top:10px}.gp-deck-time b{font-size:21px}#gp-phone .gp-deck-grid{gap:6px}.gp-deck-card{aspect-ratio:.9!important}.gp-deck-rule{margin-bottom:7px!important}}
+
+/* ═══ PocketVerse .38 · Tavern Deck / Twelve Months ═══ */
+#gp-settings-drawer .gp-settings-header{grid-template-columns:minmax(0,1fr) 18px;min-height:42px;padding:6px 12px;background:linear-gradient(90deg,rgba(92,50,120,.12),rgba(255,255,255,.025),rgba(92,50,120,.08))}
+#gp-settings-drawer .gp-settings-title b{font-family:Georgia,'Times New Roman',serif;font-size:14px;font-weight:600;letter-spacing:.02em}
+#gp-settings-drawer .gp-settings-title small{font-size:8px;letter-spacing:.08em;text-transform:uppercase}
+#gp-settings-drawer .gp-settings-status-dot{width:6px;height:6px;box-shadow:0 0 10px currentColor}
+#gp-settings-drawer .gp-settings-language{display:none!important}
+@media(max-width:620px){#gp-settings-drawer .gp-settings-header{grid-template-columns:minmax(0,1fr) 18px}}
+
+#gp-phone .gp-deck-home{background:radial-gradient(circle at 18% 2%,rgba(112,58,139,.14),transparent 31%),radial-gradient(circle at 84% 26%,rgba(106,73,52,.08),transparent 28%)}
+#gp-phone .gp-deck-rule b{font-family:Georgia,'Times New Roman',serif;font-size:8px;letter-spacing:4px}
+#gp-phone .gp-deck-card{border-radius:15px;background:linear-gradient(160deg,rgba(255,255,255,.068),rgba(255,255,255,.015) 56%,rgba(114,65,135,.065));}
+#gp-phone .gp-deck-card:nth-child(4n+1){transform:rotate(-.25deg)}
+#gp-phone .gp-deck-card:nth-child(4n+3){transform:rotate(.25deg)}
+#gp-phone .gp-deck-card:active{transform:translateY(-4px) rotate(-1deg) scale(.975)!important}
+#gp-phone .gp-deck-month{position:absolute;top:7px;left:8px;font-family:Georgia,'Times New Roman',serif;font-size:8px;letter-spacing:.06em;color:#d9b7ee;opacity:.7}
+#gp-phone .gp-deck-suit{position:absolute;right:8px;bottom:6px;font-family:Georgia,'Times New Roman',serif;font-size:9px;color:#d9b7ee;opacity:.34;transform:rotate(180deg)}
+#gp-phone .gp-deck-glyph{display:grid;place-items:center;width:34px;height:34px;margin-top:3px;border-radius:50%;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:400;color:rgba(246,239,248,.94);text-shadow:0 2px 12px rgba(189,125,218,.18)}
+#gp-phone .gp-deck-title{font-size:11.5px}
+#gp-phone .gp-deck-sub{font-size:7px;letter-spacing:1px}
+#gp-phone .gp-deck-card:after{content:"";position:absolute;width:26px;height:1px;left:50%;bottom:20px;transform:translateX(-50%);background:linear-gradient(90deg,transparent,rgba(220,183,239,.18),transparent)}
