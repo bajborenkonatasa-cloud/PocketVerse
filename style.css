@@ -4483,3 +4483,56 @@ img[data-zoom] { cursor: zoom-in; }
 #gp-phone .gp-deck-title{font-size:11.5px}
 #gp-phone .gp-deck-sub{font-size:7px;letter-spacing:1px}
 #gp-phone .gp-deck-card:after{content:"";position:absolute;width:26px;height:1px;left:50%;bottom:20px;transform:translateX(-50%);background:linear-gradient(90deg,transparent,rgba(220,183,239,.18),transparent)}
+
+/* ═══ PocketVerse .39 · Visual Language / Tavern Glass ═══ */
+#gp-phone{
+  --pv-line:rgba(219,184,239,.22);
+  --pv-line-hot:rgba(var(--gp-accent-a-rgb),.52);
+  --pv-ink:rgba(248,242,250,.96);
+  --pv-panel:rgba(20,17,23,.76);
+}
+#gp-phone .gp-header{position:relative;padding:12px 5px 14px;margin-bottom:4px;border-bottom:0!important}
+#gp-phone .gp-header:after{content:"";position:absolute;left:42px;right:5px;bottom:3px;height:1px;background:linear-gradient(90deg,var(--pv-line),transparent 88%)}
+#gp-phone .gp-title{font-family:Georgia,'Times New Roman',serif;font-size:23px;font-weight:500;letter-spacing:.01em}
+#gp-phone .gp-iconbtn{border-radius:12px;border-color:var(--pv-line);background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018));box-shadow:inset 0 1px rgba(255,255,255,.07),0 5px 14px rgba(0,0,0,.13)}
+#gp-phone .gp-iconbtn:active{transform:translateY(1px) scale(.96)}
+
+#gp-phone .gp-row{position:relative;border-radius:15px;padding:11px 12px;background:linear-gradient(145deg,rgba(255,255,255,.052),rgba(255,255,255,.014));border-color:var(--pv-line);box-shadow:inset 0 1px rgba(255,255,255,.06),0 7px 18px rgba(0,0,0,.10);overflow:hidden}
+#gp-phone .gp-row:before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:2px;border-radius:3px;background:linear-gradient(var(--gp-accent-a),var(--gp-accent-b));opacity:.5}
+
+#gp-phone .gp-thread-header{position:relative;border:0;padding:9px 3px 13px;margin-bottom:2px}
+#gp-phone .gp-thread-header:after{content:"";position:absolute;left:46px;right:2px;bottom:4px;height:1px;background:linear-gradient(90deg,var(--pv-line),transparent)}
+#gp-phone .gp-msgs{gap:5px;padding:13px 3px 16px}
+#gp-phone .gp-day span{font-family:Georgia,'Times New Roman',serif;font-size:9px;letter-spacing:.08em;border-radius:999px;padding:4px 13px;background:rgba(17,14,20,.62);border-color:var(--pv-line)}
+
+#gp-phone .gp-bubble-wrap{max-width:81%}
+#gp-phone .gp-bubble{position:relative;padding:10px 13px 9px;border-radius:17px;font-size:13.5px;line-height:1.45;box-shadow:none;overflow:visible}
+#gp-phone .gp-in .gp-bubble{border-radius:17px 17px 17px 5px;background:linear-gradient(145deg,rgba(255,255,255,.072),rgba(255,255,255,.025));border:1px solid var(--pv-line);box-shadow:inset 0 1px rgba(255,255,255,.07),6px 8px 22px rgba(0,0,0,.10)}
+#gp-phone .gp-in .gp-bubble:before{content:"";position:absolute;left:-1px;top:12px;bottom:12px;width:2px;border-radius:3px;background:linear-gradient(var(--gp-accent-a),transparent);opacity:.65}
+#gp-phone .gp-out .gp-bubble{border-radius:17px 17px 5px 17px;color:var(--pv-ink);background:linear-gradient(145deg,rgba(var(--gp-accent-a-rgb),.25),rgba(var(--gp-accent-b-rgb),.12));border:1px solid rgba(var(--gp-accent-a-rgb),.38);box-shadow:inset 0 1px rgba(255,255,255,.10),-6px 8px 22px rgba(var(--gp-accent-a-rgb),.08);text-shadow:none}
+#gp-phone .gp-out .gp-bubble:after{content:"♦";position:absolute;right:-6px;bottom:-7px;font-family:Georgia,serif;font-size:10px;color:var(--gp-accent-a);text-shadow:0 0 8px rgba(var(--gp-accent-a-rgb),.5)}
+#gp-phone .gp-bubble-time{font-size:8.5px;letter-spacing:.04em;opacity:.62;margin:2px 7px 3px}
+
+#gp-phone .gp-react-picker,#gp-phone .gp-action-pop{border-radius:15px!important;background:rgba(18,15,21,.94);border:1px solid var(--pv-line);box-shadow:0 14px 34px rgba(0,0,0,.38),inset 0 1px rgba(255,255,255,.06)}
+#gp-phone .gp-react-picker button,#gp-phone .gp-reaction-row button{border-radius:9px!important}
+#gp-phone .gp-react-chip{border-radius:8px;transform:rotate(-5deg);background:rgba(21,17,24,.96);border-color:var(--pv-line-hot);box-shadow:0 4px 12px rgba(0,0,0,.28)}
+#gp-phone .gp-action-row{border-top-color:var(--pv-line)}
+#gp-phone .gp-action-row button{border:1px solid rgba(255,255,255,.07)!important;background:rgba(255,255,255,.035)!important}
+
+#gp-phone .gp-inputbar{position:relative;margin:2px 0 5px;padding:8px 3px 8px!important;border-top:1px solid transparent;border-image:linear-gradient(90deg,transparent,var(--pv-line),transparent) 1}
+#gp-phone #gp-input{border-radius:14px;background:linear-gradient(145deg,rgba(255,255,255,.052),rgba(255,255,255,.018));border-color:var(--pv-line);box-shadow:inset 0 1px rgba(255,255,255,.06)}
+#gp-phone #gp-input:focus{border-color:var(--pv-line-hot);box-shadow:0 0 0 2px rgba(var(--gp-accent-a-rgb),.07),inset 0 1px rgba(255,255,255,.07)}
+#gp-phone .gp-send{border-radius:12px;background:linear-gradient(145deg,rgba(var(--gp-accent-a-rgb),.72),rgba(var(--gp-accent-b-rgb),.52));border-color:rgba(235,211,246,.25);box-shadow:0 7px 18px rgba(var(--gp-accent-a-rgb),.16),inset 0 1px rgba(255,255,255,.22)}
+
+#gp-phone .gp-giphy,#gp-phone .gp-sticker{position:relative;padding:3px;border:1px solid var(--pv-line);border-radius:13px!important;background:rgba(16,13,19,.34)!important}
+#gp-phone .gp-giphy img,#gp-phone .gp-sticker img{border-radius:10px!important}
+#gp-phone .gp-bubble-img-gen img,#gp-phone .gp-bubble img{border-radius:12px}
+#gp-phone .gp-gif-picker{border-color:var(--pv-line)!important;background:rgba(18,15,21,.97)!important;box-shadow:0 18px 45px rgba(0,0,0,.42)}
+#gp-phone .gp-gif-grid button{border:1px solid rgba(255,255,255,.055)!important;border-radius:10px!important}
+
+#gp-phone .gp-own-selfie-overlay,#gp-phone .gp-video-circle-overlay{background:radial-gradient(circle at 50% 100%,rgba(var(--gp-accent-a-rgb),.10),transparent 42%),rgba(5,4,7,.76);backdrop-filter:blur(5px)}
+#gp-phone .gp-own-selfie-sheet,#gp-phone .gp-video-circle-sheet{position:relative;border-radius:18px;background:linear-gradient(160deg,rgba(31,25,34,.98),rgba(15,13,18,.99));border-color:var(--pv-line);box-shadow:0 22px 60px rgba(0,0,0,.55),inset 0 1px rgba(255,255,255,.07)}
+#gp-phone .gp-own-selfie-sheet:before,#gp-phone .gp-video-circle-sheet:before{content:"✦  POCKETVERSE  ✦";display:block;text-align:center;font:9px Georgia,serif;letter-spacing:.24em;color:rgba(222,188,239,.52);margin:0 0 10px}
+#gp-phone .gp-own-selfie-sheet input,#gp-phone .gp-own-selfie-sheet textarea,#gp-phone .gp-video-circle-sheet input,#gp-phone .gp-video-circle-sheet textarea{border-radius:11px!important;background:rgba(0,0,0,.22)!important;border-color:var(--pv-line)!important}
+
+/* Theme-aware: all accents still come from Appearance variables. */
