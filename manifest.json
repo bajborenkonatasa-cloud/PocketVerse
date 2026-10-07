@@ -1,13 +1,13 @@
 {
-  "display_name": "PocketVerse · The Twelve",
-  "loading_order": 12,
-  "requires": [],
-  "optional": [],
-  "js": "index.js",
-  "css": "style.css",
-  "author": "PocketVerse contributors · derived from Phone-ST",
-  "version": "2.35.0-pocketverse.49",
-  "homePage": "",
-  "source": "",
-  "auto_update": false
+    "display_name": "PocketVerse · The Twelve",
+    "loading_order": 12,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "PocketVerse contributors · derived from Phone-ST",
+    "version": "2.35.0-pocketverse.49.1",
+    "homePage": "",
+    "source": "",
+    "auto_update": false
 }

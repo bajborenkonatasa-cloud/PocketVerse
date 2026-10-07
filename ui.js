@@ -6480,6 +6480,7 @@ function renderChannels(screen) {
         veil.innerHTML=`<div class="gp-echo-open"><button class="gp-echo-close">×</button><div class="gp-echo-openkind">${esc(post.kind||'СЛЕД')}</div><div class="gp-echo-opentext">${esc(post.text||'')}</div><div class="gp-echo-stamps"><button data-stamp="ВАЖНО">ВАЖНО</button><button data-stamp="ПОДТВЕРЖДЕНО">ПОДТВЕРЖДЕНО</button><button data-stamp="???">???</button><button data-stamp="ЛОЖЬ">ЛОЖЬ</button><button data-stamp="">СНЯТЬ</button></div><small>${esc(timeAgo(post.time))}</small></div>`;
         screen.appendChild(veil);
         veil.querySelector('.gp-echo-close')?.addEventListener('click',()=>veil.remove());
+        veil.addEventListener('click',(e)=>{ if(e.target===veil) veil.remove(); });
         veil.addEventListener('click',e=>{if(e.target===veil)veil.remove();});
         veil.querySelectorAll('[data-stamp]').forEach(x=>x.addEventListener('click',()=>{updateEchoPost(post.id,{status:x.getAttribute('data-stamp')});veil.remove();render();}));
     }));
