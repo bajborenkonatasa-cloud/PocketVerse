@@ -24,7 +24,7 @@ import {
     compressImage, setContactAvatar, getContactAvatar, avatarForAuthor, setUserAvatar, getUserAvatar,
     timeAgo, makeHandle, getUserName, generatePostImage, cancelImageGen, isImageGenAvailable, resolveAuthorKey,
     handleFor, setContactHandle, setUserHandle, getUserHandle, describePostImage, generateSmsPhotoReply, searchGiphyMeme, searchGiphyChoices, logSocialToChat, getSocialJournalEntries, logIgPost, logFeedDigest,
-    settleSocialPost, maybeGenerateStoryEvent, resolveStoryEvent, generateAdvertisingOffers,
+    settleSocialPost, maybeGenerateStoryEvent, resolveStoryEvent, generateAdvertisingOffers, getWorldPulse, generateWorldPulseCandidates, activateWorldPulseThread, setWorldPulseMode, archiveWorldPulseThread,
     getStories, activeStories, addStory, deleteStory, bumpStoryViews, toggleStoryLike, generateContactStories, generateStoryReactions,
     generateRepLabel, generateGroupChats,
     generateChannels, generateChannelPosts, generateChannelComments, generateMyChannelFeedback, generatePersonChannel,
@@ -840,126 +840,52 @@ function openStoryResult(id) {
 
 function renderSocialHub(screen) {
     currentScreen = 'socialhub';
-    // Системы выключены — экран сводится к одному переключателю. Данные при
-    // этом никуда не деваются: включишь обратно и увидишь прежние цифры.
-    if (!systemsOn()) {
-        screen.innerHTML = `<div class="gp-header gp-thread-header">
-            <button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button>
-            <div class="gp-title gp-title-app">Социальный профиль</div>
-            <span style="width:32px"></span>
-        </div>
-        <div class="gp-feed gp-social-hub">
-            <div class="gp-empty">
-                <div class="gp-empty-icon">${ic('fa-wand-sparkles')}</div>
-                <div class="gp-empty-text">Подписчики, охваты, репутация, реклама и сюжетные повороты выключены. Посты и комментарии работают как обычно.</div>
-            </div>
-            <button class="gp-save-preset" id="gp-systems-on" type="button">${ic('fa-power-off')} Включить</button>
-        </div>`;
-        screen.querySelector('#gp-back')?.addEventListener('click', () => goto('home'));
-        screen.querySelector('#gp-systems-on')?.addEventListener('click', () => {
-            getSettings().socialSystems = true;
-            saveSettingsDebounced();
-            updatePhoneInjection();
-            toast('Системы включены', 'fa-wand-sparkles');
-            render();
-        });
-        return;
-    }
-    // Самовосстановление незавершённых рекламных интеграций. Это покрывает
-    // сохранения, где пост уже получил реакции/результат, но активное предложение
-    // осталось в состоянии published и деньги не были начислены.
-    for (const post of getTweets()) {
-        if (post.ak === 'user' && post.advertisement && post.performance?.settled) settleSocialPost('twitter', post);
-    }
-    for (const post of getIgPosts()) {
-        if (post.ak === 'user' && post.advertisement && post.performance?.settled) settleSocialPost('instagram', post);
-    }
-    const s = getSystemsView();
-    const tasks = s.postingTasks.active || [];
-    ensureRepLabels(s); // живые статусы репутации (кэш по тиру)
-    const event = s.storyEvents.active;
-    const ads = s.advertising || { offers: [], active: null, history: [] };
-    const recentEvents = s.storyEvents.recent || [];
+    const pulse = getWorldPulse();
+    const active = pulse.active || [];
+    const candidates = pulse.candidates || [];
+    const typeIcon = t => ({relationship:'fa-heart', mystery:'fa-magnifying-glass', social:'fa-people-group', world:'fa-earth-europe', opportunity:'fa-door-open', consequence:'fa-link'})[t] || 'fa-circle-dot';
+    const modeName = m => ({background:'Фон', noticeable:'Заметно', key:'Ключевое'})[m] || 'Фон';
     screen.innerHTML = `<div class="gp-header gp-thread-header">
-        <button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button><div class="gp-title gp-title-app">Социальный профиль</div>
+        <button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button>
+        <div class="gp-title gp-title-app">Пульс мира</div>
         <button class="gp-iconbtn" id="gp-open-journal" title="Журнал памяти">${ic('fa-book-open')}</button>
-        <button class="gp-iconbtn" id="gp-systems-off" title="Выключить системы">${ic('fa-power-off')}</button>
-        ${event ? `<button class="gp-iconbtn gp-event-pulse" data-open-story title="Сюжетный поворот">${ic('fa-wand-sparkles')}</button>` : ''}
-    </div><div class="gp-feed gp-social-hub">
-        <div class="gp-profile-grid">
-            <div class="gp-profile-card"><div>${brand('fa-x-twitter')} Twitter</div><b>${compactNum(s.socialProfiles.twitter.followers)}</b><span>подписчиков · ${esc(repLabelOf(s, 'twitter'))}</span></div>
-            <div class="gp-profile-card"><div>${brand('fa-instagram')} Instagram</div><b>${compactNum(s.socialProfiles.instagram.followers)}</b><span>подписчиков · ${esc(repLabelOf(s, 'instagram'))}</span></div>
-        </div>
-        <section class="gp-social-section gp-ad-section"><h3>${ic('fa-star')} Рекламные предложения</h3>
-            ${ads.active
-                ? `<div class="gp-ad-active"><b>${esc(ads.active.brand)} · ${ads.active.platform === 'twitter' ? 'Twitter' : 'Instagram'}</b><span>${esc(ads.active.product)}</span><small>${ads.active.state === 'published' ? `Публикация размещена · ожидается подсчёт реакции и выплата ${fmtMoney(ads.active.payment)}` : `Следующая публикация в этой соцсети станет рекламной · ${fmtMoney(ads.active.payment)}`}</small></div>`
-                : `${(ads.offers || []).length
-                    ? (ads.offers || []).map(a => `<div class="gp-ad-card gp-ad-${esc(a.risk)}"><div><b>${esc(a.title)}</b><span>${esc(a.product)}</span><small>${esc(a.brief)} · ${fmtMoney(a.payment)}</small></div><div class="gp-ad-actions"><button class="gp-ad-accept" data-ad-accept="${esc(a.id)}">${ic('fa-check')} Взять</button><button class="gp-ad-decline" data-ad-decline="${esc(a.id)}" title="Отклонить">${ic('fa-xmark')}</button></div></div>`).join('')
-                    : `<div class="gp-event-empty"><b>Предложений пока нет</b><span>Запроси свежие интеграции — модель подберёт бренды, товары и оплату под сеттинг текущей ролевой.</span></div>`}
-                   <button class="gp-event-generate" id="gp-ad-generate" ${genBusy ? 'disabled' : ''}>${genBusy ? ic('fa-spinner fa-spin') : ic('fa-wand-magic-sparkles')} ${(ads.offers || []).length ? 'Обновить предложения' : 'Найти предложения'}</button>`}
+    </div><div class="gp-feed gp-social-hub gp-world-pulse">
+        <section class="gp-pulse-intro">
+            <div class="gp-pulse-orbit">${ic('fa-wave-square')}</div>
+            <div><b>Нити, которые могут однажды ожить</b><span>Ты командуешь миром. ИИ только замечает возможности — ничего не входит в сюжет без твоего решения.</span></div>
         </section>
-        <section class="gp-social-section gp-events-section">
-            <h3>${ic('fa-wand-sparkles')} Сюжетные ивенты</h3>
-            ${event
-                ? `<button class="gp-event-banner" data-open-story><span>${ic('fa-wand-sparkles')}</span><div><b>${esc(event.title)}</b><small>${esc(event.hook)}</small></div>${ic('fa-chevron-right')}</button>`
-                : `<div class="gp-event-empty"><b>Активного ивента пока нет</b><span>Модель соберёт три сюжетных поворота из лорбука, карточки, истории RP, журнала телефона и всех недавних постов.</span></div>
-                   <button class="gp-event-generate" id="gp-event-generate" ${!genBusy ? '' : 'disabled'}>
-                       ${genBusy ? ic('fa-spinner fa-spin') : ic('fa-wand-magic-sparkles')}
-                       Создать три сюжетных поворота
-                   </button>`}
-            ${recentEvents.length ? `<div class="gp-event-history"><small>Архив</small>${recentEvents.slice(0, 8).map(e => `<button data-story-result="${esc(e.id)}" ${e.state === 'declined' ? 'disabled' : ''}><i class="fa-solid ${e.state === 'declined' ? 'fa-ban' : 'fa-check'}"></i><span><b>${esc(e.title)}</b><small>${esc(e.state === 'declined' ? 'отклонён' : 'нажми, чтобы прочитать итог')}</small></span>${e.state === 'declined' ? '' : ic('fa-chevron-right')}</button>`).join('')}</div>` : ''}
+        <section class="gp-social-section gp-pulse-active"><h3>${ic('fa-location-dot')} Активные нити <small>${active.length}/8</small></h3>
+            ${active.length ? active.map(x => `<article class="gp-pulse-card gp-pulse-${esc(x.type)}">
+                <div class="gp-pulse-card-head"><span>${ic(typeIcon(x.type))}</span><div><b>${esc(x.title)}</b><small>${esc(x.scope === 'personal' ? 'личное' : x.scope === 'world' ? 'мир' : 'локальное')}</small></div></div>
+                <p>${esc(x.summary)}</p>${x.entryHint ? `<em>${esc(x.entryHint)}</em>` : ''}
+                <div class="gp-pulse-actions"><button data-pulse-mode="${esc(x.id)}">${ic('fa-sliders')} ${modeName(x.mode)}</button><button data-pulse-close="${esc(x.id)}">${ic('fa-check')} Завершить</button></div>
+            </article>`).join('') : `<div class="gp-event-empty"><b>Пока тихо</b><span>Здесь появятся только те нити, которые ты сама впустишь в мир.</span></div>`}
         </section>
-        <section class="gp-social-section"><h3>${ic('fa-list-check')} Задания на постинг</h3>${tasks.map(t => `<div class="gp-task-card"><div><b>${esc(t.title)}</b><span>${esc(t.text)}</span></div><strong>${Math.min(t.progress, t.goal)}/${t.goal}</strong><i><em style="width:${Math.round(Math.min(1, t.progress / t.goal) * 100)}%"></em></i></div>`).join('')}</section>
+        <section class="gp-social-section gp-pulse-candidates"><h3>${ic('fa-sparkles')} Возможности</h3>
+            ${candidates.length ? candidates.map(x => `<article class="gp-pulse-card gp-pulse-candidate">
+                <div class="gp-pulse-card-head"><span>${ic(typeIcon(x.type))}</span><div><b>${esc(x.title)}</b><small>${esc(x.type)} · ${esc(x.scope)}</small></div></div>
+                <p>${esc(x.summary)}</p>${x.whyNow ? `<em>Почему сейчас: ${esc(x.whyNow)}</em>` : ''}
+                <div class="gp-pulse-actions"><button data-pulse-accept="${esc(x.id)}">${ic('fa-plus')} Впустить</button><button data-pulse-dismiss="${esc(x.id)}">${ic('fa-xmark')} Не надо</button></div>
+            </article>`).join('') : `<div class="gp-event-empty"><b>Новых нитей нет</b><span>Нажми «Прислушаться к миру». Модель посмотрит только на компактный свежий контекст, канон и релевантный лорбук.</span></div>`}
+            <button class="gp-event-generate" id="gp-pulse-generate" ${genBusy ? 'disabled' : ''}>${genBusy ? ic('fa-spinner fa-spin') : ic('fa-wave-square')} ${candidates.length ? 'Прислушаться снова' : 'Прислушаться к миру'}</button>
+        </section>
+        <div class="gp-pulse-note">${ic('fa-shield-halved')} Нити не являются Scene Omens: они не бросают вызов текущей сцене и не разыгрываются сами.</div>
     </div>`;
     screen.querySelector('#gp-back')?.addEventListener('click', () => goto('home'));
     screen.querySelector('#gp-open-journal')?.addEventListener('click', () => goto('socialjournal'));
-    screen.querySelector('#gp-systems-off')?.addEventListener('click', () => {
-        getSettings().socialSystems = false;
-        saveSettingsDebounced();
-        updatePhoneInjection();
-        toast('Системы выключены', 'fa-power-off');
-        render();
+    screen.querySelector('#gp-pulse-generate')?.addEventListener('click', async () => {
+        if (genBusy) return; genBusy = true; render();
+        try { const rows = await generateWorldPulseCandidates(); toast(rows.length ? `Мир откликнулся: ${rows.length}` : 'Сейчас мир не просит вмешательства', rows.length ? 'fa-wave-square' : 'fa-moon'); }
+        catch (e) { console.error('[PocketVerse] world pulse failed:', e); toast('Не удалось прислушаться к миру', 'fa-circle-exclamation'); }
+        finally { genBusy = false; if (currentScreen === 'socialhub') render(); }
     });
-    screen.querySelectorAll('[data-ad-accept]').forEach(b => b.addEventListener('click', () => { acceptAdOffer(b.getAttribute('data-ad-accept')); toast('Рекламное задание принято', 'fa-star'); render(); }));
-    screen.querySelectorAll('[data-ad-decline]').forEach(b => b.addEventListener('click', () => { declineAdOffer(b.getAttribute('data-ad-decline')); render(); }));
-    screen.querySelector('#gp-ad-generate')?.addEventListener('click', async () => {
-        if (genBusy) return;
-        genBusy = true;
-        render();
-        try {
-            const offers = await generateAdvertisingOffers();
-            toast(offers.length ? `Новых предложений: ${offers.length}` : 'Модель не вернула подходящих предложений', offers.length ? 'fa-star' : 'fa-circle-exclamation');
-        } catch (e) {
-            console.error('[GlassPhone] advertising offers failed:', e);
-            toast('Ошибка генерации рекламных предложений', 'fa-circle-exclamation');
-        } finally {
-            genBusy = false;
-            if (currentScreen === 'socialhub') render();
-        }
-    });
-    screen.querySelectorAll('[data-story-result]').forEach(b => b.addEventListener('click', () => openStoryResult(b.getAttribute('data-story-result'))));
-    bindSocialSystemLinks(screen);
-    screen.querySelector('#gp-event-generate')?.addEventListener('click', async () => {
-        if (genBusy) return;
-        genBusy = true;
-        render();
-        try {
-            const created = await maybeGenerateStoryEvent('phone', null, { force: true });
-            if (created) {
-                updatePhoneInjection();
-                toast('Сюжетный ивент создан', 'fa-wand-sparkles');
-                goto('storyevent');
-                return;
-            }
-            toast('Не удалось собрать ивент из контекста', 'fa-circle-exclamation');
-        } catch (e) {
-            console.error('[GlassPhone] manual story event failed:', e);
-            toast('Ошибка генерации ивента', 'fa-circle-exclamation');
-        } finally {
-            genBusy = false;
-            if (currentScreen === 'socialhub') render();
-        }
-    });
+    screen.querySelectorAll('[data-pulse-accept]').forEach(b => b.addEventListener('click', () => { activateWorldPulseThread(b.dataset.pulseAccept, 'background'); updatePhoneInjection(); toast('Нить впущена в мир', 'fa-link'); render(); }));
+    screen.querySelectorAll('[data-pulse-dismiss]').forEach(b => b.addEventListener('click', () => { archiveWorldPulseThread(b.dataset.pulseDismiss, 'dismissed'); render(); }));
+    screen.querySelectorAll('[data-pulse-close]').forEach(b => b.addEventListener('click', () => { archiveWorldPulseThread(b.dataset.pulseClose, 'closed'); updatePhoneInjection(); render(); }));
+    screen.querySelectorAll('[data-pulse-mode]').forEach(b => b.addEventListener('click', () => {
+        const p = getWorldPulse(); const x = p.active.find(x => x.id === b.dataset.pulseMode); if (!x) return;
+        const next = x.mode === 'background' ? 'noticeable' : x.mode === 'noticeable' ? 'key' : 'background'; setWorldPulseMode(x.id, next); updatePhoneInjection(); render();
+    }));
 }
 
 function renderStoryEvent(screen) {

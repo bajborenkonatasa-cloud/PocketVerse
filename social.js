@@ -2330,6 +2330,81 @@ ${uiLangLine()}`;
     return applyEventResolution({ ...choice, text: exactText }, classification, result);
 }
 
+
+// ═══ Пульс мира: управляемые долгие сюжетные нити (не Scene Omens) ═══
+function ensureWorldPulse() {
+    const s = getSocial();
+    if (!s.worldPulse || typeof s.worldPulse !== 'object') s.worldPulse = {};
+    const p = s.worldPulse;
+    if (!Array.isArray(p.candidates)) p.candidates = [];
+    if (!Array.isArray(p.active)) p.active = [];
+    if (!Array.isArray(p.archive)) p.archive = [];
+    return p;
+}
+export function getWorldPulse() { return ensureWorldPulse(); }
+
+export async function generateWorldPulseCandidates() {
+    const p = ensureWorldPulse();
+    const active = p.active.slice(0, 6).map(x => `- ${x.title}: ${x.summary} [${x.mode || 'background'}]`).join('\n');
+    const recent = p.archive.slice(0, 6).map(x => `- ${x.title}: ${x.summary}`).join('\n');
+    const journal = getSocialJournalEntries().slice(0, 8).map(e => e.text).join('\n');
+    const prompt = `${await taskHeader('find a FEW optional long-running world threads that could enrich the roleplay later, without interrupting the current scene.')}
+
+ACTIVE WORLD THREADS — never duplicate:
+${active || '(none)'}
+RECENTLY CLOSED / DISMISSED THEMES — avoid repetition:
+${recent || '(none)'}
+PHONE JOURNAL HINTS:
+${journal || '(empty)'}
+
+This is NOT Scene Omens. Do not create an immediate twist, challenge, choice card, or forced event. Create 2 or 3 quiet POTENTIAL THREADS the user may choose to keep. They are seeds for future world movement: an unresolved secret, relationship pressure, local mystery, social situation, faction movement, opportunity, background change, or consequence already supported by canon.
+
+GROUNDING RULES:
+- Canon first: character card, persona, triggered lorebook and recent RP are authoritative.
+- Match the setting and scale. Modern youth drama stays modern youth drama; a detective story may grow clues/suspects; medieval fantasy uses its own institutions; sci-fi uses its own world.
+- NEVER introduce a genre-breaking escalation merely to be exciting. No aliens, apocalypse, murder, magic, secret agencies, etc. unless the existing canon/setting supports them.
+- If the recent RP is simply talking/flirting/domestic downtime, prefer subtle relationship/social/background threads or return fewer threads.
+- A thread must be optional and dormant until the user activates it. It must not claim that an unplayed event already happened.
+- Prefer unresolved details already present in canon over inventing strangers or organizations.
+- Keep each item compact.
+
+Output STRICT JSON object only:
+{"threads":[{"title":"2-5 words","summary":"one concrete sentence","type":"relationship|mystery|social|world|opportunity|consequence","scope":"personal|local|world","why_now":"short canon-grounded reason","entry_hint":"one subtle way this could surface later"}]}
+${uiLangLine()}`;
+    const obj = parseJsonObject(await socialGen(prompt, { maxTokens: 1100, prefill: '{"threads":[' })) || {};
+    const rows = Array.isArray(obj.threads) ? obj.threads : [];
+    p.candidates = rows.slice(0, 3).filter(x => x && x.title && x.summary).map((x, i) => ({
+        id: `pulse_${Date.now()}_${i}`, title: String(x.title).slice(0, 90), summary: String(x.summary).slice(0, 360),
+        type: ['relationship','mystery','social','world','opportunity','consequence'].includes(x.type) ? x.type : 'world',
+        scope: ['personal','local','world'].includes(x.scope) ? x.scope : 'local',
+        whyNow: String(x.why_now || '').slice(0, 260), entryHint: String(x.entry_hint || '').slice(0, 300), createdAt: Date.now()
+    }));
+    saveMeta();
+    return p.candidates;
+}
+
+export function activateWorldPulseThread(id, mode = 'background') {
+    const p = ensureWorldPulse();
+    const i = p.candidates.findIndex(x => x.id === id);
+    if (i < 0) return null;
+    const x = p.candidates.splice(i, 1)[0];
+    x.mode = ['background','noticeable','key'].includes(mode) ? mode : 'background';
+    x.state = 'active'; x.activatedAt = Date.now();
+    p.active.unshift(x); p.active = p.active.slice(0, 8); saveMeta(); return x;
+}
+export function setWorldPulseMode(id, mode) {
+    const x = ensureWorldPulse().active.find(x => x.id === id);
+    if (!x) return null; x.mode = ['background','noticeable','key'].includes(mode) ? mode : 'background'; saveMeta(); return x;
+}
+export function archiveWorldPulseThread(id, reason = 'closed') {
+    const p = ensureWorldPulse();
+    let x = null;
+    let i = p.active.findIndex(x => x.id === id);
+    if (i >= 0) x = p.active.splice(i, 1)[0];
+    else { i = p.candidates.findIndex(x => x.id === id); if (i >= 0) x = p.candidates.splice(i, 1)[0]; }
+    if (!x) return false; x.state = reason; x.finishedAt = Date.now(); p.archive.unshift(x); p.archive = p.archive.slice(0, 24); saveMeta(); return true;
+}
+
 // ═══ Фото: сжатие до разумного размера (dataURL хранится в chat_metadata) ═══
 export function compressImage(file, maxDim = 720, quality = 0.82) {
     return new Promise((resolve, reject) => {

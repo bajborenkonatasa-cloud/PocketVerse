@@ -4830,3 +4830,11 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 #gp-phone .gp-photo-wrap .gp-photo-bubble{width:100%!important;max-width:100%!important;}
 #gp-phone .gp-photo-wrap .gp-generated-photo{width:100%!important;max-width:100%!important;margin:0!important;}
 #gp-phone .gp-photo-wrap .gp-generated-photo img{width:100%!important;height:auto!important;object-fit:contain!important;}
+
+/* PocketVerse .50 — World Pulse */
+.gp-world-pulse{padding-bottom:92px}
+.gp-pulse-intro{margin:14px 16px 10px;padding:14px 15px;border:1px solid rgba(129,140,248,.28);border-radius:22px;background:linear-gradient(135deg,rgba(99,102,241,.13),rgba(255,255,255,.035));display:flex;gap:12px;align-items:center}
+.gp-pulse-intro b{display:block;font-size:15px;margin-bottom:4px}.gp-pulse-intro span{display:block;font-size:12px;line-height:1.42;opacity:.62}.gp-pulse-orbit{width:42px;height:42px;min-width:42px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(129,140,248,.42);box-shadow:0 0 24px rgba(99,102,241,.12)}
+.gp-pulse-active h3,.gp-pulse-candidates h3{display:flex;align-items:center;gap:7px}.gp-pulse-active h3 small{margin-left:auto;font-size:10px;opacity:.42;font-weight:500}
+.gp-pulse-card{padding:13px 14px;margin:9px 0;border:1px solid rgba(255,255,255,.11);border-radius:18px;background:rgba(255,255,255,.035)}
+.gp-pulse-candidate{border-style:dashed;background:rgba(99,102,241,.055)}.gp-pulse-card-head{display:flex;gap:10px;align-items:center}.gp-pulse-card-head>span{width:29px;height:29px;border-radius:10px;display:grid;place-items:center;background:rgba(129,140,248,.12);color:#9da7ff}.gp-pulse-card-head b{display:block;font-size:14px}.gp-pulse-card-head small{font-size:10px;opacity:.46;text-transform:uppercase;letter-spacing:.08em}.gp-pulse-card p{font-size:13px;line-height:1.45;margin:10px 0 7px}.gp-pulse-card em{display:block;font-size:11px;line-height:1.4;opacity:.52;font-style:normal}.gp-pulse-actions{display:flex;gap:8px;margin-top:11px}.gp-pulse-actions button{flex:1;border:1px solid rgba(129,140,248,.24);border-radius:12px;padding:8px 9px;background:rgba(99,102,241,.08);font-size:11px;color:inherit}.gp-pulse-note{margin:6px 22px 18px;text-align:center;font-size:10px;line-height:1.45;opacity:.42}
