@@ -6208,9 +6208,17 @@ function renderNotes(screen) {
         screen.querySelectorAll('[data-sticker]').forEach(b=>b.classList.toggle('gp-active', b.dataset.sticker===chosenSticker));
         screen.querySelectorAll('[data-note-color]').forEach(b=>b.classList.toggle('gp-active', b.dataset.noteColor===chosenColor));
     }; paint();
-    screen.querySelectorAll('[data-note-mode]').forEach(b=>b.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();chosenMode=b.dataset.noteMode;_noteDraft.mode=chosenMode;paint();}));
-    screen.querySelectorAll('[data-sticker]').forEach(b=>b.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();chosenSticker=b.dataset.sticker;_noteDraft.sticker=chosenSticker;paint();}));
-    screen.querySelectorAll('[data-note-color]').forEach(b=>b.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();chosenColor=b.dataset.noteColor;_noteDraft.color=chosenColor;paint();}));
+    // Journal palette buttons must NOT steal focus from the textarea on mobile.
+    // Android otherwise closes/reopens the soft keyboard on every sticker/marker tap,
+    // resizing the visual viewport and making the whole page visibly jump.
+    const keepEditorFocus = (b) => {
+        b.tabIndex = -1;
+        b.addEventListener('pointerdown', (e) => e.preventDefault());
+        b.addEventListener('mousedown', (e) => e.preventDefault());
+    };
+    screen.querySelectorAll('[data-note-mode]').forEach(b=>{ keepEditorFocus(b); b.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();chosenMode=b.dataset.noteMode;_noteDraft.mode=chosenMode;paint();}); });
+    screen.querySelectorAll('[data-sticker]').forEach(b=>{ keepEditorFocus(b); b.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();chosenSticker=b.dataset.sticker;_noteDraft.sticker=chosenSticker;paint();}); });
+    screen.querySelectorAll('[data-note-color]').forEach(b=>{ keepEditorFocus(b); b.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();chosenColor=b.dataset.noteColor;_noteDraft.color=chosenColor;paint();}); });
     screen.querySelector('#gp-back')?.addEventListener('click', () => { _noteEditId = null; goto('home'); }); bindNotesTabs(screen);
     screen.querySelector('#gp-note-save')?.addEventListener('click', () => { const text=area?.value.trim(); if(!text)return;
         if(_noteEditId){ updateNote(_noteEditId,text); updateNoteDecor(_noteEditId,{mode:chosenMode,sticker:chosenSticker,color:chosenColor}); _noteEditId=null; }
