@@ -1,9 +1,0 @@
-PocketVerse v1.1.3 — Brain Budget + GIPHY 50
-
-- GIPHY picker requests up to 50 results per search.
-- Phone ✨ generation uses generateRaw with a deliberately assembled context instead of copying the whole RP transcript through generateQuietPrompt.
-- Lite: tiny card excerpt + recent phone chat, no RP excerpt.
-- Balanced: card excerpt + 5 recent RP messages + recent phone chat.
-- Deep: larger card excerpt + 10 recent RP messages + longer phone chat.
-- Brain UI labels the approximate phone-input budgets.
-- Main RP chat remains isolated; phone replies stay in PocketVerse metadata.
