@@ -2088,9 +2088,6 @@ function renderThread(screen) {
         // The RP date belongs to the phone/header timeline. Do not insert calendar-day
         // separators inside the thread: they duplicate the RP timeline and waste space.
         // Message metadata stays compact: time only.
-        const tm = m.time
-            ? `${String(m.time.getHours()).padStart(2, '0')}:${String(m.time.getMinutes()).padStart(2, '0')}`
-            : '';
         // Фото в смс: реальное (юзер приложила) или заглушка с описанием (ММС от персонажа)
         let media = '';
         if (m.img) {
@@ -2133,7 +2130,6 @@ function renderThread(screen) {
             <div class="gp-bubble-wrap ${m.dir === 'out' ? 'gp-out' : 'gp-in'}${reaction ? ' gp-has-react' : ''}">
                 ${picker}
                 <div class="gp-bubble${m.voice ? ' gp-bubble-voice' : ''}" data-bmi="${mi}">${senderLabel}${media}${shotHtml(m)}${body}${reactChip}</div>
-                ${tm ? `<div class="gp-bubble-time">${esc(tm)}</div>` : ''}
             </div>
         </div>`;
     }
