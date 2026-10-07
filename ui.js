@@ -5998,6 +5998,15 @@ function renderTinMe(screen) {
 // ═══ НОВОСТИ ═══
 
 let _newsBusy = false;
+let _newsCancel = false;
+const pvGenerationGrace = (ms = 1100) => new Promise((resolve, reject) => {
+    const started = Date.now();
+    const tick = () => {
+        if (_newsCancel) return reject(Object.assign(new Error('Отменено до отправки запроса'), { name: 'PVPreflightCancelled' }));
+        if (Date.now() - started >= ms) return resolve();
+        setTimeout(tick, 80);
+    }; tick();
+});
 function renderNews(screen) {
     currentScreen = 'news';
     const n = getNews();
@@ -6015,7 +6024,7 @@ function renderNews(screen) {
         <div class="gp-header gp-thread-header gp-chronicle-head">
             <button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button>
             <div><div class="gp-title gp-title-app gp-news-title">Хроника</div><div class="gp-chronicle-kicker">СВОДКА МИРА · ${esc(issueDate)}</div></div>
-            <button class="gp-iconbtn" id="gp-news-refresh" title="Свежий выпуск" ${_newsBusy ? 'disabled' : ''}>${_newsBusy ? ic('fa-spinner fa-spin') : ic('fa-rotate')}</button>
+            ${_newsBusy ? `<button class="gp-iconbtn gp-stopgen" id="gp-news-stop" title="Отменить до отправки запроса">${ic('fa-stop')}</button>` : `<button class="gp-iconbtn" id="gp-news-refresh" title="Свежий выпуск">${ic('fa-rotate')}</button>`}
         </div>
         <div class="gp-news-scroll gp-chronicle-scroll">
             ${items.length === 0 ? `<section class="gp-chronicle-empty">
@@ -6042,13 +6051,14 @@ function renderNews(screen) {
     screen.querySelector('#gp-back')?.addEventListener('click', () => goto('home'));
     const refresh = async () => {
         if (_newsBusy) return;
-        _newsBusy = true; render();
-        try { const added = await refreshNews(); const nn=getNews(); nn.viewIssue=Math.max(0,(nn.issues||[]).length-1); toast(`Выпуск собран: ${added} материалов`, 'fa-newspaper'); }
-        catch (e) { toast(String(e?.message || e).slice(0, 70), 'fa-circle-exclamation'); }
-        finally { _newsBusy = false; if (currentScreen === 'news') render(); }
+        _newsCancel = false; _newsBusy = true; render();
+        try { await pvGenerationGrace(); if (_newsCancel) throw Object.assign(new Error('Отменено'), {name:'PVPreflightCancelled'}); const added = await refreshNews(); const nn=getNews(); nn.viewIssue=Math.max(0,(nn.issues||[]).length-1); toast(`Выпуск собран: ${added} материалов`, 'fa-newspaper'); }
+        catch (e) { if (e?.name === 'PVPreflightCancelled') toast('Отменено — запрос не отправлен', 'fa-circle-stop'); else toast(String(e?.message || e).slice(0, 70), 'fa-circle-exclamation'); }
+        finally { _newsBusy = false; _newsCancel = false; if (currentScreen === 'news') render(); }
     };
     screen.querySelector('#gp-news-refresh')?.addEventListener('click', refresh);
     screen.querySelector('#gp-news-first')?.addEventListener('click', refresh);
+    screen.querySelector('#gp-news-stop')?.addEventListener('click', () => { _newsCancel = true; });
     screen.querySelector('#gp-news-prev')?.addEventListener('click', () => { n.viewIssue = Math.max(0, n.viewIssue - 1); render(); });
     screen.querySelector('#gp-news-next')?.addEventListener('click', () => { n.viewIssue = Math.min(issues.length - 1, n.viewIssue + 1); render(); });
     screen.querySelectorAll('[data-share-news]').forEach(btn => btn.addEventListener('click', () => {
@@ -6281,6 +6291,7 @@ export function deliverScamSms(sms) {
 let _chanId = null;
 let _chanPostId = null;
 let _chanBusy = false;
+let _chanCancel = false;
 let _chanReplyTo = null;     // имя комментатора, которому она отвечает
 let _chanDraftImage = null;  // фото к своему посту
 
@@ -6467,7 +6478,7 @@ function renderChannels(screen) {
     </section>` : '';
 
     setHtmlKeepScroll(screen, '.gp-chan-scroll', `
-        <div class="gp-header gp-thread-header gp-echo-header"><button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button><div><div class="gp-title gp-title-app">Эхо</div><div class="gp-echo-headsub">ШЁПОТ МИРА</div></div><button class="gp-iconbtn" id="gp-chan-find" title="Послушать мир" ${_chanBusy ? 'disabled' : ''}>${ic(_chanBusy ? 'fa-spinner fa-spin' : 'fa-magnifying-glass')}</button></div>
+        <div class="gp-header gp-thread-header gp-echo-header"><button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button><div><div class="gp-title gp-title-app">Эхо</div><div class="gp-echo-headsub">ШЁПОТ МИРА</div></div>${_chanBusy ? `<button class="gp-iconbtn gp-stopgen" id="gp-chan-stop" title="Отменить до отправки запроса">${ic('fa-stop')}</button>` : `<button class="gp-iconbtn" id="gp-chan-find" title="Послушать мир">${ic('fa-magnifying-glass')}</button>`}</div>
         <div class="gp-chan-scroll gp-echo-scroll">${echoBoard}
             <button class="gp-echo-myvoice" id="gp-echo-myvoice">${ic('fa-feather')}<span><b>Оставить свой след</b><small>анонимно · в эту арку</small></span>${ic('fa-chevron-right')}</button>
         </div>`);
@@ -6500,6 +6511,7 @@ function renderChannels(screen) {
         renameEchoArc(currentArc, name.trim()); render();
     });
     const awakenEcho = () => chanBusyRun(async () => {
+        await new Promise((resolve, reject) => { const started=Date.now(); const tick=()=>{ if(_chanCancel) return reject(Object.assign(new Error('Отменено'),{name:'PVPreflightCancelled'})); if(Date.now()-started>=1100) return resolve(); setTimeout(tick,80); }; tick(); });
         const ch = getAnonChannel();
         const arr = await generateAnonFeed(ch.name, (ch.posts || []).slice(0, 8).map(x => x.text), getUserHandle());
         const n = addAnonPosts(arr);
@@ -6508,14 +6520,16 @@ function renderChannels(screen) {
     });
     screen.querySelector('#gp-chan-find')?.addEventListener('click', awakenEcho);
     screen.querySelector('#gp-echo-awaken')?.addEventListener('click', awakenEcho);
+    screen.querySelector('#gp-chan-stop')?.addEventListener('click', () => { _chanCancel = true; });
 }
 async function chanBusyRun(fn) {
     if (_chanBusy) return;
+    _chanCancel = false;
     _chanBusy = true;
     render();
     try { await fn(); }
-    catch (e) { toast(String(e?.message || e).slice(0, 70), 'fa-circle-exclamation'); }
-    finally { _chanBusy = false; render(); }
+    catch (e) { if (e?.name === 'PVPreflightCancelled') toast('Отменено — запрос не отправлен', 'fa-circle-stop'); else toast(String(e?.message || e).slice(0, 70), 'fa-circle-exclamation'); }
+    finally { _chanBusy = false; _chanCancel = false; render(); }
 }
 
 function renderChannel(screen) {
