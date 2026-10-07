@@ -49,7 +49,7 @@ import { casinoStats, spinSlots, spinRoulette, canBet } from './casino.js';
 import { getNews, refreshNews, shareNews, deleteNews } from './news.js';
 import { getDiscord, findDServer, findDChannel, refreshDiscordServers, createOwnDServer, refreshDChannel, postToDChannel, deleteDServer, addDMember, delDMember } from './discord.js';
 import { getTwitch, findStream, refreshStreams, tickStream, donateToStream, startMyStream, tickMyStream, endMyStream, getTwitchNick, setTwitchNick } from './twitch.js';
-import { getNotes, addNote, updateNote, deleteNote, toggleNoteShared } from './notes.js';
+import { getNotes, addNote, updateNote, deleteNote, toggleNoteShared, updateNoteDecor } from './notes.js';
 import {
     tinderEnabled, getTinder, getTinderMe, saveTinderMe, setTinderMePhoto,
     addTinderProfiles, currentCard, findProfile, swipeTinder, undoSwipe,
@@ -6151,60 +6151,62 @@ function renderNotes(screen) {
     if (_notesTab === 'plans') { renderPlans(screen); return; }
     const notes = getNotes();
     const editing = _noteEditId ? notes.find(n => n.id === _noteEditId) : null;
+    const stickers = ['✦','♡','★','☕','♫','☾','🔥','💌','⚠','🌸','👀','📌'];
+    const colors = [['lilac','Лиловый'],['rose','Розовый'],['blue','Голубой'],['yellow','Жёлтый']];
+    const modeOf = n => n.mode || (n.shared ? 'aware' : 'private');
+    const modeLabel = m => m === 'aware' ? '👁 Учитывать' : m === 'todo' ? '📌 Не забыть' : '🔒 Только мне';
     setHtmlKeepScroll(screen, '.gp-notes-scroll', `
         <div class="gp-header gp-thread-header">
             <button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button>
-            <div class="gp-title gp-title-app gp-notes-title">Заметки</div>
-            <span style="width:32px"></span>
+            <div class="gp-title gp-title-app gp-notes-title">Дневник</div><span style="width:32px"></span>
         </div>
         ${notesTabsHtml()}
-        <div class="gp-notes-scroll">
-            <div class="gp-notes-editor">
-                <textarea id="gp-note-text" rows="3" placeholder="Новая заметка..."></textarea>
-                <button class="gp-primary" id="gp-note-save">${editing ? 'Сохранить' : 'Добавить'}</button>
+        <div class="gp-notes-scroll gp-journal">
+            <div class="gp-journal-head"><span>MY LITTLE NOTES</span><b>мысли · планы · секреты</b></div>
+            <div class="gp-notes-editor gp-paper-editor">
+                <span class="gp-paper-tape"></span>
+                <textarea id="gp-note-text" rows="3" placeholder="Запиши, пока не забыла…"></textarea>
+                <div class="gp-note-modes">
+                    <button data-note-mode="private" class="gp-note-mode gp-active">🔒 Только мне</button>
+                    <button data-note-mode="aware" class="gp-note-mode">👁 Учитывать</button>
+                    <button data-note-mode="todo" class="gp-note-mode">📌 Не забыть</button>
+                </div>
+                <div class="gp-note-decor">
+                    <div class="gp-stickers">${stickers.map((x,i)=>`<button data-sticker="${esc(x)}" class="${i===0?'gp-active':''}">${x}</button>`).join('')}</div>
+                    <div class="gp-markers">${colors.map((x,i)=>`<button data-note-color="${x[0]}" class="gp-marker gp-marker-${x[0]} ${i===0?'gp-active':''}" title="${x[1]}"></button>`).join('')}</div>
+                </div>
+                <button class="gp-primary" id="gp-note-save">${editing ? 'Сохранить запись' : '✎ Добавить в дневник'}</button>
                 ${editing ? `<button class="gp-secondary gp-unequip" id="gp-note-cancel">Отменить правку</button>` : ''}
             </div>
-            ${notes.length === 0 ? `<div class="gp-empty-text" style="padding:12px 6px">Заметок пока нет. Секретные видишь только ты; с глазом — фоновое знание для нарратора.</div>`
-                : notes.map(n => `
-                <div class="gp-note${n.shared ? ' gp-note-shared' : ''}">
-                    <div class="gp-note-text" data-edit-note="${esc(n.id)}" title="Нажми, чтобы отредактировать">${esc(n.text)}</div>
-                    <div class="gp-note-meta">
-                        <span class="gp-tw-time">${esc(timeAgo(n.time))}${n.shared ? ' · видна модели' : ' · секретная'}</span>
-                        <button class="gp-iconbtn gp-note-eye${n.shared ? ' gp-btn-on' : ''}" data-share-note="${esc(n.id)}" title="${n.shared ? 'Сделать секретной' : 'Показать модели (фоново)'}">${ic(n.shared ? 'fa-eye' : 'fa-eye-slash')}</button>
-                        <button class="gp-bank-tx-del" data-del-note="${esc(n.id)}" title="Удалить">${ic('fa-xmark')}</button>
-                    </div>
-                </div>`).join('')}
+            ${notes.length === 0 ? `<div class="gp-journal-empty"><i>✎</i><b>Чистая страница</b><span>Секретные записи остаются только здесь. «Учитывать» даёт нарратору короткую подсказку.</span></div>`
+                : `<div class="gp-note-board">${notes.map((n,i) => { const m=modeOf(n); return `
+                <article class="gp-note gp-note-${esc(n.color||'lilac')} ${m==='aware'?'gp-note-shared':''} ${n.done?'gp-done':''}" style="--note-tilt:${[-.7,.5,-.35,.65][i%4]}deg">
+                    <span class="gp-note-sticker">${esc(n.sticker||'✦')}</span><span class="gp-note-tape"></span>
+                    ${m==='todo'?`<button class="gp-note-check" data-note-done="${esc(n.id)}" title="Выполнено">${n.done?'✓':'○'}</button>`:''}
+                    <div class="gp-note-text" data-edit-note="${esc(n.id)}">${esc(n.text)}</div>
+                    <div class="gp-note-meta"><span>${modeLabel(m)} · ${esc(timeAgo(n.time))}</span>
+                        <button class="gp-bank-tx-del" data-del-note="${esc(n.id)}" title="Удалить">${ic('fa-xmark')}</button></div>
+                </article>`}).join('')}</div>`}
         </div>`);
     const area = screen.querySelector('#gp-note-text');
+    let chosenMode = editing ? modeOf(editing) : 'private'; let chosenSticker = editing?.sticker || '✦'; let chosenColor = editing?.color || 'lilac';
     if (editing && area) area.value = editing.text;
-    screen.querySelector('#gp-back')?.addEventListener('click', () => { _noteEditId = null; goto('home'); });
-    bindNotesTabs(screen);
-    screen.querySelector('#gp-note-save')?.addEventListener('click', () => {
-        const text = area?.value.trim();
-        if (!text) return;
-        if (_noteEditId) { updateNote(_noteEditId, text); _noteEditId = null; }
-        else addNote(text);
-        updatePhoneInjection();
-        render();
-    });
-    screen.querySelector('#gp-note-cancel')?.addEventListener('click', () => { _noteEditId = null; render(); });
-    screen.querySelectorAll('[data-edit-note]').forEach(el => el.addEventListener('click', () => {
-        _noteEditId = el.getAttribute('data-edit-note'); render();
-    }));
-    screen.querySelectorAll('[data-share-note]').forEach(btn => btn.addEventListener('click', () => {
-        toggleNoteShared(btn.getAttribute('data-share-note'));
-        updatePhoneInjection();
-        render();
-    }));
-    screen.querySelectorAll('[data-del-note]').forEach(btn => btn.addEventListener('click', () => {
-        if (confirm('Удалить заметку?')) {
-            const id = btn.getAttribute('data-del-note');
-            deleteNote(id);
-            if (_noteEditId === id) _noteEditId = null;
-            updatePhoneInjection();
-            render();
-        }
-    }));
+    const paint = () => {
+        screen.querySelectorAll('[data-note-mode]').forEach(b=>b.classList.toggle('gp-active', b.dataset.noteMode===chosenMode));
+        screen.querySelectorAll('[data-sticker]').forEach(b=>b.classList.toggle('gp-active', b.dataset.sticker===chosenSticker));
+        screen.querySelectorAll('[data-note-color]').forEach(b=>b.classList.toggle('gp-active', b.dataset.noteColor===chosenColor));
+    }; paint();
+    screen.querySelectorAll('[data-note-mode]').forEach(b=>b.addEventListener('click',()=>{chosenMode=b.dataset.noteMode;paint();}));
+    screen.querySelectorAll('[data-sticker]').forEach(b=>b.addEventListener('click',()=>{chosenSticker=b.dataset.sticker;paint();}));
+    screen.querySelectorAll('[data-note-color]').forEach(b=>b.addEventListener('click',()=>{chosenColor=b.dataset.noteColor;paint();}));
+    screen.querySelector('#gp-back')?.addEventListener('click', () => { _noteEditId = null; goto('home'); }); bindNotesTabs(screen);
+    screen.querySelector('#gp-note-save')?.addEventListener('click', () => { const text=area?.value.trim(); if(!text)return;
+        if(_noteEditId){ updateNote(_noteEditId,text); updateNoteDecor(_noteEditId,{mode:chosenMode,sticker:chosenSticker,color:chosenColor}); _noteEditId=null; }
+        else addNote(text,{mode:chosenMode,sticker:chosenSticker,color:chosenColor}); updatePhoneInjection(); render(); });
+    screen.querySelector('#gp-note-cancel')?.addEventListener('click',()=>{_noteEditId=null;render();});
+    screen.querySelectorAll('[data-edit-note]').forEach(el=>el.addEventListener('click',()=>{_noteEditId=el.dataset.editNote;render();}));
+    screen.querySelectorAll('[data-note-done]').forEach(b=>b.addEventListener('click',()=>{const n=getNotes().find(x=>x.id===b.dataset.noteDone); if(n) updateNoteDecor(n.id,{done:!n.done}); render();}));
+    screen.querySelectorAll('[data-del-note]').forEach(btn=>btn.addEventListener('click',()=>{if(confirm('Удалить заметку?')){const id=btn.dataset.delNote;deleteNote(id);if(_noteEditId===id)_noteEditId=null;updatePhoneInjection();render();}}));
 }
 
 // ═══ СКАМ-СМС: доставка призраком ═══

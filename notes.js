@@ -13,10 +13,11 @@ export function getNotes() {
     return m.notes;
 }
 
-export function addNote(text) {
+export function addNote(text, opts = {}) {
     const t = String(text || '').trim();
     if (!t) return null;
-    const note = { id: genId(), text: t.slice(0, 2000), time: Date.now(), shared: false };
+    const mode = ['private','aware','todo'].includes(opts.mode) ? opts.mode : 'private';
+    const note = { id: genId(), text: t.slice(0, 2000), time: Date.now(), shared: mode === 'aware', mode, done: false, sticker: String(opts.sticker || '✦').slice(0, 4), color: String(opts.color || 'lilac').slice(0, 16) };
     getNotes().unshift(note);
     saveMeta();
     return note;
@@ -66,8 +67,18 @@ export function toggleNoteShared(id) {
     return n.shared;
 }
 
+export function updateNoteDecor(id, patch = {}) {
+    const n = getNotes().find(x => x.id === id);
+    if (!n) return false;
+    if (['private','aware','todo'].includes(patch.mode)) { n.mode = patch.mode; n.shared = patch.mode === 'aware'; }
+    if (patch.sticker != null) n.sticker = String(patch.sticker || '✦').slice(0, 4);
+    if (patch.color != null) n.color = String(patch.color || 'lilac').slice(0, 16);
+    if (patch.done != null) n.done = !!patch.done;
+    n.time = Date.now(); saveMeta(); return true;
+}
+
 export function getSharedNotes() {
-    return getNotes().filter(n => n.shared);
+    return getNotes().filter(n => (n.mode || (n.shared ? 'aware' : 'private')) === 'aware');
 }
 
 // Блок для инжекта — только если есть расшаренные заметки (иначе 0 токенов).
