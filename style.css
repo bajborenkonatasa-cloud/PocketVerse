@@ -4580,3 +4580,35 @@ img[data-zoom] { cursor: zoom-in; }
 #gp-phone .gp-connection-card .gp-row-name{font-family:Georgia,'Times New Roman',serif;font-size:15px;letter-spacing:.01em}
 #gp-phone .gp-connection-card .gp-row-preview{margin-top:4px;font-size:11px}
 #gp-phone .gp-connection-card .gp-row-time{font-family:Georgia,'Times New Roman',serif;font-size:9px;letter-spacing:.06em;opacity:.68}
+
+
+/* ═══ PocketVerse .43 · Twelve Visual Core ═══ */
+/* Calendar XII — the planner is now one of the Twelve, not a generic grey panel. */
+#gp-phone .gp-cal-xii{position:relative;padding:16px 13px 15px;border-radius:22px 16px 22px 16px;overflow:hidden;background:radial-gradient(circle at 78% 5%,rgba(var(--gp-accent-a-rgb),.13),transparent 30%),linear-gradient(145deg,rgba(255,255,255,.060),rgba(255,255,255,.016) 55%,rgba(var(--gp-accent-b-rgb),.045));border:1px solid rgba(var(--gp-accent-a-rgb),.25);box-shadow:inset 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.14)}
+#gp-phone .gp-cal-xii:before{content:"";position:absolute;inset:6px;border:1px solid rgba(255,255,255,.035);border-radius:17px 12px 17px 12px;pointer-events:none}
+#gp-phone .gp-cal-card-index{position:absolute;left:12px;top:9px;font:10px Georgia,'Times New Roman',serif;letter-spacing:.08em;color:var(--gp-accent-a);opacity:.68}
+#gp-phone .gp-cal-card-suit{position:absolute;right:12px;bottom:9px;font:12px Georgia,'Times New Roman',serif;color:var(--gp-accent-a);opacity:.46;transform:rotate(180deg)}
+#gp-phone .gp-cal-xii .gp-cal-head{padding:2px 26px 13px}
+#gp-phone .gp-cal-xii .gp-cal-head b{font-family:Georgia,'Times New Roman',serif;font-size:16px;font-weight:500;letter-spacing:.015em}
+#gp-phone .gp-cal-xii .gp-cal-head .gp-iconbtn{border-radius:50%;background:rgba(255,255,255,.035);border-color:rgba(var(--gp-accent-a-rgb),.18)}
+#gp-phone .gp-cal-xii .gp-cal-week{padding:0 4px 5px;border-bottom:1px solid rgba(var(--gp-accent-a-rgb),.10);margin-bottom:4px}
+#gp-phone .gp-cal-xii .gp-cal-week span{font-family:Georgia,'Times New Roman',serif;font-size:8px;letter-spacing:.12em}
+#gp-phone .gp-cal-xii .gp-cal-day{border-radius:11px;font-family:Georgia,'Times New Roman',serif;font-size:12px;transition:.15s ease}
+#gp-phone .gp-cal-xii .gp-cal-day.gp-sel{background:linear-gradient(145deg,rgba(var(--gp-accent-a-rgb),.25),rgba(var(--gp-accent-b-rgb),.10));border-color:rgba(var(--gp-accent-a-rgb),.52);box-shadow:inset 0 1px rgba(255,255,255,.09),0 0 15px rgba(var(--gp-accent-a-rgb),.08)}
+#gp-phone .gp-cal-xii .gp-cal-day.gp-today:not(.gp-sel){border-color:rgba(var(--gp-accent-a-rgb),.28)}
+#gp-phone .gp-cal-xii .gp-cal-day i{width:4px;height:4px;box-shadow:0 0 7px currentColor}
+
+/* Connection identity follows the card into the conversation. */
+#gp-phone .gp-thread-header .gp-row-name{display:flex;align-items:baseline;gap:8px;min-width:0}
+#gp-phone .gp-thread-card-id{font:8px Georgia,'Times New Roman',serif;font-style:normal;letter-spacing:.12em;color:var(--gp-accent-a);opacity:.58;white-space:nowrap}
+
+/* Twelve bubbles — compact glass slips, asymmetric corners and suit-like marks. */
+#gp-phone .gp-msg-line .gp-bubble-wrap{max-width:78%!important}
+#gp-phone .gp-bubble{padding:9px 12px 8px!important;border-radius:16px!important;line-height:1.42!important}
+#gp-phone .gp-in .gp-bubble{border-radius:5px 16px 16px 16px!important;background:linear-gradient(150deg,rgba(255,255,255,.066),rgba(255,255,255,.018))!important}
+#gp-phone .gp-out .gp-bubble{border-radius:16px 5px 16px 16px!important;background:linear-gradient(145deg,rgba(var(--gp-accent-a-rgb),.22),rgba(var(--gp-accent-b-rgb),.085))!important}
+#gp-phone .gp-in .gp-bubble:before{top:9px!important;bottom:9px!important;width:2px!important}
+#gp-phone .gp-out .gp-bubble:after{content:"♦"!important;right:-5px!important;bottom:-6px!important;font-size:9px!important;opacity:.8}
+#gp-phone .gp-bubble-time{font-family:Georgia,'Times New Roman',serif;font-size:8px!important;letter-spacing:.07em!important;opacity:.50!important;margin-top:2px!important}
+#gp-phone .gp-bubble-img{border-radius:14px!important;padding:3px;background:linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.018));border:1px solid rgba(var(--gp-accent-a-rgb),.13)}
+#gp-phone .gp-bubble-img img{border-radius:10px!important}

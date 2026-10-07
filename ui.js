@@ -2090,6 +2090,11 @@ function renderThread(screen) {
         ? `<div class="gp-avatar gp-avatar-sm gp-avatar-group">${ic('fa-users')}</div>`
         : `<span id="gp-ava-btn" title="Клик — загрузить фото контакта" style="cursor:pointer">${avatarHtml(t.name, getContactAvatar(t.key), 'gp-avatar gp-avatar-sm')}</span>`;
     const blocked = !t.isGroup && isSmsBlocked(t.key);
+    // Twelve identity: the same card number/suit follows a connection from the deck into its thread.
+    const deckThreads = getThreadList().filter(x => x.isGroup || !isInAppMatch(x.key));
+    const deckIndex = Math.max(0, deckThreads.findIndex(x => x.key === t.key));
+    const deckRoman = pvRoman(deckIndex);
+    const deckSuit = pvSuit(deckIndex);
     // Человек из Тиндера: показываем это прямо в шапке и даём вернуться к анкете —
     // иначе всё, что модель про него знает, для юзера невидимо
     const tinMatch = t.isGroup ? null : matchByContactKey(t.key);
@@ -2105,7 +2110,7 @@ function renderThread(screen) {
             ${headerAva}
             <input type="file" id="gp-ava-file" accept="image/*" style="display:none">
             <div class="gp-thread-title">
-                <div class="gp-row-name"><span>${esc(t.name)}</span></div>
+                <div class="gp-row-name"><span>${esc(t.name)}</span><em class="gp-thread-card-id">${deckRoman} ${deckSuit}</em></div>
                 <div class="gp-thread-number">${esc(subLine)}</div>
             </div>
             <button class="gp-thread-menu-btn" id="gp-thread-menu" title="Меню связи"><span>✦</span><i class="fa-solid fa-ellipsis-vertical"></i></button>
@@ -6037,7 +6042,8 @@ function renderPlans(screen) {
         </div>
         ${notesTabsHtml()}
         <div class="gp-notes-scroll">
-            <div class="gp-cal">
+            <div class="gp-cal gp-cal-xii" data-month-card="${pvRoman(mm - 1)}">
+                <span class="gp-cal-card-index">${pvRoman(mm - 1)}</span><span class="gp-cal-card-suit">${pvSuit(mm - 1)}</span>
                 <div class="gp-cal-head">
                     <button class="gp-iconbtn" id="gp-cal-prev" title="Прошлый месяц">${ic('fa-chevron-left')}</button>
                     <b>${esc(title)} ${my}</b>
