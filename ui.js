@@ -709,6 +709,7 @@ export function render() {
     else if (currentScreen === 'notes') renderNotes(screen);
     else if (currentScreen === 'appearance') renderAppearance(screen);
     else if (currentScreen === 'brain') renderBrain(screen);
+    else if (currentScreen === 'memories') renderMemories(screen);
     else renderHome(screen);
     // Возвращаем набранный текст: перерисовка (генерация картинки, публикация,
     // новое сообщение) больше не стирает то, что юзер печатает
@@ -1309,7 +1310,7 @@ function renderBrain(screen) {
     })();
 }
 
-// ── Домашний экран ──
+// ── PocketVerse Hub / карточная колода ──
 function renderHome(screen) {
     currentScreen = 'home';
     const unread = getTotalUnread();
@@ -1318,74 +1319,64 @@ function renderHome(screen) {
     const d = new Date();
     const DAYS = DAYS_I18N[lang()];
     const MONTHS = MONTHS_I18N[lang()];
-
-    // RP-дата/время если доступно, иначе реальные
     const clockH = rpDt?.hours ?? d.getHours();
     const clockM = rpDt?.minutes ?? d.getMinutes();
     let dateStr;
     if (rpDt) {
-        // Для RP-даты вычисляем день недели через Date
         const rpDate = new Date(rpDt.year, rpDt.month - 1, rpDt.day);
         dateStr = `${DAYS[rpDate.getDay()]}, ${rpDt.day} ${MONTHS[rpDt.month - 1]}`;
     } else {
         dateStr = `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
     }
+    const me = getUserName();
+    const meAva = avatarHtml(me, avatarForAuthor('user'), 'gp-avatar gp-deck-avatar');
+    const card = (app, suit, title, sub, icon, extra='') => `
+        <button class="gp-deck-card ${extra}" data-app="${app}" type="button">
+            <span class="gp-deck-corner">${suit}</span>
+            <span class="gp-deck-icon">${icon}</span>
+            <span class="gp-deck-title">${title}</span>
+            <span class="gp-deck-sub">${sub}</span>
+        </button>`;
 
     screen.innerHTML = `
-        <div class="gp-home">
-            <div class="gp-home-clock">${String(clockH).padStart(2, '0')}:${String(clockM).padStart(2, '0')}</div>
-            <div class="gp-home-date">${dateStr}</div>
-            <div class="gp-home-grid">
-                <div class="gp-app" data-app="list">
-                    <div class="gp-app-icon gp-app-msg">${ic('fa-comment-dots')}${unread > 0 ? `<span class="gp-app-badge">${unread > 9 ? '9+' : unread}</span>` : ''}</div>
-                    <div class="gp-app-name">Сообщения</div>
-                </div>
-                <div class="gp-app" data-app="tw">
-                    <div class="gp-app-icon gp-app-tw">${brand('fa-x-twitter')}</div>
-                    <div class="gp-app-name">Twitter</div>
-                </div>
-                <div class="gp-app" data-app="ig">
-                    <div class="gp-app-icon gp-app-ig">${brand('fa-instagram')}</div>
-                    <div class="gp-app-name">Instagram</div>
-                </div>
-                <div class="gp-app" data-app="${activeStoryEvent ? 'storyevent' : 'socialhub'}">
-                    <div class="gp-app-icon gp-app-events${activeStoryEvent ? ' gp-event-pulse' : ''}">${ic('fa-wand-sparkles')}${activeStoryEvent ? '<span class="gp-app-badge">!</span>' : ''}</div>
-                    <div class="gp-app-name">Ивенты</div>
-                </div>
-                <div class="gp-app" data-app="of">
-                    <div class="gp-app-icon gp-app-of">${ic('fa-heart')}</div>
-                    <div class="gp-app-name">OnlyFans</div>
-                </div>
-                <div class="gp-app" data-app="chans">
-                    <div class="gp-app-icon gp-app-chans">${ic('fa-paper-plane')}${unreadChannels() > 0 ? `<span class="gp-app-badge">${unreadChannels()}</span>` : ''}</div>
-                    <div class="gp-app-name">Каналы</div>
-                </div>
-                <div class="gp-app" data-app="news">
-                    <div class="gp-app-icon gp-app-news">${ic('fa-newspaper')}</div>
-                    <div class="gp-app-name">Новости</div>
-                </div>
-                <div class="gp-app" data-app="twitch">
-                    <div class="gp-app-icon gp-app-twitch">${brand('fa-twitch')}${getTwitch().myStream ? '<span class="gp-app-badge gp-live-badge">LIVE</span>' : ''}</div>
-                    <div class="gp-app-name">Twitch</div>
-                </div>
-                <div class="gp-app" data-app="notes">
-                    <div class="gp-app-icon gp-app-notes">${ic('fa-note-sticky')}${plansBadgeCount() > 0 ? `<span class="gp-app-badge">${plansBadgeCount()}</span>` : ''}</div>
-                    <div class="gp-app-name">Заметки</div>
-                </div>
-                <div class="gp-app" data-app="appearance">
-                    <div class="gp-app-icon gp-app-appearance">${ic('fa-palette')}</div>
-                    <div class="gp-app-name">Оформление</div>
-                </div>
-                <div class="gp-app" data-app="brain">
-                    <div class="gp-app-icon gp-app-brain">${ic('fa-brain')}</div>
-                    <div class="gp-app-name">Мозг</div>
-                </div>
+        <div class="gp-home gp-deck-home">
+            <div class="gp-deck-top">
+                <div class="gp-deck-profile">${meAva}<div><small>POCKETVERSE</small><b>${esc(me)}</b></div></div>
+                <div class="gp-deck-time"><b>${String(clockH).padStart(2,'0')}<i>:</i>${String(clockM).padStart(2,'0')}</b><span>${dateStr}</span></div>
+            </div>
+            <div class="gp-deck-rule"><span>✦</span><b>THE TWELVE</b><span>✦</span></div>
+            <div class="gp-home-grid gp-deck-grid">
+                ${card('list','♥','Связи', unread ? `${unread} новых` : 'переписки', ic('fa-comment-dots'), unread ? 'gp-card-hot' : '')}
+                ${card('tw','♠','Twitter','лента',brand('fa-x-twitter'))}
+                ${card('ig','♦','Instagram','моменты',brand('fa-instagram'))}
+                ${card(activeStoryEvent ? 'storyevent':'socialhub','✦','События',activeStoryEvent ? 'сейчас активно' : 'сюжет',ic('fa-wand-sparkles'),activeStoryEvent?'gp-card-hot':'')}
+                ${card('of','♥','OnlyFans','личное',ic('fa-heart'))}
+                ${card('chans','♣','Каналы',unreadChannels() ? `${unreadChannels()} новых` : 'эфир',ic('fa-paper-plane'))}
+                ${card('news','♠','Новости','мир',ic('fa-newspaper'))}
+                ${card('twitch','♦','Twitch',getTwitch().myStream ? 'LIVE' : 'стримы',brand('fa-twitch'),getTwitch().myStream?'gp-card-hot':'')}
+                ${card('notes','♣','Заметки',plansBadgeCount() ? `${plansBadgeCount()} дел` : 'мысли',ic('fa-note-sticky'))}
+                ${card('appearance','♦','Облик','темы',ic('fa-palette'))}
+                ${card('brain','♠','Мозг','настройки',ic('fa-brain'))}
+                ${card('memories','✦','Воспоминания','дневник',ic('fa-book-open'))}
             </div>
         </div>`;
+    screen.querySelectorAll('.gp-deck-card').forEach(el => el.addEventListener('click', () => goto(el.dataset.app)));
+}
 
-    screen.querySelectorAll('.gp-app').forEach(el => {
-        el.addEventListener('click', () => goto(el.getAttribute('data-app')));
-    });
+function renderMemories(screen) {
+    currentScreen = 'memories';
+    screen.innerHTML = `
+        <div class="gp-header">
+            <button class="gp-iconbtn" id="gp-home-btn">${ic('fa-chevron-left')}</button>
+            <div class="gp-title">Воспоминания</div>
+        </div>
+        <div class="gp-memory-preview">
+            <div class="gp-memory-sigil">✦</div>
+            <h2>Двенадцатая карта</h2>
+            <p>Здесь появится личный дневник этой ветки PocketVerse.</p>
+            <small>Пока карта зарезервирована — мы не сохраняем ничего лишнего и не трогаем память чата.</small>
+        </div>`;
+    screen.querySelector('#gp-home-btn')?.addEventListener('click', () => goto('home'));
 }
 
 // ── Экран «Оформление» ──
@@ -1827,7 +1818,7 @@ function renderList(screen) {
     setHtmlKeepScroll(screen, '.gp-list', `
         <div class="gp-header">
             <button class="gp-iconbtn" id="gp-home-btn">${ic('fa-chevron-left')}</button>
-            <div class="gp-title">Сообщения</div>
+            <div class="gp-title">Связи</div>
             <button class="gp-iconbtn" id="gp-gen-chats" title="Сгенерировать чаты" ${_chatsGenBusy ? 'disabled' : ''}>${ic(_chatsGenBusy ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles')}</button>
             <button class="gp-iconbtn" id="gp-add-btn" title="Добавить контакт">${ic('fa-plus')}</button>
         </div>
@@ -1835,8 +1826,8 @@ function renderList(screen) {
             ${rows || `
             <div class="gp-empty">
                 <div class="gp-empty-icon">${ic('fa-comment-slash')}</div>
-                <div class="gp-empty-title">Пусто</div>
-                <div class="gp-empty-text">Пока никто не дал тебе номер.<br>Получи номер в ролевой — контакт появится сам.<br>Или добавь вручную по кнопке&nbsp;${ic('fa-plus')}</div>
+                <div class="gp-empty-title">Пока тихо ✦</div>
+                <div class="gp-empty-text">Здесь появятся персонажи, с которыми началась переписка.<br>Новую связь можно создать вручную по кнопке&nbsp;${ic('fa-plus')}.</div>
             </div>`}
         </div>`);
 
