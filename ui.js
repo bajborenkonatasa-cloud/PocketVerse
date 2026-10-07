@@ -6001,47 +6001,53 @@ let _newsBusy = false;
 function renderNews(screen) {
     currentScreen = 'news';
     const n = getNews();
+    const rp = getRpDateTime();
+    const issueDate = rp?.label || 'Хроника текущего дня';
+    const items = n.items || [];
+    const hero = items[0];
+    const rest = items.slice(1);
     setHtmlKeepScroll(screen, '.gp-news-scroll', `
-        <div class="gp-header gp-thread-header">
+        <div class="gp-header gp-thread-header gp-chronicle-head">
             <button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button>
-            <div class="gp-title gp-title-app gp-news-title">Новости</div>
-            <button class="gp-iconbtn" id="gp-news-refresh" ${_newsBusy ? 'disabled' : ''}>${_newsBusy ? ic('fa-spinner fa-spin') : ic('fa-rotate')}</button>
+            <div><div class="gp-title gp-title-app gp-news-title">Хроника</div><div class="gp-chronicle-kicker">СВОДКА МИРА · ${esc(issueDate)}</div></div>
+            <button class="gp-iconbtn" id="gp-news-refresh" title="Свежий выпуск" ${_newsBusy ? 'disabled' : ''}>${_newsBusy ? ic('fa-spinner fa-spin') : ic('fa-rotate')}</button>
         </div>
-        <div class="gp-news-scroll">
-            ${n.items.length === 0
-                ? `<div class="gp-empty"><div class="gp-empty-icon">${ic('fa-newspaper')}</div><div class="gp-empty-title">Лента пуста</div><div class="gp-empty-text">Нажми ${ic('fa-rotate')} — новости города и мира<br>сгенерируются под твою ролевую</div></div>`
-                : n.items.map(it => `
-                <article class="gp-news-card">
-                    <div class="gp-news-meta"><span class="gp-news-tag">${esc(it.tag)}</span><span class="gp-tw-time">${esc(timeAgo(it.time))}</span>
-                        <button class="gp-bank-tx-del" data-del-news="${esc(it.id)}" title="Удалить">${ic('fa-xmark')}</button></div>
-                    <b>${esc(it.title)}</b>
-                    <p>${esc(it.text)}</p>
-                    <button class="gp-news-share" data-share-news="${esc(it.id)}" title="Ролевая узнает, что ты это прочитала">${ic('fa-share')} Обсудить в ролевой</button>
-                </article>`).join('')}
+        <div class="gp-news-scroll gp-chronicle-scroll">
+            ${items.length === 0 ? `<section class="gp-chronicle-empty">
+                <div class="gp-chronicle-mast">THE WORLD CHRONICLE</div><div class="gp-chronicle-rule"></div>
+                <div class="gp-chronicle-symbol">✦</div><h3>Выпуск ещё не собран</h3>
+                <p>Нажми ↻ — и мир сам расскажет, что происходило за пределами твоей сцены.</p>
+                <button id="gp-news-first" class="gp-chronicle-print">СОБРАТЬ СВЕЖИЙ ВЫПУСК</button>
+            </section>` : `<section class="gp-chronicle-paper">
+                <header class="gp-chronicle-masthead"><span>VOL. XII</span><b>THE WORLD CHRONICLE</b><span>${esc(issueDate)}</span></header>
+                <div class="gp-chronicle-rule"></div>
+                ${hero ? `<article class="gp-chronicle-lead">
+                    <div class="gp-chronicle-tag">${esc(hero.tag)}</div><h2>${esc(hero.title)}</h2><p>${esc(hero.text)}</p>
+                    <div class="gp-chronicle-actions"><button data-share-news="${esc(hero.id)}">${ic('fa-comment-dots')} в ролевую</button><button data-del-news="${esc(hero.id)}">${ic('fa-xmark')}</button></div>
+                </article>` : ''}
+                <div class="gp-chronicle-divider"><span>✦</span></div>
+                <div class="gp-chronicle-columns">${rest.map((it,i)=>`<article class="gp-chronicle-brief gp-chronicle-brief-${i%4}">
+                    <div class="gp-chronicle-index">${String(i+2).padStart(2,'0')}</div><div class="gp-chronicle-tag">${esc(it.tag)}</div>
+                    <h3>${esc(it.title)}</h3><p>${esc(it.text)}</p><small>${esc(timeAgo(it.time))}</small>
+                    <div class="gp-chronicle-actions"><button data-share-news="${esc(it.id)}">${ic('fa-comment-dots')}</button><button data-del-news="${esc(it.id)}">${ic('fa-xmark')}</button></div>
+                </article>`).join('')}</div>
+                <footer class="gp-chronicle-footer">Что-то здесь — факт. Что-то — версия. Всё остальное мир договорит сам.</footer>
+            </section>`}
         </div>`);
     screen.querySelector('#gp-back')?.addEventListener('click', () => goto('home'));
-    screen.querySelector('#gp-news-refresh')?.addEventListener('click', async () => {
+    const refresh = async () => {
         if (_newsBusy) return;
         _newsBusy = true; render();
-        try {
-            const added = await refreshNews();
-            toast(`Новостей: +${added}`, 'fa-newspaper');
-        } catch (e) {
-            toast(String(e?.message || e).slice(0, 70), 'fa-circle-exclamation');
-        } finally {
-            _newsBusy = false;
-            if (currentScreen === 'news') render();
-        }
-    });
+        try { const added = await refreshNews(); toast(`Свежий выпуск: +${added}`, 'fa-newspaper'); }
+        catch (e) { toast(String(e?.message || e).slice(0, 70), 'fa-circle-exclamation'); }
+        finally { _newsBusy = false; if (currentScreen === 'news') render(); }
+    };
+    screen.querySelector('#gp-news-refresh')?.addEventListener('click', refresh);
+    screen.querySelector('#gp-news-first')?.addEventListener('click', refresh);
     screen.querySelectorAll('[data-share-news]').forEach(btn => btn.addEventListener('click', () => {
-        if (shareNews(btn.getAttribute('data-share-news'))) {
-            applyChatHiding();
-            toast('Ушло в ролевую — персонажи могут отреагировать', 'fa-share');
-        }
+        if (shareNews(btn.getAttribute('data-share-news'))) { applyChatHiding(); toast('Ушло в ролевую — персонажи могут отреагировать', 'fa-share'); }
     }));
-    screen.querySelectorAll('[data-del-news]').forEach(btn => btn.addEventListener('click', () => {
-        deleteNews(btn.getAttribute('data-del-news')); render();
-    }));
+    screen.querySelectorAll('[data-del-news]').forEach(btn => btn.addEventListener('click', () => { deleteNews(btn.getAttribute('data-del-news')); render(); }));
 }
 
 // ═══ ЗАМЕТКИ ═══
@@ -6448,12 +6454,13 @@ function renderChannels(screen) {
             ${chanAvatar(ch, 'gp-avatar')}<span class="gp-chan-rowbody"><span class="gp-chan-rowtop"><span class="gp-chan-rowname">${esc(ch.name)}</span>${last ? `<span class="gp-chan-rowtime">${esc(timeAgo(last.time))}</span>` : ''}</span><span class="gp-chan-rowsub">${esc(sub)}</span></span>${ch.unread ? `<span class="gp-chan-unread">${ch.unread}</span>` : ''}</button>`;
     };
     const echoKinds = ['СЛУХ','СЛЕД','ШЁПОТ','СВИДЕТЕЛЬСТВО','ТАЙНА'];
-    const echoBoard = echo ? `<section class="gp-echo-board" data-chanopenrow="${esc(echo.id)}">
+    const echoMarks = ['✦','⌁','◌','✎','!','◇','☾'];
+    const echoBoard = echo ? `<section class="gp-echo-board">
         <div class="gp-echo-kicker">VII · WORLD WHISPERS</div>
         <div class="gp-echo-title">Эхо</div>
         <div class="gp-echo-sub">слухи · следы · шёпот мира</div>
         <div class="gp-echo-thread"></div>
-        <div class="gp-echo-grid">${(echo.posts || []).slice(0,5).map((post,i)=>`<button class="gp-echo-note gp-echo-note-${i%5}" data-chanopenrow="${esc(echo.id)}"><span class="gp-echo-pin"></span><b>${echoKinds[i%echoKinds.length]}</b><span>${esc(String(post.text||'').slice(0,150))}</span><small>${esc(timeAgo(post.time))}</small></button>`).join('') || `<button class="gp-echo-empty" data-chanopenrow="${esc(echo.id)}"><span>✦</span><b>Здесь пока тихо</b><small>Первый слух появится, когда мир начнёт говорить.</small></button>`}</div>
+        <div class="gp-echo-grid">${(echo.posts || []).slice(0,7).map((post,i)=>`<button class="gp-echo-note gp-echo-note-${i%7}" data-chanopenrow="${esc(echo.id)}"><span class="gp-echo-pin"></span><i>${echoMarks[i%echoMarks.length]}</i><b>${esc(post.kind || echoKinds[i%echoKinds.length])}</b><span>${esc(String(post.text||'').slice(0,165))}</span><small>${esc(timeAgo(post.time))}</small></button>`).join('') || `<button class="gp-echo-empty" id="gp-echo-awaken"><span>✦</span><b>Здесь пока тихо</b><small>Коснись — и послушаем, о чём шепчется этот мир.</small></button>`}</div>
         <div class="gp-echo-foot">Не всё здесь правда. Но всё может оставить след.</div>
     </section>` : '';
 
@@ -6526,12 +6533,16 @@ function renderChannels(screen) {
             });
         }));
     });
-    screen.querySelector('#gp-chan-find')?.addEventListener('click', () => chanBusyRun(async () => {
-        const arr = await generateChannels(allChannels().map(x => x.name));
-        const n = addFoundChannels(arr);
-        if (!n) throw new Error('Каналов не нашлось — попробуй ещё раз');
-        toast(`Найдено каналов: ${n}`, 'fa-paper-plane');
-    }));
+    const awakenEcho = () => chanBusyRun(async () => {
+        const ch = getAnonChannel();
+        const arr = await generateAnonFeed(ch.name, (ch.posts || []).slice(0, 8).map(x => x.text), getUserHandle());
+        const n = addAnonPosts(arr);
+        if (!n) throw new Error('Мир пока молчит — попробуй ещё раз');
+        markChannelRead(ch.id);
+        toast(`Эхо принесло ${n} новых следов`, 'fa-wand-magic-sparkles');
+    });
+    screen.querySelector('#gp-chan-find')?.addEventListener('click', awakenEcho);
+    screen.querySelector('#gp-echo-awaken')?.addEventListener('click', awakenEcho);
 }
 
 async function chanBusyRun(fn) {

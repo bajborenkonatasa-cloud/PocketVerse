@@ -1857,7 +1857,7 @@ export async function generateAnonFeed(channelName, existing = [], handle = '') 
 People send posts there WITHOUT a name: rumours about local people, things they saw, confessions, questions they would never ask to someone's face. The channel publishes them as-is.
 ${existing.length ? `Already published (do NOT repeat, do not contradict):\n${existing.slice(0, 6).map(x => `- ${x}`).join('\n')}` : ''}
 ${contactsBlock()}
-Write 4-6 new submissions. MOST OF THEM MUST BE ABOUT OTHER PEOPLE — this is a channel about the whole town, not about two people. Spread them across:
+Write 4-6 new submissions. Give every submission a "kind" chosen to fit its content: "СЛУХ", "СЛЕД", "ШЁПОТ", "СВИДЕТЕЛЬСТВО", "ПРЕДУПРЕЖДЕНИЕ", "ОБЪЯВЛЕНИЕ", "ТАЙНА". MOST OF THEM MUST BE ABOUT OTHER PEOPLE — this is a channel about the whole town, not about two people. Spread them across:
 - minor characters who have already appeared in the roleplay excerpt, BY NAME;
 - people named in the WORLD/LOREBOOK and in the main character's card — their colleagues, family, neighbours, rivals, exes, the staff of the places they frequent. Use those exact names;
 - ordinary locals you invent yourself and can reuse later: a shop, a stairwell, a school, a clinic, a bus route, a building site, a dog, a scandal at a wedding.
@@ -1865,7 +1865,7 @@ At most ONE post may be about ${getUserName()} and at most ONE about the main ch
 "from" — who REALLY sent each one, ALWAYS AS A NAME: an exact name from the contacts above when it plausibly is them, otherwise INVENT a full name for the stranger (first name + surname) and add who they are after a comma («Алина Ковалёва, продавщица из ТЦ», «Пётр Гринько, сосед сверху»). NEVER a description without a name — ${getUserName()} can pay to learn it, and a nameless answer is worthless. This field is secret from ${getUserName()}.
 ${uiLangLine()}
 ${JSON_RULES}
-Format: [{"text":"...","to":"","from":"кто на самом деле"}]`;
+Format: [{"kind":"СЛУХ","text":"...","to":"","from":"кто на самом деле"}]`;
     return await socialGenArray(prompt, { maxTokens: 1400, prefill: '[{"text":"' });
 }
 

@@ -92,6 +92,7 @@ export function addAnonPosts(arr, { fromTag = false } = {}) {
             id: genId(),
             anon: true,
             text: String(p.text).trim().slice(0, 900),
+            kind: String(p.kind || '').trim().toUpperCase().slice(0, 24),
             to: normHandle(p.to),
             // Настоящий автор нужен для платного вскрытия. Юзеру он не виден
             // ни в одном экране, пока она не заплатит.
