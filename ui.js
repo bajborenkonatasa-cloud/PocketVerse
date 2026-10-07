@@ -176,7 +176,7 @@ function createFab() {
     if (document.getElementById('gp-fab')) return;
     const fab = document.createElement('div');
     fab.id = 'gp-fab';
-    fab.innerHTML = `<span class="gp-orb-mark">◈</span><span id="gp-fab-badge" class="gp-hidden"></span>`;
+    fab.innerHTML = `<span class="gp-orb-mark" aria-hidden="true"><span class="pv-device-star">✦</span></span><span id="gp-fab-badge" class="gp-hidden"></span>`;
     document.body.appendChild(fab);
 
     // Позиция: сохранённая ВСЕГДА зажимается в текущий вьюпорт (позиция с широкого
@@ -2089,10 +2089,10 @@ function renderThread(screen) {
     // иначе всё, что модель про него знает, для юзера невидимо
     const tinMatch = t.isGroup ? null : matchByContactKey(t.key);
     const subLine = t.isGroup
-        ? (t.members?.length ? t.members.join(', ') : 'групповой чат')
+        ? (t.members?.length ? `${t.members.length} участников · групповая связь` : 'групповая связь')
         : tinMatch
-            ? `${blocked ? 'заблокирован · ' : ''}${tinMatch.inApp ? 'чат в Тиндере' : 'из Тиндера'} · ${tinMatch.age}`
-            : `${blocked ? 'заблокирован · ' : ''}${t.number || 'номер неизвестен'} · ${handleFor(`contact:${t.key}`, t.name)}`;
+            ? `${blocked ? 'связь приостановлена · ' : ''}${tinMatch.inApp ? 'знакомство · активная связь' : 'знакомство · вне приложения'}`
+            : `${blocked ? 'связь приостановлена' : 'личная связь · ' + handleFor(`contact:${t.key}`, t.name)}`;
 
     screen.innerHTML = `
         <div class="gp-header gp-thread-header">
@@ -2100,16 +2100,20 @@ function renderThread(screen) {
             ${headerAva}
             <input type="file" id="gp-ava-file" accept="image/*" style="display:none">
             <div class="gp-thread-title">
-                <div class="gp-row-name" id="gp-rename" title="Нажми, чтобы переименовать" style="cursor:pointer"><span>${esc(t.name)}</span><i class="fa-solid fa-pen gp-rename-pen"></i></div>
+                <div class="gp-row-name"><span>${esc(t.name)}</span></div>
                 <div class="gp-thread-number">${esc(subLine)}</div>
             </div>
-            ${tinMatch ? `<button class="gp-iconbtn gp-tin-openbtn" id="gp-tin-open" title="Анкета в Тиндере">${ic('fa-fire')}</button>` : ''}
-
-            ${!t.isGroup && !tinMatch?.inApp ? `<button class="gp-iconbtn" id="gp-nick" title="Ник для соцсетей">${ic('fa-at')}</button>` : ''}
-            ${!t.isGroup ? `<button class="gp-iconbtn${blocked ? ' gp-danger' : ''}" id="gp-sms-block" title="${blocked ? 'Разблокировать SMS' : 'Заблокировать SMS'}">${ic(blocked ? 'fa-lock-open' : 'fa-ban')}</button>` : ''}
-            ${t.isGroup ? `<button class="gp-iconbtn" id="gp-add-member" title="Добавить участника">${ic('fa-user-plus')}</button>` : ''}
-            ${t.isGroup && (t.members || []).length ? `<button class="gp-iconbtn" id="gp-kick-member" title="Убрать участника">${ic('fa-user-minus')}</button>` : ''}
-            <button class="gp-iconbtn gp-danger" id="gp-del" title="Удалить ${t.isGroup ? 'чат' : 'контакт'}">${ic('fa-trash-can')}</button>
+            <button class="gp-thread-menu-btn" id="gp-thread-menu" title="Меню связи"><span>✦</span><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            <div class="gp-thread-actions" id="gp-thread-actions">
+                <div class="gp-thread-actions-title"><span>✦</span> КАРТА СВЯЗИ</div>
+                <button id="gp-rename"><i class="fa-regular fa-id-card"></i><span>Изменить имя</span></button>
+                ${tinMatch ? `<button id="gp-tin-open">${ic('fa-fire')}<span>Открыть анкету</span></button>` : ''}
+                ${!t.isGroup && !tinMatch?.inApp ? `<button id="gp-nick">${ic('fa-at')}<span>Псевдоним в соцсетях</span></button>` : ''}
+                ${!t.isGroup ? `<button id="gp-sms-block">${ic(blocked ? 'fa-lock-open' : 'fa-pause')}<span>${blocked ? 'Возобновить связь' : 'Приостановить связь'}</span></button>` : ''}
+                ${t.isGroup ? `<button id="gp-add-member">${ic('fa-user-plus')}<span>Добавить участника</span></button>` : ''}
+                ${t.isGroup && (t.members || []).length ? `<button id="gp-kick-member">${ic('fa-user-minus')}<span>Убрать участника</span></button>` : ''}
+                <button class="gp-thread-action-danger" id="gp-del">${ic('fa-trash-can')}<span>Удалить связь</span></button>
+            </div>
         </div>
         <div class="gp-msgs" id="gp-msgs">
             ${bubbles || `<div class="gp-empty gp-empty-thread"><div class="gp-empty-icon">${ic('fa-message')}</div><div class="gp-empty-text">Начни переписку — сообщение попадёт<br>прямо в ролевую</div></div>`}
@@ -2137,6 +2141,16 @@ function renderThread(screen) {
         currentThreadKey = null;
         render();
     });
+    const threadMenuBtn = screen.querySelector('#gp-thread-menu');
+    const threadActions = screen.querySelector('#gp-thread-actions');
+    threadMenuBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        threadActions?.classList.toggle('gp-open');
+    });
+    threadActions?.addEventListener('click', (e) => e.stopPropagation());
+    const closeThreadMenu = () => threadActions?.classList.remove('gp-open');
+    screen.querySelector('.gp-msgs')?.addEventListener('click', closeThreadMenu);
+
     // Аватар контакта: клик → загрузка фото (сжимается до 128px)
     const avaBtn = screen.querySelector('#gp-ava-btn');
     const avaFile = screen.querySelector('#gp-ava-file');
