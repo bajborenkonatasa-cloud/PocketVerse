@@ -1,8 +1,0 @@
-PocketVerse v1.1.4 — Media Identity Lab (SAFE foundation)
-
-- Adds read-only Media Identity Lab to Brain screen.
-- Detects actual Silly Images Plus backend/model/style.
-- Resolves current Character Card to SIP characterReferenceLibrary key.
-- Reports whether an exact image reference and/or saved appearance text exists.
-- Hard design rule for next stage: exact reference > saved appearance > Card/RP description > NEVER foreign/current-character fallback.
-- No image generation added yet. No RP chat mutation. Scene Blocks untouched.
