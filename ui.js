@@ -6208,17 +6208,41 @@ function renderNotes(screen) {
         screen.querySelectorAll('[data-sticker]').forEach(b=>b.classList.toggle('gp-active', b.dataset.sticker===chosenSticker));
         screen.querySelectorAll('[data-note-color]').forEach(b=>b.classList.toggle('gp-active', b.dataset.noteColor===chosenColor));
     }; paint();
-    // Journal palette buttons must NOT steal focus from the textarea on mobile.
-    // Android otherwise closes/reopens the soft keyboard on every sticker/marker tap,
-    // resizing the visual viewport and making the whole page visibly jump.
-    const keepEditorFocus = (b) => {
+    // Android WebView: a normal <button> tap may blur the textarea BEFORE click,
+    // resize visualViewport and make the whole journal jump.  pointerdown/mousedown
+    // alone is not enough on every ST/Android build, so touch is handled explicitly.
+    const bindPaletteTap = (b, apply) => {
         b.tabIndex = -1;
-        b.addEventListener('pointerdown', (e) => e.preventDefault());
+        let touched = false;
+        const hold = (e) => {
+            touched = true;
+            // Critical: keep the textarea focused and stop native button focus/scroll.
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
+        };
+        b.addEventListener('touchstart', hold, { passive: false });
+        b.addEventListener('touchend', (e) => {
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
+            apply();
+            // Some Android WebViews still schedule a focus scroll one frame later.
+            // Keeping focus with preventScroll prevents that second bounce.
+            if (area && document.activeElement !== area) {
+                try { area.focus({ preventScroll: true }); } catch (_) {}
+            }
+            touched = false;
+        }, { passive: false });
+        b.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') e.preventDefault(); });
         b.addEventListener('mousedown', (e) => e.preventDefault());
+        b.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            // touchend already applied the action; click is only mouse/desktop fallback.
+            if (!touched && e.detail !== 0) apply();
+        });
     };
-    screen.querySelectorAll('[data-note-mode]').forEach(b=>{ keepEditorFocus(b); b.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();chosenMode=b.dataset.noteMode;_noteDraft.mode=chosenMode;paint();}); });
-    screen.querySelectorAll('[data-sticker]').forEach(b=>{ keepEditorFocus(b); b.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();chosenSticker=b.dataset.sticker;_noteDraft.sticker=chosenSticker;paint();}); });
-    screen.querySelectorAll('[data-note-color]').forEach(b=>{ keepEditorFocus(b); b.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();chosenColor=b.dataset.noteColor;_noteDraft.color=chosenColor;paint();}); });
+    screen.querySelectorAll('[data-note-mode]').forEach(b=>bindPaletteTap(b,()=>{chosenMode=b.dataset.noteMode;_noteDraft.mode=chosenMode;paint();}));
+    screen.querySelectorAll('[data-sticker]').forEach(b=>bindPaletteTap(b,()=>{chosenSticker=b.dataset.sticker;_noteDraft.sticker=chosenSticker;paint();}));
+    screen.querySelectorAll('[data-note-color]').forEach(b=>bindPaletteTap(b,()=>{chosenColor=b.dataset.noteColor;_noteDraft.color=chosenColor;paint();}));
     screen.querySelector('#gp-back')?.addEventListener('click', () => { _noteEditId = null; goto('home'); }); bindNotesTabs(screen);
     screen.querySelector('#gp-note-save')?.addEventListener('click', () => { const text=area?.value.trim(); if(!text)return;
         if(_noteEditId){ updateNote(_noteEditId,text); updateNoteDecor(_noteEditId,{mode:chosenMode,sticker:chosenSticker,color:chosenColor}); _noteEditId=null; }
