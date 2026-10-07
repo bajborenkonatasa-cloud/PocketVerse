@@ -5,7 +5,7 @@ import { extension_settings, saveMetadataDebounced } from '../../../extensions.j
 export const EXT_NAME = 'pocketverse_foundation';
 // Версия для сверки инстансов (ПК ↔ айфон): видна в настройках и в консоли.
 // БАМПАТЬ при каждом коммите вместе с manifest.json!
-export const GP_VERSION = '2.35.0-pocketverse.12';
+export const GP_VERSION = '2.35.0-pocketverse.44';
 const META_KEY = 'pocketverse_foundation';
 
 // ── Глобальные настройки ──
@@ -164,6 +164,8 @@ export function getMeta() {
     // PocketVerse-owned SMS history. Kept OUTSIDE SillyTavern chat[] so phone actions
     // can never reindex/overwrite RP messages or metadata owned by Scene Blocks/other extensions.
     if (!Array.isArray(m.localSms)) m.localSms = [];
+    // Archive XII: user-curated RP memories. Deliberately separate from model/chat memory.
+    if (!Array.isArray(m.memories)) m.memories = [];
     // Ники (@handle): per-chat, override поверх авто-генерации из имени
     if (!m.handles || typeof m.handles !== 'object') m.handles = {};
     if (typeof m.userHandle !== 'string') m.userHandle = '';
@@ -361,6 +363,36 @@ let _metaVersion = 0;
 export function saveMeta() {
     _metaVersion++;
     try { saveMetadataDebounced(); } catch (e) { console.warn('[GlassPhone] saveMeta failed:', e); }
+}
+
+// ── Архив XII · пользовательские воспоминания ──
+export function getMemories() { return getMeta().memories; }
+export function addMemory(item = {}) {
+    const m = getMeta();
+    const mem = {
+        id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+        type: item.type === 'photo' ? 'photo' : 'message',
+        text: String(item.text || '').slice(0, 3000),
+        img: String(item.img || ''),
+        author: String(item.author || ''),
+        thread: String(item.thread || ''),
+        rpDate: String(item.rpDate || ''),
+        rpTime: String(item.rpTime || ''),
+        note: String(item.note || '').slice(0, 500),
+        savedAt: Date.now(),
+    };
+    m.memories.unshift(mem); saveMeta(); return mem;
+}
+export function deleteMemory(id) {
+    const m = getMeta(); const before = m.memories.length;
+    m.memories = m.memories.filter(x => x?.id !== id);
+    if (m.memories.length !== before) { saveMeta(); return true; }
+    return false;
+}
+export function updateMemory(id, patch = {}) {
+    const x = getMeta().memories.find(x => x?.id === id); if (!x) return false;
+    if (Object.prototype.hasOwnProperty.call(patch,'note')) x.note = String(patch.note || '').slice(0,500);
+    saveMeta(); return true;
 }
 
 // ── Кэш тяжёлых проходов по чату ──

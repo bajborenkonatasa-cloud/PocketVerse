@@ -5,7 +5,7 @@ import {
     getSettings, getThreadList, getThread, markRead, addManualContact, hideContact,
     randomNumber, getTotalUnread, fmtTime, getRpDateTime, keyOf, getHiddenMessageIndexes,
     addGroup, delGroup, updateGroupMembers, renameContact, banAccount,
-    isSmsBlocked, blockSmsContact, unblockSmsContact, saveMeta, invalidateChatCache, getMeta, addLocalSms, updateLocalSms, deleteLocalSms, ingestQuietPhoneReply,
+    isSmsBlocked, blockSmsContact, unblockSmsContact, saveMeta, invalidateChatCache, getMeta, addLocalSms, updateLocalSms, deleteLocalSms, ingestQuietPhoneReply, getMemories, addMemory, deleteMemory, updateMemory,
 } from './state.js';
 import { updatePhoneInjection, getPhoneBrainSnapshot, setPhoneTurnActive } from './prompts.js';
 import {
@@ -1364,20 +1364,48 @@ function renderHome(screen) {
     screen.querySelectorAll('.gp-deck-card').forEach(el => el.addEventListener('click', () => goto(el.dataset.app)));
 }
 
+let _memoryFilter = 'all';
 function renderMemories(screen) {
     currentScreen = 'memories';
+    const all = getMemories();
+    const items = all.filter(x => _memoryFilter === 'all' || x.type === _memoryFilter);
+    const tile = (m, i) => {
+        const photo = m.img ? `<img src="${esc(m.img)}" alt="" data-zoom>` : '';
+        const quote = m.text ? `<div class="gp-memory-quote">${esc(m.text)}</div>` : '';
+        const note = m.note ? `<div class="gp-memory-note">${esc(m.note)}</div>` : '';
+        const meta = [m.rpDate, m.rpTime].filter(Boolean).join(' · ');
+        return `<article class="gp-memory-tile ${m.img ? 'gp-memory-photo' : 'gp-memory-text'}" data-memory="${esc(m.id)}">
+            <span class="gp-memory-index">${['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'][i%12]}</span>
+            ${photo}<div class="gp-memory-body">${m.author ? `<b>${esc(m.author)}</b>` : ''}${quote}${note}${meta ? `<small>${esc(meta)}</small>` : ''}</div>
+            <button class="gp-memory-more" data-memory-menu="${esc(m.id)}" title="Действия">⋮</button>
+        </article>`;
+    };
     screen.innerHTML = `
-        <div class="gp-header">
+        <div class="gp-header gp-memory-header">
             <button class="gp-iconbtn" id="gp-home-btn">${ic('fa-chevron-left')}</button>
-            <div class="gp-title">Воспоминания</div>
+            <div class="gp-title">Воспоминания<small>III · АРХИВ XII</small></div>
         </div>
-        <div class="gp-memory-preview">
-            <div class="gp-memory-sigil">✦</div>
-            <h2>Двенадцатая карта</h2>
-            <p>Здесь появится личный дневник этой ветки PocketVerse.</p>
-            <small>Пока карта зарезервирована — мы не сохраняем ничего лишнего и не трогаем память чата.</small>
-        </div>`;
+        <div class="gp-memory-tabs">
+          <button data-mf="all" class="${_memoryFilter==='all'?'gp-active':''}">Все</button>
+          <button data-mf="photo" class="${_memoryFilter==='photo'?'gp-active':''}">Фото</button>
+          <button data-mf="message" class="${_memoryFilter==='message'?'gp-active':''}">Сообщения</button>
+        </div>
+        ${all.length ? `<div class="gp-memory-count">✦ ${all.length} ${all.length===1?'момент':'моментов'} в этой ветке</div><div class="gp-memory-board">${items.map(tile).join('')}</div>` : `
+        <div class="gp-memory-preview gp-memory-empty">
+            <div class="gp-memory-sigil">✦</div><h2>Архив XII</h2>
+            <p>Здесь будут жить выбранные тобой кадры, сообщения и маленькие моменты этой истории.</p>
+            <small>Зажми сообщение или фотографию в переписке → «В Архив XII». Ничего не сохраняется автоматически.</small>
+        </div>`}`;
     screen.querySelector('#gp-home-btn')?.addEventListener('click', () => goto('home'));
+    screen.querySelectorAll('[data-mf]').forEach(b => b.addEventListener('click',()=>{ _memoryFilter=b.dataset.mf; renderMemories(screen); }));
+    screen.querySelectorAll('[data-memory-menu]').forEach(b => b.addEventListener('click',(e)=>{
+        e.stopPropagation(); const id=b.dataset.memoryMenu; const m=getMemories().find(x=>x.id===id); if(!m)return;
+        const choice=prompt('Архив XII: подпись к воспоминанию.\nОставь пустым, чтобы удалить текущую подпись.\nДля удаления введи: УДАЛИТЬ', m.note||'');
+        if(choice===null)return;
+        if(choice.trim().toUpperCase()==='УДАЛИТЬ'){ if(confirm('Удалить это воспоминание из Архива XII?')) deleteMemory(id); }
+        else updateMemory(id,{note:choice.trim()});
+        renderMemories(screen);
+    }));
 }
 
 // ── Экран «Оформление» ──
@@ -2062,7 +2090,7 @@ function renderThread(screen) {
         const photoRegenAction = (m.img && m.photoDesc)
             ? `<button data-mmsedit="${mi}">${ic('fa-pen')} Изменить фото</button><button data-mmsgen="${mi}">${ic('fa-rotate-right')} Перегенерировать фото</button>` : '';
         const picker = (_reactPickerFor === mi && _reactPickerKey === t.key)
-            ? `<div class="gp-react-picker gp-action-pop"><div class="gp-reaction-row">${REACTIONS.map(r => `<button data-react="${r.id}" data-react-mi="${mi}" class="${m.react === r.id ? 'gp-selected' : ''}" title="${r.ru}">${ic(r.icon)}</button>`).join('')}</div><div class="gp-action-row"><button data-reply-mi="${mi}">${ic('fa-reply')} Ответить</button>${photoRegenAction}<button class="gp-danger" data-smsdel="${mi}">${ic('fa-trash-can')} Удалить</button></div></div>` : '';
+            ? `<div class="gp-react-picker gp-action-pop"><div class="gp-reaction-row">${REACTIONS.map(r => `<button data-react="${r.id}" data-react-mi="${mi}" class="${m.react === r.id ? 'gp-selected' : ''}" title="${r.ru}">${ic(r.icon)}</button>`).join('')}</div><div class="gp-action-row"><button data-reply-mi="${mi}">${ic('fa-reply')} Ответить</button><button data-memory-save="${mi}">✦ В Архив XII</button>${photoRegenAction}<button class="gp-danger" data-smsdel="${mi}">${ic('fa-trash-can')} Удалить</button></div></div>` : '';
         const next = t.messages[mi + 1];
         const endOfIncomingRun = m.dir === 'in' && (!next || next.dir !== 'in' || (t.isGroup && next.from !== m.from));
         const bubbleAva = endOfIncomingRun
@@ -2452,6 +2480,21 @@ function renderThread(screen) {
         }
         applyChatHiding();
         render();
+    }));
+
+    screen.querySelectorAll('[data-memory-save]').forEach(b => b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const mi = parseInt(b.getAttribute('data-memory-save'));
+        const m = t.messages[mi]; if (!m) return;
+        const rp = getRpDateTime();
+        const rpDate = rp ? `${String(rp.day).padStart(2,'0')}.${String(rp.month).padStart(2,'0')}.${rp.year}` : '';
+        const rpTime = m.time ? `${String(m.time.getHours()).padStart(2,'0')}:${String(m.time.getMinutes()).padStart(2,'0')}` : (rp ? `${String(rp.hours).padStart(2,'0')}:${String(rp.minutes).padStart(2,'0')}` : '');
+        const author = m.dir === 'out' ? getUserName() : (m.from || t.name);
+        const img = m.img || m.gifUrl || '';
+        const text = String(m.text || (m.photoDesc ? m.photoDesc : m.voice ? 'Голосовое сообщение' : '')).trim();
+        addMemory({ type: img ? 'photo' : 'message', img, text, author, thread:t.name, rpDate, rpTime });
+        _reactPickerFor = null; _reactPickerKey = null;
+        toast('Сохранено в Архив XII', 'fa-star'); render();
     }));
 
     screen.querySelectorAll('[data-reply-mi]').forEach(b => b.addEventListener('click', (e) => {

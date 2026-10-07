@@ -4612,3 +4612,27 @@ img[data-zoom] { cursor: zoom-in; }
 #gp-phone .gp-bubble-time{font-family:Georgia,'Times New Roman',serif;font-size:8px!important;letter-spacing:.07em!important;opacity:.50!important;margin-top:2px!important}
 #gp-phone .gp-bubble-img{border-radius:14px!important;padding:3px;background:linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.018));border:1px solid rgba(var(--gp-accent-a-rgb),.13)}
 #gp-phone .gp-bubble-img img{border-radius:10px!important}
+
+/* ═══ PocketVerse .44 · Memories / Archive XII ═══ */
+#gp-phone .gp-memory-header .gp-title{display:flex;flex-direction:column;line-height:1.05}
+#gp-phone .gp-memory-header .gp-title small{margin-top:5px;font:7px system-ui,sans-serif;letter-spacing:.25em;color:var(--gp-accent-a);opacity:.62}
+#gp-phone .gp-memory-tabs{display:flex;gap:6px;margin:8px 13px 5px;padding:3px;border:1px solid var(--pv-line);border-radius:14px;background:rgba(255,255,255,.025)}
+#gp-phone .gp-memory-tabs button{flex:1;height:31px;border:0;border-radius:10px;background:transparent;color:var(--gp-text-dim);font-size:10px}
+#gp-phone .gp-memory-tabs button.gp-active{color:var(--pv-ink);background:linear-gradient(145deg,rgba(var(--gp-accent-a-rgb),.18),rgba(var(--gp-accent-b-rgb),.07));box-shadow:inset 0 0 0 1px rgba(var(--gp-accent-a-rgb),.25)}
+#gp-phone .gp-memory-count{margin:9px 17px 5px;font:8px Georgia,serif;letter-spacing:.13em;color:var(--gp-text-dim);opacity:.62}
+#gp-phone .gp-memory-board{columns:2;column-gap:9px;padding:7px 12px 22px;overflow-y:auto}
+#gp-phone .gp-memory-tile{position:relative;display:inline-block;width:100%;margin:0 0 9px;break-inside:avoid;border:1px solid var(--pv-line);border-radius:16px 10px 16px 10px;overflow:hidden;background:linear-gradient(145deg,rgba(255,255,255,.06),rgba(255,255,255,.018));box-shadow:0 9px 22px rgba(0,0,0,.16),inset 0 1px rgba(255,255,255,.05)}
+#gp-phone .gp-memory-tile:nth-child(3n+2){border-radius:10px 17px 10px 17px}
+#gp-phone .gp-memory-tile img{display:block;width:100%;height:auto;max-height:260px;object-fit:cover}
+#gp-phone .gp-memory-body{padding:10px 10px 11px}
+#gp-phone .gp-memory-body>b{display:block;margin-bottom:5px;font:11px Georgia,serif;color:var(--gp-accent-a);font-weight:500}
+#gp-phone .gp-memory-quote{font:11px/1.45 Georgia,'Times New Roman',serif;color:var(--pv-ink)}
+#gp-phone .gp-memory-note{margin-top:8px;padding-top:7px;border-top:1px solid rgba(var(--gp-accent-a-rgb),.12);font-size:9px;line-height:1.45;font-style:italic;color:var(--gp-text-dim)}
+#gp-phone .gp-memory-body small{display:block;margin-top:8px;font:7px Georgia,serif;letter-spacing:.08em;opacity:.46}
+#gp-phone .gp-memory-index{position:absolute;z-index:2;top:7px;left:8px;padding:2px 5px;border-radius:7px;background:rgba(10,9,13,.58);backdrop-filter:blur(5px);font:8px Georgia,serif;color:var(--gp-accent-a);opacity:.8}
+#gp-phone .gp-memory-more{position:absolute;z-index:3;right:6px;top:5px;width:26px;height:27px;border:0;border-radius:9px;background:rgba(10,9,13,.54);color:var(--pv-ink);backdrop-filter:blur(5px);font-size:16px}
+#gp-phone .gp-memory-text{min-height:112px;background:radial-gradient(circle at 80% 0,rgba(var(--gp-accent-a-rgb),.12),transparent 38%),linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.015))}
+#gp-phone .gp-memory-text .gp-memory-body{padding-top:34px}
+#gp-phone .gp-memory-empty{margin:auto 20px!important;background:radial-gradient(circle at 50% 15%,rgba(var(--gp-accent-a-rgb),.10),transparent 34%),rgba(255,255,255,.02)!important}
+#gp-phone .gp-action-row{flex-wrap:wrap}
+#gp-phone .gp-action-row [data-memory-save]{color:var(--gp-accent-a)!important}
