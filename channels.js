@@ -43,6 +43,9 @@ export function getAnonChannel() {
             unread: 0,
             reveals: 0,
             lastPostAt: 0,
+            arcSeq: 1,
+            currentArc: 'arc-1',
+            arcTitles: { 'arc-1': 'Текущая глава' },
         };
         c.anon.lastPostAt = chatLen();
         saveMeta();
@@ -50,6 +53,11 @@ export function getAnonChannel() {
     const a = c.anon;
     if (!Array.isArray(a.posts)) a.posts = [];
     if (typeof a.reveals !== 'number') a.reveals = 0;
+    if (!a.currentArc) a.currentArc = 'arc-1';
+    if (!a.arcSeq) a.arcSeq = 1;
+    if (!a.arcTitles || typeof a.arcTitles !== 'object') a.arcTitles = { [a.currentArc]: 'Текущая глава' };
+    // Старые следы мягко собираем в первую арку.
+    a.posts.forEach(p => { if (!p.arcId) p.arcId = a.currentArc; });
     a.id = ANON_ID;
     a.system = true;
     return a;
@@ -93,6 +101,7 @@ export function addAnonPosts(arr, { fromTag = false } = {}) {
             anon: true,
             text: String(p.text).trim().slice(0, 900),
             kind: String(p.kind || '').trim().toUpperCase().slice(0, 24),
+            arcId: ch.currentArc || 'arc-1',
             to: normHandle(p.to),
             // Настоящий автор нужен для платного вскрытия. Юзеру он не виден
             // ни в одном экране, пока она не заплатит.
@@ -211,6 +220,23 @@ export function revealAnonAuthor(postId) {
     const price = chargeAnonReveal(postId);
     if (!price) return getAnonChannel().posts.find(p => p.id === postId);
     return setAnonAuthor(postId, {});
+}
+
+export function startEchoArc(title = '') {
+    const ch = getAnonChannel();
+    ch.arcSeq = (ch.arcSeq || 1) + 1;
+    ch.currentArc = `arc-${ch.arcSeq}`;
+    if (!ch.arcTitles || typeof ch.arcTitles !== 'object') ch.arcTitles = {};
+    ch.arcTitles[ch.currentArc] = String(title || `Глава ${ch.arcSeq}`).trim().slice(0, 64);
+    saveMeta();
+    return ch.currentArc;
+}
+
+export function renameEchoArc(arcId, title) {
+    const ch = getAnonChannel();
+    if (!ch.arcTitles || typeof ch.arcTitles !== 'object') ch.arcTitles = {};
+    ch.arcTitles[arcId] = String(title || '').trim().slice(0, 64) || ch.arcTitles[arcId] || 'Без названия';
+    saveMeta();
 }
 
 export function findChannel(id) { return allChannels().find(x => x.id === id) || null; }

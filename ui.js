@@ -41,7 +41,7 @@ import {
     deleteComment, bumpViews, addSubs, matchPostByText, markChannelRead, unreadChannels,
     setChannelAvatar, clearChannelAvatar,
     CHAN_REACTS,
-    ANON_ID, ANON_NAME, anonEnabled, getAnonChannel, anonPostToUser, addAnonPosts,
+    ANON_ID, ANON_NAME, anonEnabled, getAnonChannel, anonPostToUser, addAnonPosts, startEchoArc, renameEchoArc,
     postAnonAsUser, anonRevealPrice, canAffordAnonReveal,
     chargeAnonReveal, setAnonAuthor, anonAuthorNeedsLookup,
 } from './channels.js';
@@ -6441,110 +6441,53 @@ function drawChannelAvatar(ch) {
 
 function renderChannels(screen) {
     currentScreen = 'chans';
-    const c = getChannels();
     const echo = anonEnabled() ? getAnonChannel() : null;
-    const people = c.list.filter(x => x.person);
-    const subs = c.list.filter(x => !x.person && x.subscribed);
-    const found = c.list.filter(x => !x.person && !x.subscribed);
-
-    const row = (ch) => {
-        const last = ch.posts?.[0];
-        const sub = ch.mine ? subsLine(ch) : (last ? (last.text || last.imgDesc || 'фото') : (ch.desc || subsLine(ch)));
-        return `<button class="gp-chan-row${ch.mine ? ' gp-chan-row-mine' : ''}" data-chanopenrow="${esc(ch.id)}">
-            ${chanAvatar(ch, 'gp-avatar')}<span class="gp-chan-rowbody"><span class="gp-chan-rowtop"><span class="gp-chan-rowname">${esc(ch.name)}</span>${last ? `<span class="gp-chan-rowtime">${esc(timeAgo(last.time))}</span>` : ''}</span><span class="gp-chan-rowsub">${esc(sub)}</span></span>${ch.unread ? `<span class="gp-chan-unread">${ch.unread}</span>` : ''}</button>`;
-    };
-    const echoKinds = ['СЛУХ','СЛЕД','ШЁПОТ','СВИДЕТЕЛЬСТВО','ТАЙНА'];
+    const echoKinds = ['СЛУХ','СЛЕД','ШЁПОТ','СВИДЕТЕЛЬСТВО','ПРЕДУПРЕЖДЕНИЕ','ОБЪЯВЛЕНИЕ','ТАЙНА'];
     const echoMarks = ['✦','⌁','◌','✎','!','◇','☾'];
+    const posts = echo?.posts || [];
+    const arcIds = [...new Set(posts.map(p => p.arcId || echo?.currentArc || 'arc-1'))];
+    const currentArc = echo?.currentArc || arcIds[0] || 'arc-1';
+    const titleOf = id => echo?.arcTitles?.[id] || (id === currentArc ? 'Текущая глава' : 'Архивная глава');
+    const note = (post,i) => `<button class="gp-echo-note gp-echo-note-${i%7}" data-chanopenrow="${esc(echo.id)}"><span class="gp-echo-pin"></span><i>${echoMarks[i%echoMarks.length]}</i><b>${esc(post.kind || echoKinds[i%echoKinds.length])}</b><span>${esc(String(post.text||'').slice(0,145))}</span><small>${esc(timeAgo(post.time))}</small></button>`;
+    const currentPosts = posts.filter(p => (p.arcId || currentArc) === currentArc).slice(0,8);
+    const archived = arcIds.filter(id => id !== currentArc);
     const echoBoard = echo ? `<section class="gp-echo-board">
-        <div class="gp-echo-kicker">VII · WORLD WHISPERS</div>
-        <div class="gp-echo-title">Эхо</div>
-        <div class="gp-echo-sub">слухи · следы · шёпот мира</div>
-        <div class="gp-echo-thread"></div>
-        <div class="gp-echo-grid">${(echo.posts || []).slice(0,7).map((post,i)=>`<button class="gp-echo-note gp-echo-note-${i%7}" data-chanopenrow="${esc(echo.id)}"><span class="gp-echo-pin"></span><i>${echoMarks[i%echoMarks.length]}</i><b>${esc(post.kind || echoKinds[i%echoKinds.length])}</b><span>${esc(String(post.text||'').slice(0,165))}</span><small>${esc(timeAgo(post.time))}</small></button>`).join('') || `<button class="gp-echo-empty" id="gp-echo-awaken"><span>✦</span><b>Здесь пока тихо</b><small>Коснись — и послушаем, о чём шепчется этот мир.</small></button>`}</div>
+        <div class="gp-echo-boardhead"><div><div class="gp-echo-kicker">VII · WORLD WHISPERS</div><div class="gp-echo-title">Эхо</div></div><button class="gp-echo-arcnew" id="gp-echo-newarc" title="Новая арка">＋</button></div>
+        <div class="gp-echo-arcbar"><span>ARC ${String(echo.arcSeq || 1).padStart(2,'0')}</span><button id="gp-echo-renamearc">${esc(titleOf(currentArc))}</button><small>${currentPosts.length} следов</small></div>
+        <div class="gp-echo-grid">${currentPosts.map(note).join('') || `<button class="gp-echo-empty" id="gp-echo-awaken"><span>✦</span><b>Здесь пока тихо</b><small>Коснись — и послушаем этот мир.</small></button>`}</div>
+        ${archived.length ? `<details class="gp-echo-archive"><summary>АРХИВ · ${archived.length} ${archived.length===1?'АРКА':'АРКИ'}</summary>${archived.map((id,ai)=>{const ps=posts.filter(p=>(p.arcId||'')===id);return `<details class="gp-echo-oldarc"><summary><b>ARC ${String(Math.max(1,(echo.arcSeq||1)-ai-1)).padStart(2,'0')} · ${esc(titleOf(id))}</b><span>${ps.length} следов</span></summary><div class="gp-echo-grid">${ps.slice(0,8).map(note).join('')}</div></details>`}).join('')}</details>`:''}
         <div class="gp-echo-foot">Не всё здесь правда. Но всё может оставить след.</div>
     </section>` : '';
 
     setHtmlKeepScroll(screen, '.gp-chan-scroll', `
-        <div class="gp-header gp-thread-header"><button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button><div><div class="gp-title gp-title-app">Эхо</div><div class="gp-echo-headsub">ШЁПОТ МИРА</div></div><button class="gp-iconbtn" id="gp-chan-person" title="Источник знакомого" ${_chanBusy ? 'disabled' : ''}>${ic('fa-user-plus')}</button><button class="gp-iconbtn" id="gp-chan-find" title="Найти источники" ${_chanBusy ? 'disabled' : ''}>${ic(_chanBusy ? 'fa-spinner fa-spin' : 'fa-magnifying-glass')}</button></div>
+        <div class="gp-header gp-thread-header gp-echo-header"><button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button><div><div class="gp-title gp-title-app">Эхо</div><div class="gp-echo-headsub">ШЁПОТ МИРА</div></div><button class="gp-iconbtn" id="gp-chan-find" title="Послушать мир" ${_chanBusy ? 'disabled' : ''}>${ic(_chanBusy ? 'fa-spinner fa-spin' : 'fa-magnifying-glass')}</button></div>
         <div class="gp-chan-scroll gp-echo-scroll">${echoBoard}
-            <div class="gp-chan-section">Мой голос</div>${c.mine ? row(c.mine) : `<button class="gp-chan-create" id="gp-chan-create">${ic('fa-plus')}<span>Оставить свой след</span></button>`}
-            ${people.length ? `<div class="gp-chan-section">Голоса знакомых</div>${people.map(row).join('')}` : ''}
-            ${subs.length ? `<div class="gp-chan-section">Источники</div>${subs.map(row).join('')}` : ''}
-            ${found.length ? `<div class="gp-chan-section">Найдено в мире</div>${found.map(row).join('')}` : ''}
+            <button class="gp-echo-myvoice" id="gp-echo-myvoice">${ic('fa-feather')}<span><b>Оставить свой след</b><small>анонимно · в эту арку</small></span>${ic('fa-chevron-right')}</button>
         </div>`);
 
     screen.querySelector('#gp-back')?.addEventListener('click', () => goto('home'));
-    screen.querySelectorAll('[data-chanopenrow]').forEach(b => b.addEventListener('click', () => {
-        _chanId = b.getAttribute('data-chanopenrow');
-        markChannelRead(_chanId);
-        goto('chan');
-    }));
-    screen.querySelector('#gp-chan-create')?.addEventListener('click', () => {
-        const name = prompt('Как назовём канал?', '');
-        if (name === null || !name.trim()) return;
-        const desc = prompt('О чём он? (одной строкой)', '') || '';
-        try {
-            const ch = createMyChannel(name.trim(), desc.trim());
-            _chanId = ch.id;
-            updatePhoneInjection();
-            applyChatHiding();
-            goto('chan');
-            toast('Канал создан', 'fa-paper-plane');
-        } catch (e) {
-            toast(String(e?.message || e).slice(0, 60), 'fa-circle-exclamation');
-        }
+    screen.querySelectorAll('[data-chanopenrow]').forEach(b => b.addEventListener('click', () => { _chanId = b.getAttribute('data-chanopenrow'); markChannelRead(_chanId); goto('chan'); }));
+    screen.querySelector('#gp-echo-myvoice')?.addEventListener('click', () => { _chanId = echo.id; markChannelRead(_chanId); goto('chan'); });
+    screen.querySelector('#gp-echo-newarc')?.addEventListener('click', () => {
+        const name = prompt('Название новой арки', 'Новая глава');
+        if (name === null) return;
+        startEchoArc(name.trim() || 'Новая глава'); render(); toast('Новая арка открыта', 'fa-layer-group');
     });
-    screen.querySelector('#gp-chan-person')?.addEventListener('click', () => {
-        const contacts = getThreadList().filter(t => !t.isGroup);
-        if (!contacts.length) { toast('Сначала заведи контакты', 'fa-circle-exclamation'); return; }
-        const overlay = document.createElement('div');
-        overlay.className = 'gp-member-overlay';
-        overlay.innerHTML = `
-            <div class="gp-member-overlay-panel">
-                <div class="gp-member-overlay-header">
-                    <span>Чей канал добавить?</span>
-                    <button class="gp-iconbtn" id="gp-chan-person-close">${ic('fa-xmark')}</button>
-                </div>
-                <div class="gp-member-overlay-list">
-                    ${contacts.map(t => `
-                        <button class="gp-share-row" data-chanperson="${esc(t.name)}">
-                            ${avatarHtml(t.name, getContactAvatar(t.key), 'gp-avatar gp-avatar-xs')}
-                            <span>${esc(t.name)}</span>
-                            ${ic('fa-chevron-right')}
-                        </button>`).join('')}
-                </div>
-            </div>`;
-        screen.appendChild(overlay);
-        const close = () => overlay.remove();
-        overlay.querySelector('#gp-chan-person-close')?.addEventListener('click', close);
-        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-        overlay.querySelectorAll('[data-chanperson]').forEach(b => b.addEventListener('click', () => {
-            const who = b.getAttribute('data-chanperson');
-            close();
-            chanBusyRun(async () => {
-                const gen = await generatePersonChannel(who);
-                if (!gen || !gen.name) throw new Error(`${who} не ведёт канал — попробуй ещё раз`);
-                const ch = addPersonChannel(who, gen);
-                _chanId = ch.id;
-                updatePhoneInjection();
-                applyChatHiding();
-                goto('chan');
-                toast(`Канал ${who} добавлен`, 'fa-paper-plane');
-            });
-        }));
+    screen.querySelector('#gp-echo-renamearc')?.addEventListener('click', () => {
+        const name = prompt('Название этой арки', titleOf(currentArc));
+        if (name === null || !name.trim()) return;
+        renameEchoArc(currentArc, name.trim()); render();
     });
     const awakenEcho = () => chanBusyRun(async () => {
         const ch = getAnonChannel();
         const arr = await generateAnonFeed(ch.name, (ch.posts || []).slice(0, 8).map(x => x.text), getUserHandle());
         const n = addAnonPosts(arr);
-        if (!n) throw new Error('Мир пока молчит — попробуй ещё раз');
-        markChannelRead(ch.id);
+        updatePhoneInjection(); applyChatHiding();
         toast(`Эхо принесло ${n} новых следов`, 'fa-wand-magic-sparkles');
     });
     screen.querySelector('#gp-chan-find')?.addEventListener('click', awakenEcho);
     screen.querySelector('#gp-echo-awaken')?.addEventListener('click', awakenEcho);
 }
-
 async function chanBusyRun(fn) {
     if (_chanBusy) return;
     _chanBusy = true;
