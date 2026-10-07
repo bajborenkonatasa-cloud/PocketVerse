@@ -2095,7 +2095,7 @@ function renderThread(screen) {
             const genKey = m.eventId || `${m.idx}:${m.tagStart}`;
             const busy = _mmsGenBusy.has(genKey);
             // Finished photos stay visually clean. Regeneration lives in the long-press action menu.
-            media = `<div class="gp-bubble-img"><img src="${esc(m.img)}" alt="" data-zoom></div>`;
+            media = `<div class="gp-bubble-img gp-generated-photo"><img src="${esc(m.img)}" alt="" data-zoom></div>`;
         } else if (m.photoDesc) {
             const genKey = m.eventId || `${m.idx}:${m.tagStart}`;
             const busy = _mmsGenBusy.has(genKey);
@@ -2120,14 +2120,14 @@ function renderThread(screen) {
             ? `<button data-mmsedit="${mi}">${ic('fa-pen')} Изменить фото</button><button data-mmsgen="${mi}">${ic('fa-rotate-right')} Перегенерировать фото</button>` : '';
         const picker = (_reactPickerFor === mi && _reactPickerKey === t.key)
             ? `<div class="gp-react-picker gp-action-pop"><div class="gp-reaction-row">${REACTIONS.map(r => `<button data-react="${r.id}" data-react-mi="${mi}" class="${m.react === r.id ? 'gp-selected' : ''}" title="${r.ru}">${ic(r.icon)}</button>`).join('')}</div><div class="gp-action-row"><button data-reply-mi="${mi}">${ic('fa-reply')} Ответить</button><button data-memory-save="${mi}">✦ В Архив XII</button>${photoRegenAction}<button class="gp-danger" data-smsdel="${mi}">${ic('fa-trash-can')} Удалить</button></div></div>` : '';
-        const next = t.messages[mi + 1];
-        const endOfIncomingRun = m.dir === 'in' && (!next || next.dir !== 'in' || (t.isGroup && next.from !== m.from));
-        const bubbleAva = endOfIncomingRun
+        const prev = t.messages[mi - 1];
+        const startOfIncomingRun = m.dir === 'in' && (!prev || prev.dir !== 'in' || (t.isGroup && prev.from !== m.from));
+        const bubbleAva = startOfIncomingRun
             ? avatarHtml(m.from || t.name, getContactAvatar(keyOf(m.from || t.name)), 'gp-msg-avatar') : '';
         bubbles += `
-        <div class="gp-msg-line ${m.dir === 'out' ? 'gp-msg-line-out' : 'gp-msg-line-in'}">
-            ${m.dir === 'in' ? `<div class="gp-msg-avatar-slot">${bubbleAva}</div>` : ''}
+        <div class="gp-msg-line ${m.dir === 'out' ? 'gp-msg-line-out' : 'gp-msg-line-in'} ${startOfIncomingRun ? 'gp-msg-run-start' : ''}">
             <div class="gp-bubble-wrap ${m.dir === 'out' ? 'gp-out' : 'gp-in'}${reaction ? ' gp-has-react' : ''}">
+                ${m.dir === 'in' && bubbleAva ? `<div class="gp-msg-avatar-above">${bubbleAva}</div>` : ''}
                 ${picker}
                 <div class="gp-bubble${m.voice ? ' gp-bubble-voice' : ''}" data-bmi="${mi}">${senderLabel}${media}${shotHtml(m)}${body}${reactChip}</div>
             </div>
