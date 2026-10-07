@@ -2008,24 +2008,14 @@ function renderThread(screen) {
     updateFabBadge();
 
     let bubbles = '';
-    let lastDay = '';
     for (let mi = 0; mi < t.messages.length; mi++) {
         const m = t.messages[mi];
-        if (m.time) {
-            const day = `${m.time.getDate()}.${m.time.getMonth()}.${m.time.getFullYear()}`;
-            if (day !== lastDay) {
-                lastDay = day;
-                // m.time уже в RP-шкале — сравниваем с RP «сейчас»
-                const rpDt = getRpDateTime();
-                const now = rpDt
-                    ? new Date(rpDt.year, rpDt.month - 1, rpDt.day)
-                    : new Date();
-                const isToday = now.getFullYear() === m.time.getFullYear() && now.getMonth() === m.time.getMonth() && now.getDate() === m.time.getDate();
-                const label = isToday ? 'Сегодня' : `${String(m.time.getDate()).padStart(2, '0')}.${String(m.time.getMonth() + 1).padStart(2, '0')}`;
-                bubbles += `<div class="gp-day"><span>${label}</span></div>`;
-            }
-        }
-        const tm = m.time ? fmtTime(m.time) : '';
+        // The RP date belongs to the phone/header timeline. Do not insert calendar-day
+        // separators inside the thread: they duplicate the RP timeline and waste space.
+        // Message metadata stays compact: time only.
+        const tm = m.time
+            ? `${String(m.time.getHours()).padStart(2, '0')}:${String(m.time.getMinutes()).padStart(2, '0')}`
+            : '';
         // Фото в смс: реальное (юзер приложила) или заглушка с описанием (ММС от персонажа)
         let media = '';
         if (m.img) {
