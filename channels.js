@@ -222,6 +222,17 @@ export function revealAnonAuthor(postId) {
     return setAnonAuthor(postId, {});
 }
 
+
+export function updateEchoPost(postId, patch = {}) {
+    const ch = getAnonChannel();
+    const p = (ch.posts || []).find(x => x.id === postId);
+    if (!p) return false;
+    if ('status' in patch) p.status = String(patch.status || '').slice(0, 24);
+    if ('text' in patch && String(patch.text || '').trim()) p.text = String(patch.text).trim().slice(0, 900);
+    saveMeta();
+    return true;
+}
+
 export function startEchoArc(title = '') {
     const ch = getAnonChannel();
     ch.arcSeq = (ch.arcSeq || 1) + 1;

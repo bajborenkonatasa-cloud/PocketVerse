@@ -1802,16 +1802,29 @@ Format: [{"from":"sender: short name or a phone number in the local format","tex
     return { from: String(it.from).slice(0, 40), text: String(it.text).slice(0, 300) };
 }
 
+// ── Экономная шапка для ручных «Эхо/Хроника».
+// Намеренно НЕ тянет карточки/лорбук и десятки сообщений: только последние 6 RP-сообщений + часы.
+function compactWorldHeader(what, { publicOnly = false } = {}) {
+    let block = `You are a compact world-content generator inside a text roleplay. Task: ${what}\nThis is a STANDALONE task. Be economical: use ONLY the excerpt below; do not expand context or recap the whole story.\n`;
+    const rp = rpContextBlock(6, { publicOnly });
+    if (rp) block += `\n=== LAST 6 ROLEPLAY MESSAGES MAX ===\n${rp}\n=== END ===\n`;
+    const dt = getRpDateTime();
+    if (dt) block += `\nIN-WORLD CLOCK: ${String(dt.day).padStart(2,'0')}.${String(dt.month).padStart(2,'0')}.${dt.year}${dt.hours===undefined?'':` ${String(dt.hours).padStart(2,'0')}:${String(dt.minutes||0).padStart(2,'0')}`}\n`;
+    block += `Infer setting conservatively from the excerpt. If a fact/place is not supported, keep it generic instead of inventing heavy lore.\n`;
+    if (publicOnly) block += `Public-world rule: outsiders know only witnessed/public events. Never expose private messages, notes, bank, calendar, or closed-door scenes without a witness.\n`;
+    return block;
+}
+
 // ── Новости: лента города/мира под лорбук и сюжет ──
 export async function generateNewsFeed(existingTitles = []) {
-    const prompt = `${await taskHeader(`generate a news feed for the news app on ${getUserName()}'s phone.`)}
-Invent 7-10 news items for the CITY/WORLD of the roleplay: local incidents, society gossip, economy, oddities, weather warnings, culture. 1-2 items MAY obliquely echo recent roleplay events (from an outsider's/press point of view, no private details the press couldn't know). The rest — living world background.
-${existingTitles.length ? `Do not repeat these existing headlines: ${existingTitles.join('; ')}` : ''}
-"tag" — short category (происшествия/светская хроника/экономика/культура/странное...). "title" max 80 chars, "text" 1-3 sentences. Same language as the excerpt. NO emojis.
+    const prompt = `${compactWorldHeader(`assemble ONE small Chronicle issue for ${getUserName()}.`)}
+Create only 4-5 worthwhile items: ONE lead story and 3-4 short briefs. Prefer quality and variety over quantity. One item MAY echo a recent public RP event; the rest are concise background world movement.
+${existingTitles.length ? `Avoid repeating these recent headlines: ${existingTitles.slice(0,8).join('; ')}` : ''}
+"tag" is a short section label. "title" max 70 chars. "text" max 2 short sentences. Same language as RP. NO emojis.
 ${uiLangLine()}
 ${JSON_RULES}
-Format: [{"tag":"категория","title":"заголовок","text":"текст новости"}]`;
-    return await socialGenArray(prompt, { maxTokens: 2048, prefill: '[{"tag":"' });
+Format: [{"tag":"категория","title":"заголовок","text":"текст"}]`;
+    return await socialGenArray(prompt, { maxTokens: 900, prefill: '[{"tag":"' });
 }
 
 
@@ -1853,21 +1866,17 @@ Format: [{"text":"...","photo":""}]`;
 // Лента анонимки: сплетни города + вопросы лично ей. Настоящий автор ("from")
 // в телефоне не показывается — он нужен только для платного вскрытия.
 export async function generateAnonFeed(channelName, existing = [], handle = '') {
-    const prompt = `${await taskHeaderPub(`write new anonymous submissions for «${channelName}» — the town's anonymous gossip channel that ${getUserName()} reads on their phone.`)}
-People send posts there WITHOUT a name: rumours about local people, things they saw, confessions, questions they would never ask to someone's face. The channel publishes them as-is.
-${existing.length ? `Already published (do NOT repeat, do not contradict):\n${existing.slice(0, 6).map(x => `- ${x}`).join('\n')}` : ''}
-${contactsBlock()}
-Write 4-6 new submissions. Give every submission a "kind" chosen to fit its content: "СЛУХ", "СЛЕД", "ШЁПОТ", "СВИДЕТЕЛЬСТВО", "ПРЕДУПРЕЖДЕНИЕ", "ОБЪЯВЛЕНИЕ", "ТАЙНА". MOST OF THEM MUST BE ABOUT OTHER PEOPLE — this is a channel about the whole town, not about two people. Spread them across:
-- minor characters who have already appeared in the roleplay excerpt, BY NAME;
-- people named in the WORLD/LOREBOOK and in the main character's card — their colleagues, family, neighbours, rivals, exes, the staff of the places they frequent. Use those exact names;
-- ordinary locals you invent yourself and can reuse later: a shop, a stairwell, a school, a clinic, a bus route, a building site, a dog, a scandal at a wedding.
-At most ONE post may be about ${getUserName()} and at most ONE about the main character — and even those are optional. If a post IS aimed at ${getUserName()}, set "to" to "${handle}" and speak TO them. Everything else is the town talking about itself: name names, be petty and concrete.
-"from" — who REALLY sent each one, ALWAYS AS A NAME: an exact name from the contacts above when it plausibly is them, otherwise INVENT a full name for the stranger (first name + surname) and add who they are after a comma («Алина Ковалёва, продавщица из ТЦ», «Пётр Гринько, сосед сверху»). NEVER a description without a name — ${getUserName()} can pay to learn it, and a nameless answer is worthless. This field is secret from ${getUserName()}.
+    const prompt = `${compactWorldHeader(`listen for a few fresh world echoes for «${channelName}».`, { publicOnly: true })}
+Create only 3-4 DISTINCT traces worth pinning to a story board. They can be a rumour, witnessed detail, warning, notice, clue, overheard fragment, or small mystery. Do not summarize the RP and do not manufacture filler.
+${existing.length ? `Do not repeat these recent traces:
+${existing.slice(0,6).map(x=>`- ${x}`).join('\n')}` : ''}
+Each "kind" must be one of: "СЛУХ", "СЛЕД", "ШЁПОТ", "СВИДЕТЕЛЬСТВО", "ПРЕДУПРЕЖДЕНИЕ", "ОБЪЯВЛЕНИЕ", "ТАЙНА". At most ONE may concern ${getUserName()} or the main character. "from" is a plausible named witness/source when needed; keep it secret.
 ${uiLangLine()}
 ${JSON_RULES}
-Format: [{"kind":"СЛУХ","text":"...","to":"","from":"кто на самом деле"}]`;
-    return await socialGenArray(prompt, { maxTokens: 1400, prefill: '[{"text":"' });
+Format: [{"kind":"СЛЕД","text":"...","to":"","from":"..."}]`;
+    return await socialGenArray(prompt, { maxTokens: 700, prefill: '[{"kind":"' });
 }
+
 
 // Обсуждение в городской анонимке. Отдельно от обычных каналов: здесь
 // комментируют не «подписчики издания», а весь город — те же люди, что

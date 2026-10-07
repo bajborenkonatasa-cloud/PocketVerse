@@ -41,7 +41,7 @@ import {
     deleteComment, bumpViews, addSubs, matchPostByText, markChannelRead, unreadChannels,
     setChannelAvatar, clearChannelAvatar,
     CHAN_REACTS,
-    ANON_ID, ANON_NAME, anonEnabled, getAnonChannel, anonPostToUser, addAnonPosts, startEchoArc, renameEchoArc,
+    ANON_ID, ANON_NAME, anonEnabled, getAnonChannel, anonPostToUser, addAnonPosts, startEchoArc, renameEchoArc, updateEchoPost,
     postAnonAsUser, anonRevealPrice, canAffordAnonReveal,
     chargeAnonReveal, setAnonAuthor, anonAuthorNeedsLookup,
 } from './channels.js';
@@ -6003,9 +6003,14 @@ function renderNews(screen) {
     const n = getNews();
     const rp = getRpDateTime();
     const issueDate = rp?.label || 'Хроника текущего дня';
-    const items = n.items || [];
+    const issues = Array.isArray(n.issues) ? n.issues : [];
+    if (typeof n.viewIssue !== 'number') n.viewIssue = Math.max(0, issues.length - 1);
+    n.viewIssue = Math.max(0, Math.min(n.viewIssue, Math.max(0, issues.length - 1)));
+    const issue = issues[n.viewIssue] || null;
+    const items = issue?.items || [];
     const hero = items[0];
-    const rest = items.slice(1);
+    const rest = items.slice(1, 5);
+    const issueNo = issue?.seq || 0;
     setHtmlKeepScroll(screen, '.gp-news-scroll', `
         <div class="gp-header gp-thread-header gp-chronicle-head">
             <button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button>
@@ -6019,7 +6024,7 @@ function renderNews(screen) {
                 <p>Нажми ↻ — и мир сам расскажет, что происходило за пределами твоей сцены.</p>
                 <button id="gp-news-first" class="gp-chronicle-print">СОБРАТЬ СВЕЖИЙ ВЫПУСК</button>
             </section>` : `<section class="gp-chronicle-paper">
-                <header class="gp-chronicle-masthead"><span>VOL. XII</span><b>THE WORLD CHRONICLE</b><span>${esc(issueDate)}</span></header>
+                <header class="gp-chronicle-masthead"><span>№ ${String(issueNo).padStart(2,'0')}</span><b>THE WORLD CHRONICLE</b><span>${esc(issueDate)}</span></header>${issues.length > 1 ? `<nav class="gp-chronicle-issues"><button id="gp-news-prev" ${n.viewIssue<=0?'disabled':''}>‹</button><span>ВЫПУСК ${n.viewIssue+1} / ${issues.length}</span><button id="gp-news-next" ${n.viewIssue>=issues.length-1?'disabled':''}>›</button></nav>` : ''}
                 <div class="gp-chronicle-rule"></div>
                 ${hero ? `<article class="gp-chronicle-lead">
                     <div class="gp-chronicle-tag">${esc(hero.tag)}</div><h2>${esc(hero.title)}</h2><p>${esc(hero.text)}</p>
@@ -6038,12 +6043,14 @@ function renderNews(screen) {
     const refresh = async () => {
         if (_newsBusy) return;
         _newsBusy = true; render();
-        try { const added = await refreshNews(); toast(`Свежий выпуск: +${added}`, 'fa-newspaper'); }
+        try { const added = await refreshNews(); const nn=getNews(); nn.viewIssue=Math.max(0,(nn.issues||[]).length-1); toast(`Выпуск собран: ${added} материалов`, 'fa-newspaper'); }
         catch (e) { toast(String(e?.message || e).slice(0, 70), 'fa-circle-exclamation'); }
         finally { _newsBusy = false; if (currentScreen === 'news') render(); }
     };
     screen.querySelector('#gp-news-refresh')?.addEventListener('click', refresh);
     screen.querySelector('#gp-news-first')?.addEventListener('click', refresh);
+    screen.querySelector('#gp-news-prev')?.addEventListener('click', () => { n.viewIssue = Math.max(0, n.viewIssue - 1); render(); });
+    screen.querySelector('#gp-news-next')?.addEventListener('click', () => { n.viewIssue = Math.min(issues.length - 1, n.viewIssue + 1); render(); });
     screen.querySelectorAll('[data-share-news]').forEach(btn => btn.addEventListener('click', () => {
         if (shareNews(btn.getAttribute('data-share-news'))) { applyChatHiding(); toast('Ушло в ролевую — персонажи могут отреагировать', 'fa-share'); }
     }));
@@ -6448,7 +6455,7 @@ function renderChannels(screen) {
     const arcIds = [...new Set(posts.map(p => p.arcId || echo?.currentArc || 'arc-1'))];
     const currentArc = echo?.currentArc || arcIds[0] || 'arc-1';
     const titleOf = id => echo?.arcTitles?.[id] || (id === currentArc ? 'Текущая глава' : 'Архивная глава');
-    const note = (post,i) => `<button class="gp-echo-note gp-echo-note-${i%7}" data-chanopenrow="${esc(echo.id)}"><span class="gp-echo-pin"></span><i>${echoMarks[i%echoMarks.length]}</i><b>${esc(post.kind || echoKinds[i%echoKinds.length])}</b><span>${esc(String(post.text||'').slice(0,145))}</span><small>${esc(timeAgo(post.time))}</small></button>`;
+    const note = (post,i) => `<button class="gp-echo-note gp-echo-note-${i%7}" data-echopost="${esc(post.id)}"><span class="gp-echo-pin"></span><i>${echoMarks[i%echoMarks.length]}</i><b>${esc(post.kind || echoKinds[i%echoKinds.length])}</b><span>${esc(String(post.text||'').slice(0,145))}</span><small>${post.status ? `<em class="gp-echo-status">${esc(post.status)}</em>` : ''}${esc(timeAgo(post.time))}</small></button>`;
     const currentPosts = posts.filter(p => (p.arcId || currentArc) === currentArc).slice(0,8);
     const archived = arcIds.filter(id => id !== currentArc);
     const echoBoard = echo ? `<section class="gp-echo-board">
@@ -6466,8 +6473,21 @@ function renderChannels(screen) {
         </div>`);
 
     screen.querySelector('#gp-back')?.addEventListener('click', () => goto('home'));
-    screen.querySelectorAll('[data-chanopenrow]').forEach(b => b.addEventListener('click', () => { _chanId = b.getAttribute('data-chanopenrow'); markChannelRead(_chanId); goto('chan'); }));
-    screen.querySelector('#gp-echo-myvoice')?.addEventListener('click', () => { _chanId = echo.id; markChannelRead(_chanId); goto('chan'); });
+    screen.querySelectorAll('[data-echopost]').forEach(b => b.addEventListener('click', () => {
+        const post = (echo.posts || []).find(x => x.id === b.getAttribute('data-echopost'));
+        if (!post) return;
+        const veil = document.createElement('div'); veil.className='gp-echo-modal';
+        veil.innerHTML=`<div class="gp-echo-open"><button class="gp-echo-close">×</button><div class="gp-echo-openkind">${esc(post.kind||'СЛЕД')}</div><div class="gp-echo-opentext">${esc(post.text||'')}</div><div class="gp-echo-stamps"><button data-stamp="ВАЖНО">ВАЖНО</button><button data-stamp="ПОДТВЕРЖДЕНО">ПОДТВЕРЖДЕНО</button><button data-stamp="???">???</button><button data-stamp="ЛОЖЬ">ЛОЖЬ</button><button data-stamp="">СНЯТЬ</button></div><small>${esc(timeAgo(post.time))}</small></div>`;
+        screen.appendChild(veil);
+        veil.querySelector('.gp-echo-close')?.addEventListener('click',()=>veil.remove());
+        veil.addEventListener('click',e=>{if(e.target===veil)veil.remove();});
+        veil.querySelectorAll('[data-stamp]').forEach(x=>x.addEventListener('click',()=>{updateEchoPost(post.id,{status:x.getAttribute('data-stamp')});veil.remove();render();}));
+    }));
+    screen.querySelector('#gp-echo-myvoice')?.addEventListener('click', () => {
+        const text = prompt('Какой след оставить в этой арке?');
+        if (!text?.trim()) return;
+        addAnonPosts([{ kind:'ЗАПИСКА', text:text.trim(), from:getUserName?.() || 'Я' }]); render(); toast('След приколот к доске','fa-thumbtack');
+    });
     screen.querySelector('#gp-echo-newarc')?.addEventListener('click', () => {
         const name = prompt('Название новой арки', 'Новая глава');
         if (name === null) return;
