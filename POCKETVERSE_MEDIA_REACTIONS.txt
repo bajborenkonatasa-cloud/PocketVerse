@@ -1,1 +1,0 @@
-v1.1.0: compact GIFs; user GIPHY picker; GIF/meme and sticker search; selected media is stored only in PocketVerse local SMS and described compactly to the quiet phone request.
