@@ -1,1 +1,0 @@
-PocketVerse v1.2.3: real Instagram/MMS image generation now uses RP-aware Visual Scene Engine before SIP; Scene Blocks-style multi-character structure; Card/Persona/SIP appearance fallback; English-only blueprint; raw LLM snapshot; robust JSON fallback.
