@@ -1,9 +1,0 @@
-PocketVerse v1.2.5 — Prompt Writer Fix
-- Replaced overcomplicated Visual Blueprint instruction with direct Scene Blocks Lite-style image prompt writer rules.
-- Locked visible cast: exactly one object per resolved identity; no extras/merges.
-- Character names are now retained as identity anchors in final NovelAI character blocks.
-- Current RP/photo idea explicitly controls environment, clothing, pose, expression, gaze, action, camera and factual light.
-- Explicitly forbids social-media UI, watermarks, captions, logos and unrelated backgrounds unless requested.
-- Preserves NSFW support for established adult RP with direct clinical/Danbooru terminology and Action Tags; no censorship and no escalation.
-- Keeps SIP appearance/reference routing untouched.
-- Reduced blueprint max output from 1100 to 700 tokens.
