@@ -1,5 +1,0 @@
-PocketVerse v1.1.7 — Identity Resolver Lab 3
-- Recognizes SIP Character/Persona avatar fallback as a real primary reference.
-- Reads SIP Additional Reference lorebooks as NPC/manual identity library.
-- Shows aliases and reference/description availability.
-- SAFE diagnostic only: no model/image generation and no RP mutation.
