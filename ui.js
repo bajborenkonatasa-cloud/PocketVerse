@@ -6010,6 +6010,10 @@ function renderNews(screen) {
 // ═══ ЗАМЕТКИ ═══
 
 let _noteEditId = null;
+// Draft UI state lives outside renderNotes so harmless phone re-renders cannot reset
+// the selected mode/sticker/marker or make the editor appear to flicker.
+let _noteDraft = { mode: 'private', sticker: '✦', color: 'lilac', text: '' };
+let _noteDraftFor = null;
 // Планы и важные даты — вторая вкладка заметок. Дни считаются по ролевому
 // времени: «сегодня» — это сегодня в истории.
 let _notesTab = 'notes';
@@ -6167,13 +6171,13 @@ function renderNotes(screen) {
                 <span class="gp-paper-tape"></span>
                 <textarea id="gp-note-text" rows="3" placeholder="Запиши, пока не забыла…"></textarea>
                 <div class="gp-note-modes">
-                    <button data-note-mode="private" class="gp-note-mode gp-active">🔒 Только мне</button>
-                    <button data-note-mode="aware" class="gp-note-mode">👁 Учитывать</button>
-                    <button data-note-mode="todo" class="gp-note-mode">📌 Не забыть</button>
+                    <button type="button" data-note-mode="private" class="gp-note-mode gp-active">🔒 Только мне</button>
+                    <button type="button" data-note-mode="aware" class="gp-note-mode">👁 Учитывать</button>
+                    <button type="button" data-note-mode="todo" class="gp-note-mode">📌 Не забыть</button>
                 </div>
                 <div class="gp-note-decor">
-                    <div class="gp-stickers">${stickers.map((x,i)=>`<button data-sticker="${esc(x)}" class="${i===0?'gp-active':''}">${x}</button>`).join('')}</div>
-                    <div class="gp-markers">${colors.map((x,i)=>`<button data-note-color="${x[0]}" class="gp-marker gp-marker-${x[0]} ${i===0?'gp-active':''}" title="${x[1]}"></button>`).join('')}</div>
+                    <div class="gp-stickers">${stickers.map((x,i)=>`<button type="button" data-sticker="${esc(x)}" class="${i===0?'gp-active':''}">${x}</button>`).join('')}</div>
+                    <div class="gp-markers">${colors.map((x,i)=>`<button type="button" data-note-color="${x[0]}" class="gp-marker gp-marker-${x[0]} ${i===0?'gp-active':''}" title="${x[1]}"></button>`).join('')}</div>
                 </div>
                 <button class="gp-primary" id="gp-note-save">${editing ? 'Сохранить запись' : '✎ Добавить в дневник'}</button>
                 ${editing ? `<button class="gp-secondary gp-unequip" id="gp-note-cancel">Отменить правку</button>` : ''}
@@ -6189,22 +6193,30 @@ function renderNotes(screen) {
                 </article>`}).join('')}</div>`}
         </div>`);
     const area = screen.querySelector('#gp-note-text');
-    let chosenMode = editing ? modeOf(editing) : 'private'; let chosenSticker = editing?.sticker || '✦'; let chosenColor = editing?.color || 'lilac';
-    if (editing && area) area.value = editing.text;
+    const draftKey = editing?.id || '__new__';
+    if (_noteDraftFor !== draftKey) {
+        _noteDraftFor = draftKey;
+        _noteDraft = editing
+            ? { mode: modeOf(editing), sticker: editing.sticker || '✦', color: editing.color || 'lilac', text: editing.text || '' }
+            : { mode: 'private', sticker: '✦', color: 'lilac', text: '' };
+    }
+    let chosenMode = _noteDraft.mode; let chosenSticker = _noteDraft.sticker; let chosenColor = _noteDraft.color;
+    if (area) area.value = _noteDraft.text || '';
+    area?.addEventListener('input', () => { _noteDraft.text = area.value; });
     const paint = () => {
         screen.querySelectorAll('[data-note-mode]').forEach(b=>b.classList.toggle('gp-active', b.dataset.noteMode===chosenMode));
         screen.querySelectorAll('[data-sticker]').forEach(b=>b.classList.toggle('gp-active', b.dataset.sticker===chosenSticker));
         screen.querySelectorAll('[data-note-color]').forEach(b=>b.classList.toggle('gp-active', b.dataset.noteColor===chosenColor));
     }; paint();
-    screen.querySelectorAll('[data-note-mode]').forEach(b=>b.addEventListener('click',()=>{chosenMode=b.dataset.noteMode;paint();}));
-    screen.querySelectorAll('[data-sticker]').forEach(b=>b.addEventListener('click',()=>{chosenSticker=b.dataset.sticker;paint();}));
-    screen.querySelectorAll('[data-note-color]').forEach(b=>b.addEventListener('click',()=>{chosenColor=b.dataset.noteColor;paint();}));
+    screen.querySelectorAll('[data-note-mode]').forEach(b=>b.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();chosenMode=b.dataset.noteMode;_noteDraft.mode=chosenMode;paint();}));
+    screen.querySelectorAll('[data-sticker]').forEach(b=>b.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();chosenSticker=b.dataset.sticker;_noteDraft.sticker=chosenSticker;paint();}));
+    screen.querySelectorAll('[data-note-color]').forEach(b=>b.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();chosenColor=b.dataset.noteColor;_noteDraft.color=chosenColor;paint();}));
     screen.querySelector('#gp-back')?.addEventListener('click', () => { _noteEditId = null; goto('home'); }); bindNotesTabs(screen);
     screen.querySelector('#gp-note-save')?.addEventListener('click', () => { const text=area?.value.trim(); if(!text)return;
         if(_noteEditId){ updateNote(_noteEditId,text); updateNoteDecor(_noteEditId,{mode:chosenMode,sticker:chosenSticker,color:chosenColor}); _noteEditId=null; }
-        else addNote(text,{mode:chosenMode,sticker:chosenSticker,color:chosenColor}); updatePhoneInjection(); render(); });
-    screen.querySelector('#gp-note-cancel')?.addEventListener('click',()=>{_noteEditId=null;render();});
-    screen.querySelectorAll('[data-edit-note]').forEach(el=>el.addEventListener('click',()=>{_noteEditId=el.dataset.editNote;render();}));
+        else addNote(text,{mode:chosenMode,sticker:chosenSticker,color:chosenColor}); _noteDraftFor=null; _noteDraft={mode:'private',sticker:'✦',color:'lilac',text:''}; updatePhoneInjection(); render(); });
+    screen.querySelector('#gp-note-cancel')?.addEventListener('click',()=>{_noteEditId=null;_noteDraftFor=null;render();});
+    screen.querySelectorAll('[data-edit-note]').forEach(el=>el.addEventListener('click',()=>{_noteEditId=el.dataset.editNote;_noteDraftFor=null;render();}));
     screen.querySelectorAll('[data-note-done]').forEach(b=>b.addEventListener('click',()=>{const n=getNotes().find(x=>x.id===b.dataset.noteDone); if(n) updateNoteDecor(n.id,{done:!n.done}); render();}));
     screen.querySelectorAll('[data-del-note]').forEach(btn=>btn.addEventListener('click',()=>{if(confirm('Удалить заметку?')){const id=btn.dataset.delNote;deleteNote(id);if(_noteEditId===id)_noteEditId=null;updatePhoneInjection();render();}}));
 }
