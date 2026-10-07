@@ -1,5 +1,0 @@
-PocketVerse v1.1.6 — Media Identity Lab 2
-- Read-only diagnostics now resolves current Character and active User Persona independently.
-- Reads the Silly Images Plus character/user reference library and lists NPC candidates.
-- Does not generate images, mutate RP chat, or automatically attach references.
-- Safety rule: only visible subjects may be attached to a generation; never use a foreign reference as fallback.
