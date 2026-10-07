@@ -1,1 +1,0 @@
-PocketVerse v1.1.9 — Alias + Russian cases + selfie detection fix. SAFE resolver only.
