@@ -6489,10 +6489,11 @@ function renderChannels(screen) {
         if (!post) return;
         const veil = document.createElement('div'); veil.className='gp-echo-modal';
         veil.innerHTML=`<div class="gp-echo-open"><button class="gp-echo-close">×</button><div class="gp-echo-openkind">${esc(post.kind||'СЛЕД')}</div><div class="gp-echo-opentext">${esc(post.text||'')}</div><div class="gp-echo-stamps"><button data-stamp="ВАЖНО">ВАЖНО</button><button data-stamp="ПОДТВЕРЖДЕНО">ПОДТВЕРЖДЕНО</button><button data-stamp="???">???</button><button data-stamp="ЛОЖЬ">ЛОЖЬ</button><button data-stamp="">СНЯТЬ</button></div><small>${esc(timeAgo(post.time))}</small></div>`;
-        screen.appendChild(veil);
+        // Mount the Echo detail overlay at document level. On phones the PocketVerse screen
+        // may live inside a transformed/scaled container, which makes position:fixed escape the viewport.
+        document.body.appendChild(veil);
         veil.querySelector('.gp-echo-close')?.addEventListener('click',()=>veil.remove());
         veil.addEventListener('click',(e)=>{ if(e.target===veil) veil.remove(); });
-        veil.addEventListener('click',e=>{if(e.target===veil)veil.remove();});
         veil.querySelectorAll('[data-stamp]').forEach(x=>x.addEventListener('click',()=>{updateEchoPost(post.id,{status:x.getAttribute('data-stamp')});veil.remove();render();}));
     }));
     screen.querySelector('#gp-echo-myvoice')?.addEventListener('click', () => {
