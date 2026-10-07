@@ -20,11 +20,11 @@ export function getChannels() {
 
 export function myChannel() { return getChannels().mine; }
 
-// ══ Подслушано: городская анонимка ══
+// ══ Эхо: слухи, следы и шёпот мира ══
 // Канал есть всегда и не удаляется. Туда валятся сплетни города и вопросы
 // лично ей через @ник; автор поста скрыт, но его можно пробить за деньги.
 export const ANON_ID = 'anon';
-export const ANON_NAME = 'Подслушано';
+export const ANON_NAME = 'Эхо';
 
 export function anonEnabled() { return getSettings().anonChannel !== false; }
 
@@ -37,7 +37,7 @@ export function getAnonChannel() {
             mine: false,
             subscribed: true,
             name: ANON_NAME,
-            desc: 'Городские сплетни. Присылают анонимно',
+            desc: 'Слухи · следы · шёпот мира',
             subs: 4200 + Math.floor(Math.random() * 6000),
             posts: [],
             unread: 0,
@@ -111,7 +111,7 @@ export function addAnonPosts(arr, { fromTag = false } = {}) {
     // Пишем ВСЕГДА, в том числе про посты из тега: сам тег — сырой JSON
     // посреди прозы, и в следующем ходе модель не помнит, что публиковала.
     logSocialToChat(
-        `В «${ANON_NAME}» (городская анонимка, её читает ${getUserName()}) ${fromTag ? 'появился новый пост' : 'появились новые посты'}: `
+        `В «${ANON_NAME}» (слухи и шёпот мира, это читает ${getUserName()}) ${fromTag ? 'появился новый пост' : 'появились новые посты'}: `
         + fresh.map(p => `«${p.text.slice(0, 200)}»${p.to ? ` — адресовано ${p.to}` : ''}`).join('; ')
         + `. Авторы не подписаны.`,
     );

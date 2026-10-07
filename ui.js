@@ -1353,7 +1353,7 @@ function renderHome(screen) {
                 ${card('ig','IV','♥','Instagram','моменты','◎')}
                 ${card('notes','V','♣','Заметки',plansBadgeCount() ? `${plansBadgeCount()} дел` : 'мысли','✎')}
                 ${card('news','VI','♦','Новости','мир','▤')}
-                ${card('chans','VII','♠','Каналы',unreadChannels() ? `${unreadChannels()} новых` : 'эфир','◇')}
+                ${card('chans','VII','♠','Эхо',unreadChannels() ? `${unreadChannels()} новых` : 'слухи · следы','◇')}
                 ${card('twitch','VIII','♣','Twitch',getTwitch().myStream ? 'LIVE' : 'стримы','▷',getTwitch().myStream?'gp-card-hot':'')}
                 ${card('tw','IX','♦','Twitter','лента','#')}
                 ${card('of','X','♥','OnlyFans','личное','♡')}
@@ -6436,50 +6436,34 @@ function drawChannelAvatar(ch) {
 function renderChannels(screen) {
     currentScreen = 'chans';
     const c = getChannels();
-    // Каналы знакомых живут отдельной секцией: это люди, а не издания
+    const echo = anonEnabled() ? getAnonChannel() : null;
     const people = c.list.filter(x => x.person);
     const subs = c.list.filter(x => !x.person && x.subscribed);
     const found = c.list.filter(x => !x.person && !x.subscribed);
 
     const row = (ch) => {
         const last = ch.posts?.[0];
-        const sub = ch.mine
-            ? subsLine(ch)
-            : (last ? (last.text || last.imgDesc || 'фото') : (ch.desc || subsLine(ch)));
-        return `
-        <button class="gp-chan-row${ch.mine ? ' gp-chan-row-mine' : ''}" data-chanopenrow="${esc(ch.id)}">
-            ${chanAvatar(ch, 'gp-avatar')}
-            <span class="gp-chan-rowbody">
-                <span class="gp-chan-rowtop">
-                    <span class="gp-chan-rowname">${esc(ch.name)}</span>
-                    ${last ? `<span class="gp-chan-rowtime">${esc(timeAgo(last.time))}</span>` : ''}
-                </span>
-                <span class="gp-chan-rowsub">${esc(sub)}</span>
-            </span>
-            ${ch.unread ? `<span class="gp-chan-unread">${ch.unread}</span>` : ''}
-        </button>`;
+        const sub = ch.mine ? subsLine(ch) : (last ? (last.text || last.imgDesc || 'фото') : (ch.desc || subsLine(ch)));
+        return `<button class="gp-chan-row${ch.mine ? ' gp-chan-row-mine' : ''}" data-chanopenrow="${esc(ch.id)}">
+            ${chanAvatar(ch, 'gp-avatar')}<span class="gp-chan-rowbody"><span class="gp-chan-rowtop"><span class="gp-chan-rowname">${esc(ch.name)}</span>${last ? `<span class="gp-chan-rowtime">${esc(timeAgo(last.time))}</span>` : ''}</span><span class="gp-chan-rowsub">${esc(sub)}</span></span>${ch.unread ? `<span class="gp-chan-unread">${ch.unread}</span>` : ''}</button>`;
     };
+    const echoKinds = ['СЛУХ','СЛЕД','ШЁПОТ','СВИДЕТЕЛЬСТВО','ТАЙНА'];
+    const echoBoard = echo ? `<section class="gp-echo-board" data-chanopenrow="${esc(echo.id)}">
+        <div class="gp-echo-kicker">VII · WORLD WHISPERS</div>
+        <div class="gp-echo-title">Эхо</div>
+        <div class="gp-echo-sub">слухи · следы · шёпот мира</div>
+        <div class="gp-echo-thread"></div>
+        <div class="gp-echo-grid">${(echo.posts || []).slice(0,5).map((post,i)=>`<button class="gp-echo-note gp-echo-note-${i%5}" data-chanopenrow="${esc(echo.id)}"><span class="gp-echo-pin"></span><b>${echoKinds[i%echoKinds.length]}</b><span>${esc(String(post.text||'').slice(0,150))}</span><small>${esc(timeAgo(post.time))}</small></button>`).join('') || `<button class="gp-echo-empty" data-chanopenrow="${esc(echo.id)}"><span>✦</span><b>Здесь пока тихо</b><small>Первый слух появится, когда мир начнёт говорить.</small></button>`}</div>
+        <div class="gp-echo-foot">Не всё здесь правда. Но всё может оставить след.</div>
+    </section>` : '';
 
     setHtmlKeepScroll(screen, '.gp-chan-scroll', `
-        <div class="gp-header gp-thread-header">
-            <button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button>
-            <div class="gp-title gp-title-app">${ic('fa-paper-plane')} Каналы</div>
-            <button class="gp-iconbtn" id="gp-chan-person" title="Канал знакомого" ${_chanBusy ? 'disabled' : ''}>${ic('fa-user-plus')}</button>
-            <button class="gp-iconbtn" id="gp-chan-find" title="Найти каналы" ${_chanBusy ? 'disabled' : ''}>${ic(_chanBusy ? 'fa-spinner fa-spin' : 'fa-magnifying-glass')}</button>
-        </div>
-        <div class="gp-chan-scroll">
-            ${anonEnabled() ? `<div class="gp-chan-section">Город</div>${row(getAnonChannel())}` : ''}
-            <div class="gp-chan-section">Мой канал</div>
-            ${c.mine ? row(c.mine) : `
-                <button class="gp-chan-create" id="gp-chan-create">
-                    ${ic('fa-plus')}<span>Завести свой канал</span>
-                </button>`}
-            ${people.length ? `<div class="gp-chan-section">Каналы знакомых</div>${people.map(row).join('')}` : ''}
-            ${subs.length ? `<div class="gp-chan-section">Подписки</div>${subs.map(row).join('')}` : ''}
-            ${found.length ? `<div class="gp-chan-section">Можно подписаться</div>${found.map(row).join('')}` : ''}
-            ${!subs.length && !found.length && !people.length ? `
-                <div class="gp-empty"><div class="gp-empty-icon">${ic('fa-paper-plane')}</div>
-                <div class="gp-empty-text">Поиск соберёт каналы этого города и мира,<br>а ${ic('fa-user-plus')} заведёт канал знакомого</div></div>` : ''}
+        <div class="gp-header gp-thread-header"><button class="gp-iconbtn" id="gp-back">${ic('fa-chevron-left')}</button><div><div class="gp-title gp-title-app">Эхо</div><div class="gp-echo-headsub">ШЁПОТ МИРА</div></div><button class="gp-iconbtn" id="gp-chan-person" title="Источник знакомого" ${_chanBusy ? 'disabled' : ''}>${ic('fa-user-plus')}</button><button class="gp-iconbtn" id="gp-chan-find" title="Найти источники" ${_chanBusy ? 'disabled' : ''}>${ic(_chanBusy ? 'fa-spinner fa-spin' : 'fa-magnifying-glass')}</button></div>
+        <div class="gp-chan-scroll gp-echo-scroll">${echoBoard}
+            <div class="gp-chan-section">Мой голос</div>${c.mine ? row(c.mine) : `<button class="gp-chan-create" id="gp-chan-create">${ic('fa-plus')}<span>Оставить свой след</span></button>`}
+            ${people.length ? `<div class="gp-chan-section">Голоса знакомых</div>${people.map(row).join('')}` : ''}
+            ${subs.length ? `<div class="gp-chan-section">Источники</div>${subs.map(row).join('')}` : ''}
+            ${found.length ? `<div class="gp-chan-section">Найдено в мире</div>${found.map(row).join('')}` : ''}
         </div>`);
 
     screen.querySelector('#gp-back')?.addEventListener('click', () => goto('home'));
