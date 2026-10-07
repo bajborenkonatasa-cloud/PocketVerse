@@ -4751,3 +4751,36 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
  dialog.gp-echo-modal{padding:calc(env(safe-area-inset-top) + 12px) 12px calc(env(safe-area-inset-bottom) + 12px)!important}
  dialog.gp-echo-modal>.gp-echo-open{width:min(92vw,430px)!important;max-width:92vw!important;max-height:calc(100dvh - 72px)!important}
 }
+
+
+/* pocketverse.49.6 — readable Chronicle + taller mobile chat */
+@media (max-width: 600px){
+  /* Chronicle: keep the compact newspaper, but make the actual reading text comfortable. */
+  #gp-phone .gp-chronicle-scroll{padding:6px 9px 18px!important;overflow-x:hidden!important}
+  #gp-phone .gp-chronicle-paper{box-sizing:border-box!important;width:100%!important;max-width:100%!important;margin:0!important;padding:14px 12px 15px!important;overflow:hidden!important}
+  #gp-phone .gp-chronicle-masthead{grid-template-columns:34px minmax(0,1fr) 52px!important;gap:5px!important}
+  #gp-phone .gp-chronicle-masthead b,#gp-phone .gp-chronicle-mast{font-size:17px!important;line-height:1.02!important;white-space:normal!important}
+  #gp-phone .gp-chronicle-lead h2{font-size:21px!important;line-height:1.08!important;margin:5px 0 7px!important}
+  #gp-phone .gp-chronicle-lead p,#gp-phone .gp-chronicle-brief p{font-size:11.5px!important;line-height:1.42!important;overflow-wrap:anywhere!important}
+  #gp-phone .gp-chronicle-columns{grid-template-columns:1fr 1fr!important;gap:0!important;min-width:0!important}
+  #gp-phone .gp-chronicle-brief{min-width:0!important;padding:8px 7px 9px!important}
+  #gp-phone .gp-chronicle-brief h3{font-size:13px!important;line-height:1.16!important;margin:4px 0 5px!important;overflow-wrap:anywhere!important;hyphens:auto!important}
+  #gp-phone .gp-chronicle-tag{font-size:7.5px!important}
+  #gp-phone .gp-chronicle-brief small{font-size:7.5px!important}
+  #gp-phone .gp-chronicle-footer{font-size:8px!important}
+  #gp-phone .gp-chronicle-actions button{font-size:8.5px!important;padding:3px 4px!important}
+  #gp-phone .gp-chronicle-issues{margin:6px 0 9px!important;font-size:7.5px!important}
+
+  /* Chat: reclaim vertical room without shrinking the text or tap targets too far. */
+  #gp-phone .gp-thread-header{padding:5px 3px 8px!important;gap:7px!important;margin-bottom:0!important}
+  #gp-phone .gp-thread-header:after{bottom:1px!important}
+  #gp-phone .gp-thread-header>.gp-avatar,#gp-phone .gp-thread-header>#gp-ava-btn .gp-avatar{width:42px!important;height:46px!important}
+  #gp-phone .gp-thread-header .gp-row-name{font-size:17px!important}
+  #gp-phone .gp-thread-number{margin-top:2px!important;font-size:7.5px!important}
+  #gp-phone .gp-thread-menu-btn{width:40px!important;height:42px!important;flex-basis:40px!important}
+  #gp-phone .gp-thread-actions{top:54px!important}
+  #gp-phone .gp-msgs{padding:6px 3px 8px!important}
+  #gp-phone .gp-inputbar{margin:0 0 3px!important;padding:5px 3px 5px!important}
+  #gp-phone .gp-statusbar{padding-bottom:0!important}
+  body.gp-native-shell #gp-phone>.gp-statusbar{padding-top:24px!important}
+}
