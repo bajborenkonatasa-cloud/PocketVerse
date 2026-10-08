@@ -649,9 +649,13 @@ function tickClock() {
 // только мешают.
 const BLEED_SCREENS = new Set(['discord', 'dchannel', 'twitch', 'stream', 'mystream', 'igstory', 'lock']);
 
-export function render() {
+export function render(force = false) {
     const screen = document.getElementById('gp-screen');
     if (!screen || !isPhoneOpen()) return;
+    // Keep the journal DOM mounted during unrelated SillyTavern / phone updates.
+    // Replacing its textarea while Android IME is active causes keyboard flicker
+    // and viewport jumps. Explicit journal actions use render(true).
+    if (!force && currentScreen === 'notes' && screen.querySelector('.gp-notes-scroll')) return;
     // During a quiet phone LLM request SillyTavern and other extensions can emit many
     // render-triggering events. Keep the already-painted Messages DOM frozen so the
     // phone does not flash/rebuild (the old "disco" bug). We render exactly once
@@ -6032,7 +6036,7 @@ function notesTabsHtml() {
 function bindNotesTabs(screen) {
     screen.querySelectorAll('[data-notestab]').forEach(b => b.addEventListener('click', () => {
         _notesTab = b.getAttribute('data-notestab');
-        render();
+        render(true);
     }));
 }
 
@@ -6210,11 +6214,11 @@ function renderNotes(screen) {
     screen.querySelector('#gp-back')?.addEventListener('click', () => { _noteEditId = null; goto('home'); }); bindNotesTabs(screen);
     screen.querySelector('#gp-note-save')?.addEventListener('click', () => { const text=area?.value.trim(); if(!text)return;
         if(_noteEditId){ updateNote(_noteEditId,text); updateNoteDecor(_noteEditId,{mode:chosenMode,sticker:chosenSticker,color:chosenColor}); _noteEditId=null; }
-        else addNote(text,{mode:chosenMode,sticker:chosenSticker,color:chosenColor}); _noteDraftFor=null; _noteDraft={mode:'private',sticker:'✦',color:'lilac',text:''}; updatePhoneInjection(); render(); });
-    screen.querySelector('#gp-note-cancel')?.addEventListener('click',()=>{_noteEditId=null;_noteDraftFor=null;render();});
-    screen.querySelectorAll('[data-edit-note]').forEach(el=>el.addEventListener('click',()=>{_noteEditId=el.dataset.editNote;_noteDraftFor=null;render();}));
-    screen.querySelectorAll('[data-note-done]').forEach(b=>b.addEventListener('click',()=>{const n=getNotes().find(x=>x.id===b.dataset.noteDone); if(n) updateNoteDecor(n.id,{done:!n.done}); render();}));
-    screen.querySelectorAll('[data-del-note]').forEach(btn=>btn.addEventListener('click',()=>{if(confirm('Удалить заметку?')){const id=btn.dataset.delNote;deleteNote(id);if(_noteEditId===id)_noteEditId=null;updatePhoneInjection();render();}}));
+        else addNote(text,{mode:chosenMode,sticker:chosenSticker,color:chosenColor}); _noteDraftFor=null; _noteDraft={mode:'private',sticker:'✦',color:'lilac',text:''}; updatePhoneInjection(); render(true); });
+    screen.querySelector('#gp-note-cancel')?.addEventListener('click',()=>{_noteEditId=null;_noteDraftFor=null;render(true);});
+    screen.querySelectorAll('[data-edit-note]').forEach(el=>el.addEventListener('click',()=>{_noteEditId=el.dataset.editNote;_noteDraftFor=null;render(true);}));
+    screen.querySelectorAll('[data-note-done]').forEach(b=>b.addEventListener('click',()=>{const n=getNotes().find(x=>x.id===b.dataset.noteDone); if(n) updateNoteDecor(n.id,{done:!n.done}); render(true);}));
+    screen.querySelectorAll('[data-del-note]').forEach(btn=>btn.addEventListener('click',()=>{if(confirm('Удалить заметку?')){const id=btn.dataset.delNote;deleteNote(id);if(_noteEditId===id)_noteEditId=null;updatePhoneInjection();render(true);}}));
 }
 
 // ═══ СКАМ-СМС: доставка призраком ═══
