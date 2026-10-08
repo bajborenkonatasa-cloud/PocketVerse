@@ -6155,8 +6155,6 @@ function renderNotes(screen) {
     if (_notesTab === 'plans') { renderPlans(screen); return; }
     const notes = getNotes();
     const editing = _noteEditId ? notes.find(n => n.id === _noteEditId) : null;
-    const stickers = ['✦','♡','★','☕','♫','☾','🔥','💌','⚠','🌸','👀','📌'];
-    const colors = [['lilac','Лиловый'],['rose','Розовый'],['blue','Голубой'],['yellow','Жёлтый']];
     const modeOf = n => n.mode || (n.shared ? 'aware' : 'private');
     const modeLabel = m => m === 'aware' ? '👁 Учитывать' : m === 'todo' ? '📌 Не забыть' : '🔒 Только мне';
     setHtmlKeepScroll(screen, '.gp-notes-scroll', `
@@ -6174,10 +6172,6 @@ function renderNotes(screen) {
                     <button type="button" data-note-mode="private" class="gp-note-mode gp-active">🔒 Только мне</button>
                     <button type="button" data-note-mode="aware" class="gp-note-mode">👁 Учитывать</button>
                     <button type="button" data-note-mode="todo" class="gp-note-mode">📌 Не забыть</button>
-                </div>
-                <div class="gp-note-decor">
-                    <div class="gp-stickers">${stickers.map((x,i)=>`<button type="button" data-sticker="${esc(x)}" class="${i===0?'gp-active':''}">${x}</button>`).join('')}</div>
-                    <div class="gp-markers">${colors.map((x,i)=>`<button type="button" data-note-color="${x[0]}" class="gp-marker gp-marker-${x[0]} ${i===0?'gp-active':''}" title="${x[1]}"></button>`).join('')}</div>
                 </div>
                 <button class="gp-primary" id="gp-note-save">${editing ? 'Сохранить запись' : '✎ Добавить в дневник'}</button>
                 ${editing ? `<button class="gp-secondary gp-unequip" id="gp-note-cancel">Отменить правку</button>` : ''}
@@ -6204,45 +6198,15 @@ function renderNotes(screen) {
     if (area) area.value = _noteDraft.text || '';
     area?.addEventListener('input', () => { _noteDraft.text = area.value; });
     const paint = () => {
-        screen.querySelectorAll('[data-note-mode]').forEach(b=>b.classList.toggle('gp-active', b.dataset.noteMode===chosenMode));
-        screen.querySelectorAll('[data-sticker]').forEach(b=>b.classList.toggle('gp-active', b.dataset.sticker===chosenSticker));
-        screen.querySelectorAll('[data-note-color]').forEach(b=>b.classList.toggle('gp-active', b.dataset.noteColor===chosenColor));
-    }; paint();
-    // Android WebView: a normal <button> tap may blur the textarea BEFORE click,
-    // resize visualViewport and make the whole journal jump.  pointerdown/mousedown
-    // alone is not enough on every ST/Android build, so touch is handled explicitly.
-    const bindPaletteTap = (b, apply) => {
-        b.tabIndex = -1;
-        let touched = false;
-        const hold = (e) => {
-            touched = true;
-            // Critical: keep the textarea focused and stop native button focus/scroll.
-            if (e.cancelable) e.preventDefault();
-            e.stopPropagation();
-        };
-        b.addEventListener('touchstart', hold, { passive: false });
-        b.addEventListener('touchend', (e) => {
-            if (e.cancelable) e.preventDefault();
-            e.stopPropagation();
-            apply();
-            // Some Android WebViews still schedule a focus scroll one frame later.
-            // Keeping focus with preventScroll prevents that second bounce.
-            if (area && document.activeElement !== area) {
-                try { area.focus({ preventScroll: true }); } catch (_) {}
-            }
-            touched = false;
-        }, { passive: false });
-        b.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') e.preventDefault(); });
-        b.addEventListener('mousedown', (e) => e.preventDefault());
-        b.addEventListener('click', (e) => {
-            e.preventDefault(); e.stopPropagation();
-            // touchend already applied the action; click is only mouse/desktop fallback.
-            if (!touched && e.detail !== 0) apply();
-        });
+        screen.querySelectorAll('[data-note-mode]').forEach(b => b.classList.toggle('gp-active', b.dataset.noteMode === chosenMode));
     };
-    screen.querySelectorAll('[data-note-mode]').forEach(b=>bindPaletteTap(b,()=>{chosenMode=b.dataset.noteMode;_noteDraft.mode=chosenMode;paint();}));
-    screen.querySelectorAll('[data-sticker]').forEach(b=>bindPaletteTap(b,()=>{chosenSticker=b.dataset.sticker;_noteDraft.sticker=chosenSticker;paint();}));
-    screen.querySelectorAll('[data-note-color]').forEach(b=>bindPaletteTap(b,()=>{chosenColor=b.dataset.noteColor;_noteDraft.color=chosenColor;paint();}));
+    paint();
+    // Simple click handlers: no touch interception, forced focus or keyboard manipulation.
+    screen.querySelectorAll('[data-note-mode]').forEach(b => b.addEventListener('click', () => {
+        chosenMode = b.dataset.noteMode;
+        _noteDraft.mode = chosenMode;
+        paint();
+    }));
     screen.querySelector('#gp-back')?.addEventListener('click', () => { _noteEditId = null; goto('home'); }); bindNotesTabs(screen);
     screen.querySelector('#gp-note-save')?.addEventListener('click', () => { const text=area?.value.trim(); if(!text)return;
         if(_noteEditId){ updateNote(_noteEditId,text); updateNoteDecor(_noteEditId,{mode:chosenMode,sticker:chosenSticker,color:chosenColor}); _noteEditId=null; }

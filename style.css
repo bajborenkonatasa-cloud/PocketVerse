@@ -4858,3 +4858,7 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 #gp-phone .gp-note-mode,#gp-phone .gp-stickers button,#gp-phone .gp-marker{touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 #gp-phone .gp-stickers button,#gp-phone .gp-marker{transition:opacity .12s ease,outline-color .12s ease,background-color .12s ease!important}
 #gp-phone .gp-stickers button.gp-active{transform:none!important}
+
+/* Journal stability: no tilted editor or palette layout on mobile */
+.gp-paper-editor{transform:none!important}
+.gp-paper-editor textarea{font-size:16px!important}
