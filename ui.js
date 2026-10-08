@@ -570,11 +570,32 @@ export function isPhoneOpen() {
     return document.getElementById('gp-overlay')?.classList.contains('gp-open') || false;
 }
 
+// Keep SillyTavern's roleplay page stationary behind the phone while Android IME
+// opens/closes. Lock the underlying document, not the journal input.
+let _pvPageLock = null;
+function lockRoleplayPage() {
+    if (_pvPageLock) return;
+    const body = document.body;
+    const y = window.scrollY || window.pageYOffset || 0;
+    _pvPageLock = { y, position: body.style.position, top: body.style.top,
+        left: body.style.left, right: body.style.right, width: body.style.width };
+    Object.assign(body.style, { position: 'fixed', top: `-${y}px`, left: '0', right: '0', width: '100%' });
+}
+function unlockRoleplayPage() {
+    if (!_pvPageLock) return;
+    const old = _pvPageLock;
+    _pvPageLock = null;
+    Object.assign(document.body.style, { position: old.position, top: old.top,
+        left: old.left, right: old.right, width: old.width });
+    window.scrollTo(0, old.y);
+}
+
 export function openPhone(threadKey = null) {
     createPhone();
     applySkin();
     const ov = document.getElementById('gp-overlay');
     ov.classList.add('gp-open');
+    lockRoleplayPage();
     // Стадии заказов двигает время ролевой: пока телефон был закрыт, курьер мог
     // выехать. Догоняем при открытии, иначе заказ висел бы «в сборке».
     notifyDeliveries();
@@ -619,6 +640,7 @@ export function closePhone() {
     try { captureDrafts(document.getElementById('gp-screen')); } catch (e) { /* ignore */ }
     const ov = document.getElementById('gp-overlay');
     if (ov) ov.classList.remove('gp-open');
+    unlockRoleplayPage();
     if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
 }
 

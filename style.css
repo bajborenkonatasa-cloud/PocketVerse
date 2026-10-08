@@ -4881,3 +4881,19 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
     #gp-overlay.gp-open { background: #10101a !important; }
     #gp-overlay.gp-open #gp-phone { background: #10101a !important; }
 }
+
+/* PV .60 — IME isolation: remove 3D compositor layer on mobile and prevent
+   the roleplay document from being painted through the phone during focus. */
+@media (max-width: 600px) {
+  body #gp-overlay.gp-open {
+    perspective: none !important;
+    transform: none !important;
+    contain: layout paint;
+    background: #10101a !important;
+  }
+  body #gp-overlay.gp-open #gp-phone {
+    transform: none !important;
+    animation: none !important;
+    will-change: auto !important;
+  }
+}
