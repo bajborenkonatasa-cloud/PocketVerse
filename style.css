@@ -4904,3 +4904,8 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 .gp-plan-visibility,.gp-plan-reschedule { flex:0 0 auto; border:1px solid var(--gp-border-soft); border-radius:9px; padding:5px 7px; background:var(--gp-glass); color:var(--gp-text); cursor:pointer; }
 .gp-plan-suggestion { border-left-color:rgba(var(--gp-accent-a-rgb),.85)!important; }
 .gp-plan-suggestion .gp-primary { padding:6px 10px; border-radius:9px; }
+
+/* Calendar tap targets must remain above ornamental card layers. */
+#gp-phone .gp-cal-card-index,#gp-phone .gp-cal-card-suit{pointer-events:none!important}
+#gp-phone .gp-cal-xii .gp-cal-head,#gp-phone .gp-cal-xii .gp-cal-grid{position:relative;z-index:2}
+#gp-phone .gp-cal-xii button,#gp-phone .gp-plan button,#gp-phone .gp-plan-editor button{touch-action:manipulation;pointer-events:auto}

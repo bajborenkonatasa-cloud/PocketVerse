@@ -684,6 +684,7 @@ export function render(force = false) {
     // phone does not flash/rebuild (the old "disco" bug). We render exactly once
     // after the quiet request finishes.
     if (_pvThreadRenderFrozen && currentScreen === 'thread') return;
+    if (currentScreen !== 'notes' || _notesTab !== 'plans') { screen.onclick = null; screen.onchange = null; }
     bindStopGen(screen);
     bindZoom(screen);
     screen.classList.toggle('gp-screen-bleed', BLEED_SCREENS.has(currentScreen));
@@ -6148,46 +6149,50 @@ function renderPlans(screen) {
 
     screen.querySelector('#gp-back')?.addEventListener('click', () => goto('home'));
     bindNotesTabs(screen);
-    screen.querySelector('#gp-cal-prev')?.addEventListener('click', () => { _planMonth = shiftMonth(_planMonth, -1); render(); });
-    screen.querySelector('#gp-cal-next')?.addEventListener('click', () => { _planMonth = shiftMonth(_planMonth, 1); render(); });
-    screen.querySelectorAll('[data-calday]').forEach(b => b.addEventListener('click', () => {
-        _planDay = b.getAttribute('data-calday');
-        _planMonth = monthOf(_planDay);
-        render();
-    }));
-
-    const add = () => {
-        const text = screen.querySelector('#gp-plan-text')?.value.trim();
-        if (!text) return;
-        addPlan({
-            text,
-            date: _planDay,
-            time: screen.querySelector('#gp-plan-time')?.value,
-            who: screen.querySelector('#gp-plan-who')?.value,
-            visible: screen.querySelector('#gp-plan-visible')?.value !== 'no',
-        });
-        clearDraft('gp-plan-text'); clearDraft('gp-plan-time');
-        updatePhoneInjection();
-        render();
+    // Calendar controls: a single delegated handler survives child/icon taps and
+    // avoids binding a separate listener to each dynamically generated element.
+    // Use the same event channel for every action, including add/delete.
+    screen.onclick = (event) => {
+        if (currentScreen !== 'notes' || _notesTab !== 'plans') return;
+        const button = event.target.closest('button');
+        if (!button || !screen.contains(button)) return;
+        if (button.id === 'gp-cal-prev' || button.id === 'gp-cal-next') {
+            _planMonth = shiftMonth(_planMonth, button.id === 'gp-cal-prev' ? -1 : 1);
+            render(true); return;
+        }
+        if (button.hasAttribute('data-calday')) {
+            _planDay = button.dataset.calday;
+            _planMonth = monthOf(_planDay);
+            render(true); return;
+        }
+        if (button.id === 'gp-plan-add') {
+            const value = screen.querySelector('#gp-plan-text')?.value.trim();
+            if (!value) { toast('Напиши название события', 'fa-calendar'); return; }
+            addPlan({ text:value, date:_planDay,
+                time:screen.querySelector('#gp-plan-time')?.value,
+                who:screen.querySelector('#gp-plan-who')?.value,
+                visible:screen.querySelector('#gp-plan-visible')?.value !== 'no' });
+            clearDraft('gp-plan-text'); clearDraft('gp-plan-time');
+            updatePhoneInjection(); render(true); return;
+        }
+        if (button.dataset.planaccept) { acceptPlanSuggestion(button.dataset.planaccept); updatePhoneInjection(); render(true); return; }
+        if (button.dataset.planreject) { dismissPlanSuggestion(button.dataset.planreject); render(true); return; }
+        if (button.dataset.planvisible) {
+            const p = getPlans().find(x => x.id === button.dataset.planvisible);
+            if (p) { setPlanVisible(p.id, p.visible === false); updatePhoneInjection(); render(true); }
+            return;
+        }
+        if (button.dataset.planmove) { reschedulePlan(button.dataset.planmove, _planDay); updatePhoneInjection(); render(true); return; }
+        if (button.dataset.plandel) { deletePlan(button.dataset.plandel); updatePhoneInjection(); render(true); }
     };
-    screen.querySelector('#gp-plan-add')?.addEventListener('click', add);
-    screen.querySelector('#gp-plan-text')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); add(); }
+    screen.onchange = (event) => {
+        const el = event.target.closest('[data-plantoggle]');
+        if (!el || currentScreen !== 'notes' || _notesTab !== 'plans') return;
+        togglePlan(el.dataset.plantoggle); updatePhoneInjection(); render(true);
+    };
+    screen.querySelector('#gp-plan-text')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); screen.querySelector('#gp-plan-add')?.click(); }
     });
-    screen.querySelectorAll('[data-planaccept]').forEach(b => b.addEventListener('click', () => { acceptPlanSuggestion(b.dataset.planaccept); updatePhoneInjection(); render(); }));
-    screen.querySelectorAll('[data-planreject]').forEach(b => b.addEventListener('click', () => { dismissPlanSuggestion(b.dataset.planreject); render(); }));
-    screen.querySelectorAll('[data-planvisible]').forEach(b => b.addEventListener('click', () => { const p = getPlans().find(x => x.id === b.dataset.planvisible); if (p) { setPlanVisible(p.id, p.visible === false); updatePhoneInjection(); render(); } }));
-    screen.querySelectorAll('[data-planmove]').forEach(b => b.addEventListener('click', () => { reschedulePlan(b.dataset.planmove, _planDay); updatePhoneInjection(); render(); }));
-    screen.querySelectorAll('[data-plantoggle]').forEach(b => b.addEventListener('change', () => {
-        togglePlan(b.getAttribute('data-plantoggle'));
-        updatePhoneInjection();
-        render();
-    }));
-    screen.querySelectorAll('[data-plandel]').forEach(b => b.addEventListener('click', () => {
-        deletePlan(b.getAttribute('data-plandel'));
-        updatePhoneInjection();
-        render();
-    }));
 }
 
 function renderNotes(screen) {
