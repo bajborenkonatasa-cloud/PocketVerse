@@ -4862,3 +4862,22 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 /* Journal stability: no tilted editor or palette layout on mobile */
 .gp-paper-editor{transform:none!important}
 .gp-paper-editor textarea{font-size:16px!important}
+
+/* PV .59: Android IME compositor guard. Never expose the roleplay behind the phone
+   when the visual viewport changes during keyboard open/close. */
+#gp-overlay.gp-open {
+    background-color: #10101a !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    animation: none !important;
+    isolation: isolate;
+    overscroll-behavior: contain;
+}
+#gp-overlay.gp-open #gp-phone {
+    animation: none !important;
+    background-color: #10101a !important;
+}
+@media (max-width: 600px) {
+    #gp-overlay.gp-open { background: #10101a !important; }
+    #gp-overlay.gp-open #gp-phone { background: #10101a !important; }
+}
