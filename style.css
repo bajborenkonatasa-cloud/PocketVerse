@@ -4897,3 +4897,10 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
     will-change: auto !important;
   }
 }
+
+/* .61 Calendar: compact mobile controls; no keyboard/overlay changes */
+.gp-plan-form { flex-wrap: wrap; }
+.gp-plan-form #gp-plan-visible { max-width: 105px; }
+.gp-plan-visibility,.gp-plan-reschedule { flex:0 0 auto; border:1px solid var(--gp-border-soft); border-radius:9px; padding:5px 7px; background:var(--gp-glass); color:var(--gp-text); cursor:pointer; }
+.gp-plan-suggestion { border-left-color:rgba(var(--gp-accent-a-rgb),.85)!important; }
+.gp-plan-suggestion .gp-primary { padding:6px 10px; border-radius:9px; }

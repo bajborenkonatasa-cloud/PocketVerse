@@ -479,7 +479,7 @@ jQuery(async () => {
             // Планы и даты, о которых договорились в сцене
             try {
                 const n = harvestPlanTags();
-                if (n > 0) toast(`В календарь: ${n}`, 'fa-calendar-check');
+                if (n > 0) toast(`Календарь: ${n} предложений`, 'fa-calendar-check');
             } catch (e) { /* ignore */ }
             notifyBankReminders();
             notifyDeliveries();   // курьер выехал / заказ приехал

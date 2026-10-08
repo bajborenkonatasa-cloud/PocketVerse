@@ -58,6 +58,7 @@ import {
 } from './tinder.js';
 import {
     getPlans, addPlan, togglePlan, deletePlan, groupedPlans, plansBadgeCount,
+    setPlanVisible, reschedulePlan, getPlanSuggestions, acceptPlanSuggestion, dismissPlanSuggestion,
     fmtPlanDate, rpToday, PLAN_WHO, monthGrid, monthOf, shiftMonth, plansByDate, daysBetween,
 } from './plans.js';
 import { tr, trDom, lang, DAYS_I18N, MONTHS_I18N } from './i18n.js';
@@ -6074,6 +6075,8 @@ function planRowHtml(p) {
                 ${p.source === 'rp' ? `<span class="gp-plan-src" title="Из ролевой">${ic('fa-comment')}</span>` : ''}
             </div>
         </div>
+        <button class="gp-plan-visibility" data-planvisible="${esc(p.id)}" title="${p.visible === false ? 'Личное: модель не видит' : 'Для сюжета: модель учитывает'}">${p.visible === false ? '🔒' : '👁'}</button>
+        ${!p.done && p.date < rpToday() ? `<button class="gp-plan-reschedule" data-planmove="${esc(p.id)}" title="Перенести на выбранную дату">↪</button>` : ''}
         <button class="gp-bank-tx-del" data-plandel="${esc(p.id)}" title="Удалить">${ic('fa-xmark')}</button>
     </div>`;
 }
@@ -6089,6 +6092,8 @@ function renderPlans(screen) {
     const title = `${monthName[0].toUpperCase()}${monthName.slice(1).replace(/я$/, 'ь').replace(/а$/, '')}`;
     const dayPlans = plansByDate(_planDay);
     const g = groupedPlans();
+    const suggestions = getPlanSuggestions();
+    const missed = g.overdue.slice(0, 12);
     const soon = [...g.overdue, ...g.today, ...g.tomorrow, ...g.week].filter(p => p.date !== _planDay).slice(0, 6);
 
     const week = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
@@ -6120,12 +6125,16 @@ function renderPlans(screen) {
                 <div class="gp-cal-week">${week.map(d => `<span>${d}</span>`).join('')}</div>
                 <div class="gp-cal-grid">${grid}</div>
             </div>
+            ${suggestions.length ? `<div class="gp-chan-section">✨ Предложено из ролевой · ${suggestions.length}</div>
+                ${suggestions.slice(0, 8).map(p => `<div class="gp-plan gp-plan-suggestion"><div class="gp-plan-body"><div class="gp-plan-text">${esc(p.text)}</div><div class="gp-plan-meta">${esc(fmtPlanDate(p.date))}${p.time ? ' · ' + esc(p.time) : ''} · ${esc(PLAN_WHO[p.who] || 'вместе')}</div></div><button class="gp-primary" data-planaccept="${esc(p.id)}">✓</button><button class="gp-iconbtn" data-planreject="${esc(p.id)}" title="Отклонить">✕</button></div>`).join('')}` : ''}
+            ${missed.length ? `<div class="gp-chan-section">⏳ Не решено после таймскипа · ${missed.length}</div><div class="gp-cal-empty">События не считаются произошедшими автоматически. ✓ — подтвердить, ↪ — перенести на выбранный день.</div>${missed.map(planRowHtml).join('')}` : ''}
             <div class="gp-chan-section">${_planDay === today ? 'Сегодня' : esc(fmtPlanDate(_planDay))}</div>
             ${planList(dayPlans, 'В этот день пусто')}
             <div class="gp-notes-editor gp-plan-editor">
                 <input type="text" id="gp-plan-text" placeholder="Что запланировано на ${esc(fmtPlanDate(_planDay))}…">
                 <div class="gp-plan-form">
                     <input type="text" id="gp-plan-time" placeholder="19:00" value="">
+                    <select id="gp-plan-visible" title="Кто видит событие"><option value="yes">👁 Сюжет</option><option value="no">🔒 Личное</option></select>
                     <select id="gp-plan-who">
                         <option value="user">я</option>
                         <option value="char">он/она</option>
@@ -6155,6 +6164,7 @@ function renderPlans(screen) {
             date: _planDay,
             time: screen.querySelector('#gp-plan-time')?.value,
             who: screen.querySelector('#gp-plan-who')?.value,
+            visible: screen.querySelector('#gp-plan-visible')?.value !== 'no',
         });
         clearDraft('gp-plan-text'); clearDraft('gp-plan-time');
         updatePhoneInjection();
@@ -6164,6 +6174,10 @@ function renderPlans(screen) {
     screen.querySelector('#gp-plan-text')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); add(); }
     });
+    screen.querySelectorAll('[data-planaccept]').forEach(b => b.addEventListener('click', () => { acceptPlanSuggestion(b.dataset.planaccept); updatePhoneInjection(); render(); }));
+    screen.querySelectorAll('[data-planreject]').forEach(b => b.addEventListener('click', () => { dismissPlanSuggestion(b.dataset.planreject); render(); }));
+    screen.querySelectorAll('[data-planvisible]').forEach(b => b.addEventListener('click', () => { const p = getPlans().find(x => x.id === b.dataset.planvisible); if (p) { setPlanVisible(p.id, p.visible === false); updatePhoneInjection(); render(); } }));
+    screen.querySelectorAll('[data-planmove]').forEach(b => b.addEventListener('click', () => { reschedulePlan(b.dataset.planmove, _planDay); updatePhoneInjection(); render(); }));
     screen.querySelectorAll('[data-plantoggle]').forEach(b => b.addEventListener('change', () => {
         togglePlan(b.getAttribute('data-plantoggle'));
         updatePhoneInjection();

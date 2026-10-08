@@ -5,7 +5,7 @@ import { getSocialActivitySummary } from './social.js';
 import { getBankSummaryLine, bankInjectRule } from './bank.js';
 import { notesInjectBlock } from './notes.js';
 import { channelInjectLine, anonInjectLine } from './channels.js';
-import { plansInjectLine, plansInjectRule, getPlans } from './plans.js';
+import { plansInjectLine, plansInjectRule, getPlans, getPlanSuggestions } from './plans.js';
 import { twitchInjectLine } from './twitch.js';
 import { tinderInjectLine, inAppMatchNames } from './tinder.js';
 import { pendingConsequences } from './social-events.js';
@@ -121,7 +121,7 @@ function buildPrompt() {
             if (chan) c += `[{{user}}'S CHANNELS] ${chan}\n5. A channel they follow publishes → <!--tel:chan:{"channel":"Name","text":"the post","photo":"what the picture shows, or omit"}-->. Never into their own channel.\n`;
         } catch (e) { /* ignore */ }
         try {
-            if (getPlans().length) {
+            {
                 c += `6. Договорились о дате/встрече → <!--tel:plan:{"date":"DD.MM.YYYY","time":"19:00","text":"...","who":"user|char|both"}-->\n`;
                 const plans = plansInjectLine();
                 if (plans) c += `\n${plans}\n`;
@@ -228,7 +228,7 @@ function buildPrompt() {
     // Календарь: правило ставим, только когда планы вообще заведены —
     // пустой календарь не должен занимать место в директиве
     try {
-        if (getPlans().length) p += `\n${plansInjectRule()}\n`;
+        p += `\n${plansInjectRule()}\n`;
         const plans = plansInjectLine();
         if (plans) p += `\n${plans}\n`;
     } catch (e) { /* ignore */ }

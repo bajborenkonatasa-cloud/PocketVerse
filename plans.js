@@ -20,6 +20,7 @@ export function getPlans() {
     const m = getMeta();
     if (!Array.isArray(m.plans)) m.plans = [];
     if (!Array.isArray(m.planTags)) m.planTags = [];
+    if (!Array.isArray(m.planSuggestions)) m.planSuggestions = [];
     return m.plans;
 }
 
@@ -68,7 +69,7 @@ export function daysBetween(a, b) {
     return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000);
 }
 
-export function addPlan({ text, date, time = '', who = 'user', source = 'user' }) {
+export function addPlan({ text, date, time = '', who = 'user', source = 'user', visible = true }) {
     const t = String(text || '').trim();
     if (!t) return null;
     const plan = {
@@ -78,6 +79,7 @@ export function addPlan({ text, date, time = '', who = 'user', source = 'user' }
         time: String(time || '').trim().slice(0, 5),
         who: PLAN_WHO[who] ? who : 'user',
         done: false,
+        visible: visible !== false,
         source,
         at: Date.now(),
     };
@@ -100,6 +102,34 @@ function sortPlans(plans) {
     plans.sort((a, b) => (a.date === b.date
         ? String(a.time || '99:99').localeCompare(String(b.time || '99:99'))
         : a.date.localeCompare(b.date)));
+}
+
+export function setPlanVisible(id, visible) {
+    const p = getPlans().find(x => x.id === id);
+    if (!p) return false;
+    p.visible = !!visible;
+    saveMeta(); return true;
+}
+
+export function reschedulePlan(id, date) {
+    const p = getPlans().find(x => x.id === id);
+    if (!p) return false;
+    p.date = parsePlanDate(date);
+    p.done = false;
+    delete p.doneDate;
+    sortPlans(getPlans()); saveMeta(); return true;
+}
+
+export function getPlanSuggestions() { getPlans(); return getMeta().planSuggestions; }
+export function acceptPlanSuggestion(id) {
+    const m = getMeta(); const item = getPlanSuggestions().find(x => x.id === id);
+    if (!item) return null;
+    const result = addPlan({ ...item, source: 'rp' });
+    m.planSuggestions = getPlanSuggestions().filter(x => x.id !== id);
+    saveMeta(); return result;
+}
+export function dismissPlanSuggestion(id) {
+    const m = getMeta(); m.planSuggestions = getPlanSuggestions().filter(x => x.id !== id); saveMeta();
 }
 
 export function togglePlan(id) {
@@ -197,14 +227,14 @@ export function monthGrid(ym) {
 export function plansInjectLine() {
     const g = groupedPlans();
     const today = rpToday();
-    const near = [...g.overdue, ...g.today, ...g.tomorrow, ...g.week].slice(0, 8);
+    const near = [...g.overdue, ...g.today, ...g.tomorrow, ...g.week].filter(p => p.visible !== false).slice(0, 5);
     // Дальние даты тоже нужны: день рождения через три недели или отпуск в мае
     // модель иначе не видела вовсе, пока до них не оставалось недели
-    const ahead = g.later.slice(0, 3);
+    const ahead = g.later.filter(p => p.visible !== false).slice(0, 1);
     // Недавно закрытое: она отметила галочку — значит дело сделано, и ролевая
     // должна это знать (не напоминать, не тянуть героя туда снова)
     const justDone = g.done
-        .filter(p => !p.doneDate || daysBetween(p.doneDate, today) <= 3)
+        .filter(p => p.visible !== false && p.doneDate && daysBetween(p.doneDate, today) >= 0 && daysBetween(p.doneDate, today) <= 1)
         .slice(-3);
     if (!near.length && !ahead.length && !justDone.length) return '';
     const whoOf = (p) => (p.who === 'char' ? 'their plan' : p.who === 'both' ? 'together' : `{{user}}'s plan`);
@@ -219,11 +249,11 @@ export function plansInjectLine() {
         return `- ${fmtPlanDate(p.date)}${p.time ? ` ${p.time}` : ''} (in ${diff}d, ${whoOf(p)}): ${p.text}`;
     }).join('\n');
     const body = [lines, aheadLines, doneLines].filter(Boolean).join('\n');
-    return `[{{user}}'S CALENDAR — what has been agreed or planned. It is TRUE and binding: characters who took part in a plan remember it, may bring it up, hold {{user}} to it, be late, cancel or show up. Do not invent a different date for these. Lines marked DONE are already finished — {{user}} ticked them off: treat them as done, do not push for them again, and you may refer to them as something that happened.]\n${body}`;
+    return `[RP CALENDAR — planned events, not proof they happened. Characters who agreed may remember and react naturally. OVERDUE means unresolved after a time skip: do NOT assume it occurred; ask or allow rescheduling. DONE means the user explicitly confirmed completion. Do not force an event or invent a different date.]\n${body}`;
 }
 
 export function plansInjectRule() {
-    return `[PLAN] If in THIS reply a date or plan is set — a meeting, a shift, a doctor's appointment, a promise to come or call at some time — append a hidden comment at the END: <!--tel:plan:{"date":"DD.MM.YYYY","time":"19:00","text":"what exactly","who":"user|char|both"}--> ("who": whose plan it is — {{user}}'s, the character's, or both). "time" may be empty. One tag per plan, only for things that are really agreed.`;
+    return `[PLAN] Suggest only explicitly agreed future events; user must approve. If in THIS reply a date or plan is set — a meeting, a shift, a doctor's appointment, a promise to come or call at some time — append a hidden comment at the END: <!--tel:plan:{"date":"DD.MM.YYYY","time":"19:00","text":"what exactly","who":"user|char|both"}--> ("who": whose plan it is — {{user}}'s, the character's, or both). "time" may be empty. One tag per plan, only for things that are really agreed.`;
 }
 
 // ── Теги из чата ──
@@ -257,17 +287,19 @@ export function harvestPlanTags() {
             m.planTags.push(key);
             const j = safeJson(hit[1]);
             if (!j || !j.text) continue;
-            addPlan({
-                text: j.text,
-                date: j.date,
-                time: j.time,
-                who: j.who,
-                source: 'rp',
-            });
-            added++;
+            // Proposal only: never silently turn model output into a calendar entry.
+            if (m.planSuggestions.length < 30) {
+                const proposed = { id: genId(), text: String(j.text).slice(0, 200),
+                    date: parsePlanDate(j.date), time: String(j.time || '').slice(0, 5),
+                    who: PLAN_WHO[j.who] ? j.who : 'both' };
+                if (!getPlans().some(p => p.date === proposed.date && p.text === proposed.text) &&
+                    !m.planSuggestions.some(p => p.date === proposed.date && p.text === proposed.text)) {
+                    m.planSuggestions.push(proposed); added++;
+                }
+            }
         }
     }
     if (m.planTags.length > 300) m.planTags = m.planTags.slice(-300);
-    if (added) saveMeta();
+    if (added || m.planTags.length) saveMeta();
     return added;
 }
