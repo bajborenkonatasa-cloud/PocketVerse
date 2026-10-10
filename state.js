@@ -1103,6 +1103,8 @@ function scanChatUncached() {
                 if (j.photo) entry.photoDesc = String(j.photo).slice(0, 600);
                 if (j.media && typeof j.media === 'object') entry.mediaIntent = j.media;
                 if (j.meme) entry.memeQuery = String(j.meme).slice(0, 80);
+                if (j.memeFailed) entry.memeFailed = true;
+                if (j.mediaKind) entry.mediaKind = String(j.mediaKind).slice(0, 20);
                 if (j.gif) entry.gifUrl = String(j.gif).slice(0, 1200);
                 if (j.shot) entry.shot = j.shot;
                 if (groupName) {
@@ -1165,6 +1167,8 @@ function scanChatUncached() {
                 if (j.photo) entry.photoDesc = String(j.photo).slice(0, 600);
                 if (j.media && typeof j.media === 'object') entry.mediaIntent = j.media;
                 if (j.meme) entry.memeQuery = String(j.meme).slice(0, 80);
+                if (j.memeFailed) entry.memeFailed = true;
+                if (j.mediaKind) entry.mediaKind = String(j.mediaKind).slice(0, 20);
                 if (j.gif) entry.gifUrl = String(j.gif).slice(0, 1200);
                 // Голосовое: text = расшифровка, в пузыре рисуем дорожку
                 if (j.voice) entry.voice = true;
@@ -1252,6 +1256,7 @@ function scanChatUncached() {
         if (m.media && typeof m.media === 'object') entry.mediaIntent = m.media;
         if (m.img) entry.img = m.img;
         if (m.meme) entry.memeQuery = String(m.meme).slice(0, 120);
+        if (m.memeFailed) entry.memeFailed = true;
         if (m.gif) entry.gifUrl = String(m.gif).slice(0, 1600);
         if (m.mediaKind) entry.mediaKind = String(m.mediaKind).slice(0, 20);
         if (m.voice) entry.voice = true;
@@ -1287,7 +1292,7 @@ export function addLocalSms(data = {}) {
         chat: data.chat ? String(data.chat).trim() : '',
         text: String(data.text || ''),
     };
-    for (const k of ['photo','media','img','meme','gif','mediaKind','voice','react','shot','number','videoCircle']) if (data[k] !== undefined) rec[k] = data[k];
+    for (const k of ['photo','media','img','meme','gif','mediaKind','memeFailed','voice','react','shot','number','videoCircle']) if (data[k] !== undefined) rec[k] = data[k];
     if (!rec.name && !rec.chat) return null;
     meta.localSms.push(rec);
     // Prevent unbounded metadata growth while retaining a large local phone history.
@@ -1301,7 +1306,7 @@ export function updateLocalSms(id, patch = {}) {
     const meta = getMeta();
     const rec = (meta.localSms || []).find(x => x && String(x.id) === String(id));
     if (!rec) return false;
-    const allowed = ['photo','media','img','meme','gif','mediaKind','voice','react','shot','number','videoCircle','text'];
+    const allowed = ['photo','media','img','meme','gif','mediaKind','memeFailed','voice','react','shot','number','videoCircle','text'];
     for (const k of allowed) if (Object.prototype.hasOwnProperty.call(patch, k)) rec[k] = patch[k];
     saveMeta(); invalidateChatCache();
     return true;

@@ -2603,10 +2603,14 @@ export async function searchGiphyMeme(query, kind = 'gif') {
     const u = new URL(`https://api.giphy.com/v1/${resource}/search`);
     u.searchParams.set('api_key', key);
     u.searchParams.set('q', q);
-    u.searchParams.set('limit', '8');
+    u.searchParams.set('limit', '12');
     u.searchParams.set('rating', 'pg-13');
     u.searchParams.set('bundle', 'messaging_non_clips');
-    const r = await fetch(u.toString());
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6500);
+    let r;
+    try { r = await fetch(u.toString(), { signal:controller.signal }); }
+    finally { clearTimeout(timer); }
     if (!r.ok) throw new Error(`GIPHY HTTP ${r.status}`);
     const j = await r.json();
     const a = Array.isArray(j?.data) ? j.data : [];

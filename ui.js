@@ -1172,7 +1172,7 @@ function renderBrain(screen) {
             <label><input type="checkbox" id="gp-bc-photo" ${st.phonePhotos!==false?'checked':''}> 📸 Фото</label>
             <label><input type="checkbox" id="gp-bc-meme" ${st.phoneMemes?'checked':''}> 😂 Мемы/GIF <small>GIPHY Bridge</small></label>
             <label><input type="checkbox" id="gp-bc-autophoto" ${st.autoIncomingPhotos!==false?'checked':''}> ✨ Авто-рисовать входящие фото</label>
-            <label><input type="checkbox" id="gp-bc-automeme" ${st.autoIncomingMemes!==false?'checked':''}> ⚡ Авто-подставлять GIF</label>
+            <label><input type="checkbox" id="gp-bc-automeme" ${st.autoIncomingMemes!==false?'checked':''}> ⚡ Авто-подставлять GIF/мемы/стикеры</label>
             <div class="gp-brain-api"><small>GIPHY API key · хранится локально и не отправляется языковой модели</small><input id="gp-bc-giphy" type="password" autocomplete="off" placeholder="GIPHY API key" value="${esc(st.giphyApiKey || '')}"></div>
             <label><input type="checkbox" id="gp-bc-groups" ${st.phoneGroups!==false?'checked':''}> 👥 Групповые чаты</label>
           </div>
@@ -2008,6 +2008,8 @@ function voiceBubbleHtml(m) {
 
 let _pvThreadRenderFrozen = false;
 const _pvAutoMediaBusy = new Set();
+// One automatic GIPHY attempt per message. Failed searches are persisted on the SMS tag.
+const _pvMediaFailedSession = new Set();
 async function autoResolveIncomingMedia(t) {
     const st = getSettings();
     for (let mi = 0; mi < (t?.messages || []).length; mi++) {
@@ -2031,18 +2033,27 @@ async function autoResolveIncomingMedia(t) {
             finally { _mmsGenBusy.delete(key); _pvAutoMediaBusy.delete(key); if (!_pvThreadRenderFrozen) render(); }
             return; // по одному медиа за цикл, чтобы не запускать пачку генераций одновременно
         }
-        // Мем/GIF: отдельный бесплатный media lookup, LLM второй раз НЕ вызывается.
-        if (st.phoneMemes && st.autoIncomingMemes !== false && st.giphyApiKey && m.memeQuery && !m.gifUrl) {
+        // Мем/стикер/GIF: одна попытка на сообщение, без повторной генерации LLM.
+        if (st.phoneMemes && st.autoIncomingMemes !== false && st.giphyApiKey && m.memeQuery && !m.gifUrl && !m.memeFailed && !_pvMediaFailedSession.has(key)) {
             _pvAutoMediaBusy.add(key);
+            _pvMediaFailedSession.add(key); // protect even when tag rewrite fails
             try {
-                const g = await searchGiphyMeme(m.memeQuery);
-                if (g?.url) {
-                    const ok = m.localId ? updateLocalSms(m.localId, { gif: g.url }) : await rewriteSmsTag(m, t, j => { j.gif = g.url; j.gifPage = g.page || ''; });
-                    if (ok) { m.gifUrl = g.url; console.info('[PocketVerse] GIPHY OK', { query:m.memeQuery, id:g.id, url:g.url }); }
-                    else throw new Error('GIF найден, но не удалось сохранить его в сообщении');
-                }
-            } catch (e) { console.warn('[PocketVerse] GIPHY resolve failed:', e); toast(`GIPHY: ${String(e?.message || e).slice(0,90)}`, 'fa-triangle-exclamation'); }
-            finally { _pvAutoMediaBusy.delete(key); if (!_pvThreadRenderFrozen) render(); }
+                const kind = m.mediaKind === 'sticker' ? 'sticker' : 'gif';
+                const g = await searchGiphyMeme(m.memeQuery, kind);
+                const ok = m.localId
+                    ? updateLocalSms(m.localId, { gif:g.url, mediaKind:g.kind })
+                    : await rewriteSmsTag(m, t, j => { j.gif = g.url; j.gifPage = g.page || ''; j.mediaKind = g.kind; });
+                if (ok) { m.gifUrl = g.url; m.mediaKind = g.kind; }
+                else throw new Error('Не удалось сохранить медиа');
+            } catch (e) {
+                console.warn('[PocketVerse] GIPHY skipped (no retry):', e);
+                m.memeFailed = true;
+                // Save the failure, including after app restart. No empty card is displayed.
+                try {
+                    if (m.localId) updateLocalSms(m.localId, { memeFailed:true });
+                    else await rewriteSmsTag(m, t, j => { j.memeFailed = true; });
+                } catch (_) { /* session guard still prevents retries */ }
+            } finally { _pvAutoMediaBusy.delete(key); if (!_pvThreadRenderFrozen) render(); }
             return;
         }
     }
@@ -2078,7 +2089,7 @@ function renderThread(screen) {
         }
         if (m.gifUrl) {
             media += `<div class="gp-bubble-img gp-giphy${m.mediaKind === 'sticker' ? ' gp-sticker' : ''}"><img src="${esc(m.gifUrl)}" alt="${esc(m.memeQuery || 'GIF')}" data-zoom><small>Powered by GIPHY</small></div>`;
-        } else if (m.memeQuery) {
+        } else if (m.memeQuery && !m.memeFailed && st.phoneMemes && st.autoIncomingMemes !== false && st.giphyApiKey) {
             media += `<div class="gp-bubble-img gp-bubble-img-gen gp-meme-wait"><span>${ic('fa-face-laugh-squint')}</span><i>${esc(m.memeQuery)}</i></div>`;
         }
         // В группе подписываем отправителя входящих — КАЖДОМУ свой цвет
@@ -2158,7 +2169,7 @@ function renderThread(screen) {
             ${typing}
         </div>
         ${_smsDraftImage ? `<div class="gp-sms-attach"><img src="${esc(_smsDraftImage)}" alt=""><span>Фото приложено</span><button class="gp-iconbtn gp-danger" id="gp-attach-clear">${ic('fa-xmark')}</button></div>` : ''}
-        ${_gifPickerOpen ? `<div class="gp-gif-picker"><div class="gp-gif-head"><button class="${_gifPickerKind==='gif'?'active':''}" data-gifkind="gif">GIF · мемы</button><button class="${_gifPickerKind==='sticker'?'active':''}" data-gifkind="sticker">Стикеры</button><button class="gp-iconbtn" id="gp-gif-close">${ic('fa-xmark')}</button></div><div class="gp-gif-search"><input id="gp-gif-q" placeholder="Поиск реакции, мема, GIF…"><button id="gp-gif-go">${ic('fa-magnifying-glass')}</button></div><div class="gp-gif-grid">${_gifPickerBusy ? `<div class="gp-gif-status">${ic('fa-spinner fa-spin')} Ищу…</div>` : (_gifPickerResults.length ? _gifPickerResults.map((g,i)=>`<button data-gifpick="${i}" title="${esc(g.title||'GIF')}"><img src="${esc(g.url)}" loading="lazy"></button>`).join('') : '<div class="gp-gif-status">Напиши, что хочешь найти ✨</div>')}</div>${_gifPickerResults.length ? '<div class="gp-gif-hint">Показано до 30 результатов за 1 API-запрос</div>' : ''}<small class="gp-giphy-credit">Powered by GIPHY</small></div>` : ''}
+        ${_gifPickerOpen ? `<div class="gp-gif-picker"><div class="gp-gif-head"><button class="${_gifPickerKind==='gif'?'active':''}" data-gifkind="gif">GIF · мемы</button><button class="${_gifPickerKind==='sticker'?'active':''}" data-gifkind="sticker">Стикеры</button><button class="gp-iconbtn" id="gp-gif-close">${ic('fa-xmark')}</button></div><div class="gp-gif-search"><input id="gp-gif-q" placeholder="Поиск реакции, мема, GIF…"><button id="gp-gif-go">${ic('fa-magnifying-glass')}</button></div><div class="gp-gif-grid">${_gifPickerBusy ? `<div class="gp-gif-status">${ic('fa-spinner fa-spin')} Ищу…</div>` : (_gifPickerResults.length ? _gifPickerResults.map((g,i)=>`<button data-gifpick="${i}" title="${esc(g.title||'GIF')}"><img src="${esc(g.url)}" loading="lazy"></button>`).join('') : '<div class="gp-gif-status">Напиши, что хочешь найти ✨</div>')}</div>${_gifPickerResults.length ? '<div class="gp-gif-hint">Показано до 50 результатов за 1 API-запрос</div>' : ''}<small class="gp-giphy-credit">Powered by GIPHY</small></div>` : ''}
         <div class="gp-inputbar">
             ${t.messages.length > 0 && t.messages[t.messages.length - 1].dir === 'in'
                 ? `<button class="gp-iconbtn gp-regen" id="gp-regen" title="Другой ответ" ${sending ? 'disabled' : ''}>${ic('fa-rotate-right')}</button>` : ''}
@@ -7449,7 +7460,7 @@ function pvPhoneRawPrompt(t, items, isGroup = false) {
         .map(m => `${m?.dir === 'out' ? user : (m?.from || charName)}: ${esc(m?.text || m?.memeQuery || (m?.gifUrl ? '[GIF]' : ''))}`)
         .join('\n').slice(-cfg.smsChars);
     const custom = esc(st.phoneCustomInstructions || '').slice(0, mode === 'lite' ? 260 : 700);
-    const mediaRule = st.phoneMemes ? 'You may naturally add "meme":"short English GIPHY search phrase" when a GIF/meme reaction fits; do not force it.' : '';
+    const mediaRule = st.phoneMemes ? 'Rarely, when naturally appropriate, add "meme":"short English GIPHY search phrase" and "mediaKind":"gif|sticker" (sticker for small expressive stickers; gif for reaction GIFs or memes). Prefer normal text most of the time. Never send multiple media in one turn; never repeat a failed search.' : '';
     const photoRule = st.phonePhotos !== false ? 'You may add "photo":"short visual description" when a photo is genuinely natural.' : '';
     const groupRule = st.phoneGroups !== false ? 'For groups, every tag must contain "chat":"Group name" and the real sender in "from".' : '';
     const incoming = items.map((x,i)=>`${i+1}. ${x}`).join('\n');
