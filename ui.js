@@ -2060,6 +2060,7 @@ async function autoResolveIncomingMedia(t) {
 }
 
 function renderThread(screen) {
+    const st = getSettings();
     const t = getThread(currentThreadKey);
     if (!t) { currentScreen = 'list'; renderList(screen); return; }
     markRead(t.key);
