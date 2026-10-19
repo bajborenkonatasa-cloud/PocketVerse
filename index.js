@@ -1,3 +1,4 @@
+import { scanStoryInvitations, storyInvitations, resolveStoryInvitation, invitationTheme, markInvitationDecisionsDelivered } from './world-invitations.js';
 
 import { eventSource, event_types, saveSettingsDebounced } from '../../../../script.js';
 import { getSettings, GP_VERSION, invalidateChatCache, factoryReset, wipePhoneTraces } from './state.js';
@@ -481,6 +482,7 @@ jQuery(async () => {
                 const n = harvestPlanTags();
                 if (n > 0) toast(`Календарь: ${n} предложений`, 'fa-calendar-check');
             } catch (e) { /* ignore */ }
+            try { const invite=scanStoryInvitations(); if(invite) showWorldInvitation(invite); } catch(e) { console.warn('[PocketVerse] invitation scan',e); }
             notifyBankReminders();
             notifyDeliveries();   // курьер выехал / заказ приехал
             // Мошенники: редкий скам-смс (сам себя гейтит кулдауном и шансом)
@@ -491,6 +493,8 @@ jQuery(async () => {
             if (isPhoneOpen()) render();
         };
         eventSource.on(event_types.MESSAGE_RECEIVED, onNewMessage);
+        if(event_types.GENERATION_STARTED)eventSource.on(event_types.GENERATION_STARTED,()=>{try{markInvitationDecisionsDelivered();}catch(e){}});
+
         if (event_types.GENERATION_ENDED) {
             eventSource.on(event_types.GENERATION_ENDED, onNewMessage);
         }
@@ -570,3 +574,17 @@ jQuery(async () => {
         console.error('[GlassPhone] FATAL:', e);
     }
 });
+
+// v0.7 lightweight RP overlay; never alters SillyTavern chat messages.
+function showWorldInvitation(item){
+ if(document.querySelector('.gp-world-invite-overlay'))return;
+ const el=document.createElement('section');el.className='gp-world-invite-overlay gp-world-invite-'+invitationTheme();
+ const title=document.createElement('strong');title.textContent=(invitationTheme()==='parchment'?'✉ Свиток-приглашение':'💌 Новое приглашение');el.append(title);
+ const body=document.createElement('div');body.className='gp-world-invite-body';body.textContent=`${item.who} · ${item.title}`;el.append(body);
+ const actions=document.createElement('div');actions.className='gp-world-invite-actions';
+ for(const [status,label] of [['accepted','✓ Принять'],['later','◷ Позже'],['declined','× Отказ'],['close','Скрыть']]){
+  const btn=document.createElement('button');btn.type='button';btn.textContent=label;
+  btn.addEventListener('click',()=>{if(status!=='close'){resolveStoryInvitation(item.id,status);updatePhoneInjection();}el.remove();});actions.append(btn);
+ }
+ el.append(actions);document.body.append(el);
+}

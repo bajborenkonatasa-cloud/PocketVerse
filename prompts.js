@@ -1,3 +1,4 @@
+import { invitationPromptLine } from './world-invitations.js';
 import { worldCalendarInjectLine } from './world-calendar.js';
 
 import { setExtensionPrompt, extension_prompt_types, extension_prompt_roles } from '../../../../script.js';
@@ -304,13 +305,13 @@ function buildPhoneOnlyPrompt(mode = 'balanced') {
 function buildActivePrompt() {
     const s = getSettings();
     const turn = phoneTurnState();
-    if (!turn) return buildIdleBridge() + worldCalendarInjectLine();
+    if (!turn) return buildIdleBridge() + worldCalendarInjectLine() + invitationPromptLine();
     const mode = String(s.brainMode || 'balanced');
-    if (mode === 'lite') return buildPhoneOnlyPrompt('lite') + worldCalendarInjectLine();
-    if (mode === 'balanced') return buildPhoneOnlyPrompt('balanced') + worldCalendarInjectLine();
+    if (mode === 'lite') return buildPhoneOnlyPrompt('lite') + worldCalendarInjectLine() + invitationPromptLine();
+    if (mode === 'balanced') return buildPhoneOnlyPrompt('balanced') + worldCalendarInjectLine() + invitationPromptLine();
     // Deep deliberately keeps the complete legacy Phone-ST directive.
     const oldCompact = s.compactRules;
-    try { s.compactRules = false; return buildPrompt() + worldCalendarInjectLine(); }
+    try { s.compactRules = false; return buildPrompt() + worldCalendarInjectLine() + invitationPromptLine(); }
     finally { s.compactRules = oldCompact; }
 }
 

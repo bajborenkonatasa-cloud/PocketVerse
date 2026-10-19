@@ -4947,3 +4947,13 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 .gp-world-ai-note{font-size:11px;opacity:.67;margin-top:6px;line-height:1.4}
 .gp-world-ai-item{display:flex;gap:7px;align-items:center;padding:9px 0;border-bottom:1px solid rgba(190,135,235,.12)}
 .gp-world-ai-item>div{flex:1;min-width:0}.gp-world-ai-item b{font-size:13px;color:#ebd3fc}.gp-world-ai-item small{display:block;font-size:12px;opacity:.76;margin-top:3px;line-height:1.35}
+
+/* v0.7 world invitations — independent of the phone panel */
+.gp-world-invite-overlay{position:fixed;z-index:2147482000;bottom:max(88px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(92vw,420px);box-sizing:border-box;padding:15px;border-radius:18px;background:linear-gradient(135deg,#23182f,#141522);border:1px solid #a96bc5;color:#f8e9ff;box-shadow:0 8px 32px #000b,0 0 18px #ac65cb55;font-family:inherit}
+.gp-world-invite-overlay strong{font-size:16px;color:#f3bafc;text-shadow:0 0 12px #c36dea99}
+.gp-world-invite-body{font-size:13px;line-height:1.5;margin:9px 0 12px}
+.gp-world-invite-actions{display:flex;flex-wrap:wrap;gap:6px}
+.gp-world-invite-actions button{flex:1 1 auto;min-width:65px;border:1px solid #9a73ad;background:#382746;color:#fff;border-radius:10px;padding:9px 6px;font-size:12px}
+.gp-world-invite-parchment{background:linear-gradient(135deg,#392b2a,#201923);border-color:#d5aa67;box-shadow:0 8px 32px #000b,0 0 17px #d6a45c55}
+.gp-world-invite-parchment strong{color:#ffdfa1;text-shadow:0 0 10px #e4b95d99}
+.gp-world-invite-parchment button{background:#45352f;border-color:#c3a074}
