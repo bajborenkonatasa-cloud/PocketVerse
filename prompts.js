@@ -306,11 +306,11 @@ function buildActivePrompt() {
     const turn = phoneTurnState();
     if (!turn) return buildIdleBridge() + worldCalendarInjectLine();
     const mode = String(s.brainMode || 'balanced');
-    if (mode === 'lite') return buildPhoneOnlyPrompt('lite');
-    if (mode === 'balanced') return buildPhoneOnlyPrompt('balanced');
+    if (mode === 'lite') return buildPhoneOnlyPrompt('lite') + worldCalendarInjectLine();
+    if (mode === 'balanced') return buildPhoneOnlyPrompt('balanced') + worldCalendarInjectLine();
     // Deep deliberately keeps the complete legacy Phone-ST directive.
     const oldCompact = s.compactRules;
-    try { s.compactRules = false; return buildPrompt(); }
+    try { s.compactRules = false; return buildPrompt() + worldCalendarInjectLine(); }
     finally { s.compactRules = oldCompact; }
 }
 

@@ -4923,3 +4923,9 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 .gp-world-cal-form input[type=checkbox]{vertical-align:middle}
 .gp-world-event{display:flex;justify-content:space-between;align-items:center;gap:7px;font-size:13px;color:#f0def6;padding:4px 0}
 .gp-world-event button{padding:2px 9px;flex-shrink:0}
+
+/* World Calendar v0.4: compact, opt-in suggestions panel */
+.gp-world-suggestions{margin:9px 0 5px;border:1px solid rgba(180,145,230,.2);border-radius:10px;padding:7px 9px}
+.gp-world-suggestions>summary{cursor:pointer;font-weight:700;color:#d9b8f4;font-size:12px;list-style:revert}
+.gp-world-suggestions>summary small{font-size:10px;font-weight:400;color:#aaa0bb}
+.gp-world-suggestions[open]>summary{margin-bottom:7px}
