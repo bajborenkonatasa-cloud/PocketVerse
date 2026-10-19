@@ -4929,3 +4929,12 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 .gp-world-suggestions>summary{cursor:pointer;font-weight:700;color:#d9b8f4;font-size:12px;list-style:revert}
 .gp-world-suggestions>summary small{font-size:10px;font-weight:400;color:#aaa0bb}
 .gp-world-suggestions[open]>summary{margin-bottom:7px}
+
+/* World Calendar v0.5 — event dots in existing month grid; no second event warehouse */
+#gp-phone .gp-cal-day.gp-world-marked{border-color:rgba(218,157,252,.57);background:linear-gradient(145deg,rgba(162,92,216,.20),rgba(105,64,151,.10));}
+#gp-phone .gp-cal-day.gp-world-marked.gp-sel{box-shadow:0 0 0 1px rgba(225,178,255,.45),0 0 12px rgba(183,117,228,.20);}
+#gp-phone .gp-world-day-dot{display:block;position:absolute;bottom:2px;right:3px;font-style:normal;font-size:10px;line-height:1;color:#e3b8ff;pointer-events:none;}
+#gp-phone .gp-cal-day{position:relative;}
+#gp-phone .gp-world-cal-hint{font-size:11px;color:#c6afdb;margin-top:5px;}
+#gp-phone .gp-world-upcoming{margin-top:9px;border-top:1px solid rgba(190,160,220,.15);padding-top:6px;}
+#gp-phone .gp-world-upcoming summary{font-size:12px;color:#d9b8f4;cursor:pointer;font-weight:650;}

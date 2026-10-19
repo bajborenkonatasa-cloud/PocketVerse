@@ -93,8 +93,37 @@ export function inferredWorldCulture() {
   if (/европ|герман|франци|итал|британ|англи/.test(place)) return 'europe';
   return 'auto';
 }
+// v0.5: conservative, offline inference from the current character card and recent RP.
+// Manual culture always wins. Never treats a place name in dialogue as certain canon.
+export function worldSettingHint() {
+  const c=data();
+  if (c.culture!=='auto') return {culture:c.culture,source:'ручной выбор',confidence:'confirmed'};
+  const placeCulture=inferredWorldCulture();
+  if (placeCulture!=='auto') return {culture:placeCulture,source:'место действия',confidence:'likely'};
+  let ctx;
+  try { ctx=SillyTavern.getContext(); } catch (_) { return {culture:'auto',source:'',confidence:'unknown'}; }
+  const card=ctx?.characters?.[ctx?.characterId] || {};
+  const lore=[card.description,card.scenario,card.personality,card.first_mes,ctx?.name2].filter(x=>typeof x==='string').join(' ').slice(0,9000);
+  const recent=(ctx?.chat||[]).slice(-5).filter(m=>!m?.is_system).map(m=>String(m?.mes||'').slice(0,1300)).join(' ');
+  const corpus=(lore+' '+recent).toLowerCase();
+  const rules=[
+    ['fantasy',/(?:\b(?:fantasy|elves|elven|orcs|dragon kingdom|magic academy)\b|эльф|дракон|магическ|волшебн|фэнтези|вымышленн.{0,20}королевств)/g],
+    ['medieval',/(?:средневеков|рыцар|феодал|вассал|замок.{0,40}корол|\bmedieval\b)/g],
+    ['russia',/(?:санкт.петербург|петербург|москва|росси|\brussia\b|\bmoscow\b)/g],
+    ['usa',/(?:нью.йорк|колорадо|аспен|чикаго|калифорни|америк|\b(?:usa|united states|new york|colorado|aspen|chicago)\b)/g],
+    ['east',/(?:япони|коре|кита|токио|сеул|пекин|\b(?:japan|korea|china|tokyo|seoul|beijing)\b)/g],
+    ['europe',/(?:герман|франци|итал|англи|британ|\b(?:germany|france|italy|england|london|berlin|paris)\b)/g]
+  ];
+  const ranked=rules.map(([culture,re])=>({culture,score:(corpus.match(re)||[]).length})).sort((a,b)=>b.score-a.score);
+  const best=ranked[0],runner=ranked[1];
+  if (!best?.score || (best.score<2 && runner?.score)) return {culture:'auto',source:'недостаточно данных',confidence:'unknown'};
+  // A fantasy or historical story must not receive modern national holidays.
+  const historical=worldDate() && Number(worldDate().split('-')[0])<1600;
+  if (historical && !['fantasy','medieval'].includes(best.culture)) return {culture:'medieval',source:'историческая дата; календарь требует подтверждения',confidence:'tentative'};
+  return {culture:best.culture,source:'карточка и недавний сюжет',confidence:best.score>=2?'likely':'tentative'};
+}
 export function suggestedWorldHolidays() {
-  const c = data(), culture = inferredWorldCulture();
+  const c = data(), culture = worldSettingHint().culture;
   const today = worldDate();
   if (!today || !HOLIDAYS[culture]) return [];
   const year = Number(today.split('-')[0]);
@@ -106,7 +135,7 @@ export function suggestedWorldHolidays() {
     .map(([md,title])=>({date:`${year}-${md}`,title,culture}));
 }
 export function dismissWorldHoliday(date) {
-  const c=data(), culture=inferredWorldCulture(), year=worldDate()?.split('-')[0];
+  const c=data(), culture=worldSettingHint().culture, year=worldDate()?.split('-')[0];
   if (!year) return;
   if (!Array.isArray(c.dismissedHolidays)) c.dismissedHolidays=[];
   const key=`${year}|${culture}|${date.slice(-5)}`;

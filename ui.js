@@ -61,7 +61,7 @@ import {
     setPlanVisible, reschedulePlan, getPlanSuggestions, acceptPlanSuggestion, dismissPlanSuggestion,
     fmtPlanDate, rpToday, PLAN_WHO, monthGrid, monthOf, shiftMonth, plansByDate, daysBetween,
 } from './plans.js';
-import { CULTURES, worldCalendar, worldDate, setWorldSetting, addWorldEvent, removeWorldEvent, eventsForDate, upcomingWorldEvents, suggestedWorldHolidays, dismissWorldHoliday, inferredWorldCulture } from './world-calendar.js';
+import { CULTURES, worldCalendar, worldDate, setWorldSetting, addWorldEvent, removeWorldEvent, eventsForDate, upcomingWorldEvents, suggestedWorldHolidays, dismissWorldHoliday, inferredWorldCulture, worldSettingHint } from './world-calendar.js';
 import { tr, trDom, lang, DAYS_I18N, MONTHS_I18N } from './i18n.js';
 import { logAct, logOk, logFail } from './debug-log.js';
 
@@ -6099,6 +6099,7 @@ function renderPlans(screen) {
     currentScreen = 'notes';
     const today = rpToday();
     const storyToday = worldDate();
+    const worldHint = worldSettingHint();
     const wc = worldCalendar();
     if (!_planDay) _planDay = today;
     if (!_planMonth) _planMonth = monthOf(_planDay);
@@ -6113,11 +6114,15 @@ function renderPlans(screen) {
     const soon = [...g.overdue, ...g.today, ...g.tomorrow, ...g.week].filter(p => p.date !== _planDay).slice(0, 6);
 
     const week = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
-    const grid = cells.map(c => `
-        <button class="gp-cal-day${c.inMonth ? '' : ' gp-out'}${c.isToday ? ' gp-today' : ''}${c.iso === _planDay ? ' gp-sel' : ''}" data-calday="${c.iso}">
+    const grid = cells.map(c => {
+        const dayEvents = eventsForDate(c.iso);
+        return `
+        <button class="gp-cal-day${dayEvents.length ? ' gp-world-marked' : ''}${c.inMonth ? '' : ' gp-out'}${c.isToday ? ' gp-today' : ''}${c.iso === _planDay ? ' gp-sel' : ''}" data-calday="${c.iso}">
             <span>${c.day}</span>
             ${c.total ? `<i class="${c.open ? (c.past ? 'gp-late' : '') : 'gp-done'}"></i>` : ''}
-        </button>`).join('');
+            ${dayEvents.length ? `<em class="gp-world-day-dot" title="${esc(dayEvents.map(e=>e.title).join(' · '))}">${dayEvents.some(e=>e.kind==='birthday')?'🎂':dayEvents.some(e=>e.kind==='holiday')?'✦':'•'}</em>` : ''}
+        </button>`;
+    }).join('');
 
     const planList = (arr, empty) => (arr.length
         ? arr.map(planRowHtml).join('')
@@ -6142,13 +6147,14 @@ function renderPlans(screen) {
                 <div class="gp-cal-grid">${grid}</div>
             </div>
             <section class="gp-world-cal" aria-label="События мира">
-                <div class="gp-world-cal-title">✦ Живой мир <span>v0.4 · экономный режим</span></div>
+                <div class="gp-world-cal-title">✦ Живой мир <span>v0.5 · без доп. запросов</span></div>
                 <div class="gp-world-cal-date">${storyToday ? `📅 ${esc(fmtPlanDate(storyToday))} · сюжетное время` : '📅 Сюжетная дата пока не определена'}</div>
+                <div class="gp-world-cal-hint">🔎 Мир: ${esc(CULTURES[worldHint.culture]||'не определён')} · ${esc(worldHint.source||'укажи культуру или место')}${worldHint.confidence==='tentative'?' · предположение':''}</div>
                 <div class="gp-world-cal-settings">
                     <select id="gp-world-culture" title="Культура и эпоха">${Object.entries(CULTURES).map(([k,v])=>`<option value="${k}" ${wc.culture===k?'selected':''}>${esc(v)}</option>`).join('')}</select>
                     <input id="gp-world-place" maxlength="100" placeholder="Место / королевство" value="${esc(wc.place)}">
                 </div>
-                <details class="gp-world-suggestions"><summary>🌍 Праздники мира · ${esc(CULTURES[inferredWorldCulture()] || 'уточни место')} <small>(${suggestedWorldHolidays().length} предложений)</small></summary>
+                <details class="gp-world-suggestions"><summary>🌍 Праздники мира · ${esc(CULTURES[worldHint.culture] || 'уточни место')} <small>(${suggestedWorldHolidays().length} предложений)</small></summary>
                 ${suggestedWorldHolidays().length ? suggestedWorldHolidays().slice(0,30).map(e=>`<div class="gp-world-event gp-world-suggestion"><span>✧ ${esc(fmtPlanDate(e.date))} · ${esc(e.title)} <small>предложение</small></span><button data-world-accept="${esc(e.date)}" data-world-title="${esc(e.title)}" title="Добавить праздник">＋</button><button data-world-dismiss="${esc(e.date)}" title="Не предлагать в этом году">×</button></div>`).join('') : '<div class="gp-world-cal-empty">Нет предложений. Укажи место или выбери культуру; для фэнтези праздники задаются по лору вручную.</div>'}
                 </details>
                 <div class="gp-world-cal-sub">✧ ${esc(fmtPlanDate(_planDay))} · праздники и события</div>
@@ -6159,7 +6165,7 @@ function renderPlans(screen) {
                     <label><input type="checkbox" id="gp-world-yearly"> Каждый год</label>
                     <button id="gp-world-add">＋ Добавить</button>
                 </div>
-                ${storyToday && upcomingWorldEvents(storyToday).length ? `<div class="gp-world-cal-sub">Скоро в истории</div>${upcomingWorldEvents(storyToday).map(e=>`<div class="gp-world-cal-upcoming">${esc(fmtPlanDate(e.occurrence))} · ${esc(e.title)}</div>`).join('')}` : ''}
+                ${storyToday && upcomingWorldEvents(storyToday).length ? `<details class="gp-world-upcoming"><summary>Скоро в истории · ${upcomingWorldEvents(storyToday).length}</summary>${upcomingWorldEvents(storyToday).map(e=>`<div class="gp-world-cal-upcoming">${esc(fmtPlanDate(e.occurrence))} · ${esc(e.title)}</div>`).join('')}</details>` : ''}
             </section>
             ${suggestions.length ? `<div class="gp-chan-section">✨ Предложено из ролевой · ${suggestions.length}</div>
                 ${suggestions.slice(0, 8).map(p => `<div class="gp-plan gp-plan-suggestion"><div class="gp-plan-body"><div class="gp-plan-text">${esc(p.text)}</div><div class="gp-plan-meta">${esc(fmtPlanDate(p.date))}${p.time ? ' · ' + esc(p.time) : ''} · ${esc(PLAN_WHO[p.who] || 'вместе')}</div></div><button class="gp-primary" data-planaccept="${esc(p.id)}">✓</button><button class="gp-iconbtn" data-planreject="${esc(p.id)}" title="Отклонить">✕</button></div>`).join('')}` : ''}
