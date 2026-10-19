@@ -6060,6 +6060,9 @@ let _noteDraftFor = null;
 let _notesTab = 'notes';
 let _planMonth = '';   // какой месяц открыт
 let _planDay = '';     // выбранный день
+// Calendar navigation is UI-only; never carry its selected day/month to another RP chat.
+let _planChatMeta = null;
+let _planLastStoryDate = '';
 
 function notesTabsHtml() {
     const due = plansBadgeCount();
@@ -6101,8 +6104,24 @@ function renderPlans(screen) {
     const storyToday = worldDate();
     const worldHint = worldSettingHint();
     const wc = worldCalendar();
-    if (!_planDay) _planDay = today;
-    if (!_planMonth) _planMonth = monthOf(_planDay);
+    // Metadata object is per-chat in SillyTavern. A new chat must open at its
+    // own story date, not the month last browsed in another chat.
+    const chatMeta = getMeta();
+    const targetDay = storyToday || today;
+    if (_planChatMeta !== chatMeta) {
+        _planChatMeta = chatMeta;
+        _planDay = targetDay;
+        _planMonth = monthOf(targetDay);
+    } else if (!_planDay || !_planMonth) {
+        _planDay = targetDay;
+        _planMonth = monthOf(targetDay);
+    } else if (storyToday && _planLastStoryDate && storyToday !== _planLastStoryDate && _planDay === _planLastStoryDate) {
+        // Follow the RP clock only if the user was viewing the previous RP day.
+        // Explicit browsing of another day/month is not overridden.
+        _planDay = storyToday;
+        _planMonth = monthOf(storyToday);
+    }
+    _planLastStoryDate = storyToday || '';
     const cells = monthGrid(_planMonth);
     const [my, mm] = _planMonth.split('-').map(Number);
     const monthName = MONTHS_I18N[lang()][mm - 1];
@@ -6147,7 +6166,7 @@ function renderPlans(screen) {
                 <div class="gp-cal-grid">${grid}</div>
             </div>
             <section class="gp-world-cal" aria-label="События мира">
-                <div class="gp-world-cal-title">✦ Живой мир <span>v0.5 · без доп. запросов</span></div>
+                <div class="gp-world-cal-title">✦ Живой мир <span>v0.5.1 · без доп. запросов</span></div>
                 <div class="gp-world-cal-date">${storyToday ? `📅 ${esc(fmtPlanDate(storyToday))} · сюжетное время` : '📅 Сюжетная дата пока не определена'}</div>
                 <div class="gp-world-cal-hint">🔎 Мир: ${esc(CULTURES[worldHint.culture]||'не определён')} · ${esc(worldHint.source||'укажи культуру или место')}${worldHint.confidence==='tentative'?' · предположение':''}</div>
                 <div class="gp-world-cal-settings">
