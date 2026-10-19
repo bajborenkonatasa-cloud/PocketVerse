@@ -61,6 +61,7 @@ import {
     setPlanVisible, reschedulePlan, getPlanSuggestions, acceptPlanSuggestion, dismissPlanSuggestion,
     fmtPlanDate, rpToday, PLAN_WHO, monthGrid, monthOf, shiftMonth, plansByDate, daysBetween,
 } from './plans.js';
+import { CULTURES, worldCalendar, worldDate, setWorldSetting, addWorldEvent, removeWorldEvent, eventsForDate, upcomingWorldEvents } from './world-calendar.js';
 import { tr, trDom, lang, DAYS_I18N, MONTHS_I18N } from './i18n.js';
 import { logAct, logOk, logFail } from './debug-log.js';
 
@@ -6097,6 +6098,8 @@ function planRowHtml(p) {
 function renderPlans(screen) {
     currentScreen = 'notes';
     const today = rpToday();
+    const storyToday = worldDate();
+    const wc = worldCalendar();
     if (!_planDay) _planDay = today;
     if (!_planMonth) _planMonth = monthOf(_planDay);
     const cells = monthGrid(_planMonth);
@@ -6138,6 +6141,23 @@ function renderPlans(screen) {
                 <div class="gp-cal-week">${week.map(d => `<span>${d}</span>`).join('')}</div>
                 <div class="gp-cal-grid">${grid}</div>
             </div>
+            <section class="gp-world-cal" aria-label="События мира">
+                <div class="gp-world-cal-title">✦ Живой мир <span>v0.1 · без доп. запросов</span></div>
+                <div class="gp-world-cal-date">${storyToday ? `📅 ${esc(fmtPlanDate(storyToday))} · сюжетное время` : '📅 Сюжетная дата пока не определена'}</div>
+                <div class="gp-world-cal-settings">
+                    <select id="gp-world-culture" title="Культура и эпоха">${Object.entries(CULTURES).map(([k,v])=>`<option value="${k}" ${wc.culture===k?'selected':''}>${esc(v)}</option>`).join('')}</select>
+                    <input id="gp-world-place" maxlength="100" placeholder="Место / королевство" value="${esc(wc.place)}">
+                </div>
+                <div class="gp-world-cal-sub">✧ ${esc(fmtPlanDate(_planDay))} · праздники и события</div>
+                ${(eventsForDate(_planDay).length ? eventsForDate(_planDay).map(e=>`<div class="gp-world-event"><span>${e.kind==='birthday'?'🎂':e.kind==='holiday'?'🎉':e.kind==='meeting'?'💌':'✨'} ${esc(e.title)}${e.yearly?' ↻':''}</span><button data-world-remove="${esc(e.id)}" title="Удалить событие">×</button></div>`).join('') : '<div class="gp-world-cal-empty">Пока событий нет. Добавь день рождения, праздник или встречу.</div>')}
+                <div class="gp-world-cal-form">
+                    <input id="gp-world-title" maxlength="120" placeholder="Название события">
+                    <select id="gp-world-kind"><option value="event">✨ Событие</option><option value="holiday">🎉 Праздник</option><option value="birthday">🎂 День рождения</option><option value="meeting">💌 Встреча</option></select>
+                    <label><input type="checkbox" id="gp-world-yearly"> Каждый год</label>
+                    <button id="gp-world-add">＋ Добавить</button>
+                </div>
+                ${storyToday && upcomingWorldEvents(storyToday).length ? `<div class="gp-world-cal-sub">Скоро в истории</div>${upcomingWorldEvents(storyToday).map(e=>`<div class="gp-world-cal-upcoming">${esc(fmtPlanDate(e.occurrence))} · ${esc(e.title)}</div>`).join('')}` : ''}
+            </section>
             ${suggestions.length ? `<div class="gp-chan-section">✨ Предложено из ролевой · ${suggestions.length}</div>
                 ${suggestions.slice(0, 8).map(p => `<div class="gp-plan gp-plan-suggestion"><div class="gp-plan-body"><div class="gp-plan-text">${esc(p.text)}</div><div class="gp-plan-meta">${esc(fmtPlanDate(p.date))}${p.time ? ' · ' + esc(p.time) : ''} · ${esc(PLAN_WHO[p.who] || 'вместе')}</div></div><button class="gp-primary" data-planaccept="${esc(p.id)}">✓</button><button class="gp-iconbtn" data-planreject="${esc(p.id)}" title="Отклонить">✕</button></div>`).join('')}` : ''}
             ${missed.length ? `<div class="gp-chan-section">⏳ Не решено после таймскипа · ${missed.length}</div><div class="gp-cal-empty">События не считаются произошедшими автоматически. ✓ — подтвердить, ↪ — перенести на выбранный день.</div>${missed.map(planRowHtml).join('')}` : ''}
@@ -6164,10 +6184,18 @@ function renderPlans(screen) {
     // Calendar controls: a single delegated handler survives child/icon taps and
     // avoids binding a separate listener to each dynamically generated element.
     // Use the same event channel for every action, including add/delete.
+    screen.querySelector('#gp-world-culture')?.addEventListener('change', e => setWorldSetting('culture',e.target.value));
+    screen.querySelector('#gp-world-place')?.addEventListener('change', e => setWorldSetting('place',e.target.value));
     screen.onclick = (event) => {
         if (currentScreen !== 'notes' || _notesTab !== 'plans') return;
         const button = event.target.closest('button');
         if (!button || !screen.contains(button)) return;
+        if (button.id === 'gp-world-add') {
+            const title = screen.querySelector('#gp-world-title')?.value;
+            if (!addWorldEvent({title, date:_planDay, kind:screen.querySelector('#gp-world-kind')?.value, yearly:screen.querySelector('#gp-world-yearly')?.checked})) { toast('Укажи название события', 'fa-calendar'); return; }
+            render(true); return;
+        }
+        if (button.hasAttribute('data-world-remove')) { removeWorldEvent(button.dataset.worldRemove); render(true); return; }
         if (button.id === 'gp-cal-prev' || button.id === 'gp-cal-next') {
             _planMonth = shiftMonth(_planMonth, button.id === 'gp-cal-prev' ? -1 : 1);
             render(true); return;

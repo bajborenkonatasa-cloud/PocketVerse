@@ -4909,3 +4909,17 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 #gp-phone .gp-cal-card-index,#gp-phone .gp-cal-card-suit{pointer-events:none!important}
 #gp-phone .gp-cal-xii .gp-cal-head,#gp-phone .gp-cal-xii .gp-cal-grid{position:relative;z-index:2}
 #gp-phone .gp-cal-xii button,#gp-phone .gp-plan button,#gp-phone .gp-plan-editor button{touch-action:manipulation;pointer-events:auto}
+
+/* PocketVerse World Calendar v0.1: compact, isolated styles */
+.gp-world-cal{margin:10px 10px 14px;padding:12px;border:1px solid rgba(180,145,230,.34);border-radius:15px;background:rgba(65,45,95,.14)}
+.gp-world-cal-title{font-weight:750;color:#e6c5ff;font-size:15px;display:flex;justify-content:space-between;gap:8px}
+.gp-world-cal-title span{font-size:10px;color:#a9a2b6;font-weight:400}
+.gp-world-cal-date,.gp-world-cal-empty,.gp-world-cal-upcoming{font-size:12px;color:#bcb4cb;margin-top:7px}
+.gp-world-cal-sub{margin:10px 0 5px;font-weight:700;font-size:12px;color:#d9b8f4}
+.gp-world-cal-settings,.gp-world-cal-form{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
+.gp-world-cal input,.gp-world-cal select,.gp-world-cal button{min-width:0;border:1px solid rgba(190,160,220,.3);border-radius:8px;background:rgba(25,22,40,.75);color:#f0e8f5;padding:7px;font-size:12px}
+.gp-world-cal-settings select{flex:1 1 110px}.gp-world-cal-settings input{flex:1 1 130px}
+.gp-world-cal-form input[type=text]{flex:1 1 100%;box-sizing:border-box}.gp-world-cal-form label{font-size:11px;white-space:nowrap;color:#d5c7e0}
+.gp-world-cal-form input[type=checkbox]{vertical-align:middle}
+.gp-world-event{display:flex;justify-content:space-between;align-items:center;gap:7px;font-size:13px;color:#f0def6;padding:4px 0}
+.gp-world-event button{padding:2px 9px;flex-shrink:0}
