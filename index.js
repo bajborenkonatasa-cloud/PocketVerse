@@ -493,10 +493,14 @@ jQuery(async () => {
             if (isPhoneOpen()) render();
         };
         eventSource.on(event_types.MESSAGE_RECEIVED, onNewMessage);
-        if(event_types.GENERATION_STARTED)eventSource.on(event_types.GENERATION_STARTED,()=>{try{markInvitationDecisionsDelivered();}catch(e){}});
+        // v0.7.1: do not consume invitation decisions before the model has generated a reply.
+        // GENERATION_STARTED happens before the prompt is guaranteed to be assembled.
 
         if (event_types.GENERATION_ENDED) {
             eventSource.on(event_types.GENERATION_ENDED, onNewMessage);
+            eventSource.on(event_types.GENERATION_ENDED, () => {
+                try { markInvitationDecisionsDelivered(); } catch (e) { console.warn('[PocketVerse] invitation delivery', e); }
+            });
         }
         eventSource.on(event_types.MESSAGE_SENT, () => {
             if (!getSettings().isEnabled) return;
