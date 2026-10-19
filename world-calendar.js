@@ -53,3 +53,56 @@ export function upcomingWorldEvents(today, max=5) {
     }
     return out.sort((a,b)=>a.occurrence.localeCompare(b.occurrence)).slice(0,max);
 }
+
+// v0.2: small, deterministic holiday catalog. Suggestions are NOT assumed to be canon.
+const HOLIDAYS = {
+  russia: [['01-01','Новый год'],['01-07','Рождество (православная традиция)'],['03-08','Международный женский день'],['05-09','День Победы']],
+  europe: [['01-01','Новый год'],['12-25','Рождество (западная традиция)']],
+  usa: [['01-01','Новый год'],['07-04','День независимости США'],['10-31','Хэллоуин'],['12-25','Рождество']],
+  east: [['01-01','Новый год']],
+  medieval: [], fantasy: [], custom: []
+};
+export function inferredWorldCulture() {
+  const c = data();
+  if (c.culture !== 'auto') return c.culture;
+  const place = c.place.toLowerCase();
+  if (/росси|москв|петербург|питер|русь|сибир/.test(place)) return 'russia';
+  if (/америк|сша|нью.?йорк|лос.?анджелес|чикаго/.test(place)) return 'usa';
+  if (/япони|коре|кита|токи|сеул|пекин/.test(place)) return 'east';
+  if (/европ|герман|франци|итал|британ|англи/.test(place)) return 'europe';
+  return 'auto';
+}
+export function suggestedWorldHolidays() {
+  const c = data(), culture = inferredWorldCulture();
+  const today = worldDate();
+  if (!today || !HOLIDAYS[culture]) return [];
+  const year = Number(today.split('-')[0]);
+  // No Gregorian presumption for premodern or fictional worlds.
+  if (year < 1600 || culture === 'medieval' || culture === 'fantasy') return [];
+  const existing = new Set(c.events.filter(e=>e.kind==='holiday').map(e=>`${e.date.slice(-5)}|${e.title.toLowerCase()}`));
+  const dismissed = new Set(c.dismissedHolidays || []);
+  return HOLIDAYS[culture].filter(([md,title])=>!existing.has(`${md}|${title.toLowerCase()}`) && !dismissed.has(`${year}|${culture}|${md}`))
+    .map(([md,title])=>({date:`${year}-${md}`,title,culture}));
+}
+export function dismissWorldHoliday(date) {
+  const c=data(), culture=inferredWorldCulture(), year=worldDate()?.split('-')[0];
+  if (!year) return;
+  if (!Array.isArray(c.dismissedHolidays)) c.dismissedHolidays=[];
+  const key=`${year}|${culture}|${date.slice(-5)}`;
+  if (!c.dismissedHolidays.includes(key)) c.dismissedHolidays.push(key);
+  c.dismissedHolidays=c.dismissedHolidays.slice(-150);saveMeta();
+}
+export function worldCalendarInjectLine() {
+  const today=worldDate(); if (!today) return '';
+  const c=data();
+  const active=eventsForDate(today).slice(0,2);
+  const upcoming=upcomingWorldEvents(today,3).filter(e=>e.occurrence!==today);
+  // Only inject near-term confirmed events; no fictional world facts invented.
+  const soon=upcoming.filter(e=>{
+    const a=Date.parse(`${today}T12:00:00Z`), b=Date.parse(`${e.occurrence}T12:00:00Z`);
+    return Number.isFinite(a)&&Number.isFinite(b)&&b>=a&&b-a<=3*86400000;
+  });
+  if (!active.length&&!soon.length) return '';
+  const items=[...active.map(e=>`today: ${e.title}`),...soon.map(e=>`${e.occurrence}: ${e.title}`)].slice(0,3);
+  return `\n<story_calendar>RP date ${today}. Confirmed calendar events: ${items.join('; ')}. Mention preparations or celebrations ONLY if natural to the current scene, setting, characters and their beliefs. Do not force actions, repeat reminders or assume attendance.</story_calendar>`;
+}

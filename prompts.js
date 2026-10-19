@@ -1,3 +1,4 @@
+import { worldCalendarInjectLine } from './world-calendar.js';
 
 import { setExtensionPrompt, extension_prompt_types, extension_prompt_roles } from '../../../../script.js';
 import { getSettings, getMeta, scanChat, getBlockedSmsKeys, keyOf, EXT_NAME } from './state.js';
@@ -303,7 +304,7 @@ function buildPhoneOnlyPrompt(mode = 'balanced') {
 function buildActivePrompt() {
     const s = getSettings();
     const turn = phoneTurnState();
-    if (!turn) return buildIdleBridge();
+    if (!turn) return buildIdleBridge() + worldCalendarInjectLine();
     const mode = String(s.brainMode || 'balanced');
     if (mode === 'lite') return buildPhoneOnlyPrompt('lite');
     if (mode === 'balanced') return buildPhoneOnlyPrompt('balanced');
