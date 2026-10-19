@@ -6142,14 +6142,14 @@ function renderPlans(screen) {
                 <div class="gp-cal-grid">${grid}</div>
             </div>
             <section class="gp-world-cal" aria-label="События мира">
-                <div class="gp-world-cal-title">✦ Живой мир <span>v0.2 · экономный режим</span></div>
+                <div class="gp-world-cal-title">✦ Живой мир <span>v0.3 · без доп. запросов</span></div>
                 <div class="gp-world-cal-date">${storyToday ? `📅 ${esc(fmtPlanDate(storyToday))} · сюжетное время` : '📅 Сюжетная дата пока не определена'}</div>
                 <div class="gp-world-cal-settings">
                     <select id="gp-world-culture" title="Культура и эпоха">${Object.entries(CULTURES).map(([k,v])=>`<option value="${k}" ${wc.culture===k?'selected':''}>${esc(v)}</option>`).join('')}</select>
                     <input id="gp-world-place" maxlength="100" placeholder="Место / королевство" value="${esc(wc.place)}">
                 </div>
                 <div class="gp-world-cal-sub">🌍 Подсказки для мира · ${esc(CULTURES[inferredWorldCulture()] || 'уточни место')}</div>
-                ${suggestedWorldHolidays().length ? suggestedWorldHolidays().slice(0,6).map(e=>`<div class="gp-world-event gp-world-suggestion"><span>✧ ${esc(fmtPlanDate(e.date))} · ${esc(e.title)} <small>предложение</small></span><button data-world-accept="${esc(e.date)}" data-world-title="${esc(e.title)}" title="Добавить праздник">＋</button><button data-world-dismiss="${esc(e.date)}" title="Не предлагать в этом году">×</button></div>`).join('') : '<div class="gp-world-cal-empty">Нет предложений. Укажи место или выбери культуру; для фэнтези праздники задаются по лору вручную.</div>'}
+                ${suggestedWorldHolidays().length ? suggestedWorldHolidays().slice(0,30).map(e=>`<div class="gp-world-event gp-world-suggestion"><span>✧ ${esc(fmtPlanDate(e.date))} · ${esc(e.title)} <small>предложение</small></span><button data-world-accept="${esc(e.date)}" data-world-title="${esc(e.title)}" title="Добавить праздник">＋</button><button data-world-dismiss="${esc(e.date)}" title="Не предлагать в этом году">×</button></div>`).join('') : '<div class="gp-world-cal-empty">Нет предложений. Укажи место или выбери культуру; для фэнтези праздники задаются по лору вручную.</div>'}
                 <div class="gp-world-cal-sub">✧ ${esc(fmtPlanDate(_planDay))} · праздники и события</div>
                 ${(eventsForDate(_planDay).length ? eventsForDate(_planDay).map(e=>`<div class="gp-world-event"><span>${e.kind==='birthday'?'🎂':e.kind==='holiday'?'🎉':e.kind==='meeting'?'💌':'✨'} ${esc(e.title)}${e.yearly?' ↻':''}</span><button data-world-remove="${esc(e.id)}" title="Удалить событие">×</button></div>`).join('') : '<div class="gp-world-cal-empty">Пока событий нет. Добавь день рождения, праздник или встречу.</div>')}
                 <div class="gp-world-cal-form">
@@ -6186,8 +6186,8 @@ function renderPlans(screen) {
     // Calendar controls: a single delegated handler survives child/icon taps and
     // avoids binding a separate listener to each dynamically generated element.
     // Use the same event channel for every action, including add/delete.
-    screen.querySelector('#gp-world-culture')?.addEventListener('change', e => setWorldSetting('culture',e.target.value));
-    screen.querySelector('#gp-world-place')?.addEventListener('change', e => setWorldSetting('place',e.target.value));
+    screen.querySelector('#gp-world-culture')?.addEventListener('change', e => { setWorldSetting('culture',e.target.value); render(true); });
+    screen.querySelector('#gp-world-place')?.addEventListener('change', e => { setWorldSetting('place',e.target.value); render(true); });
     screen.onclick = (event) => {
         if (currentScreen !== 'notes' || _notesTab !== 'plans') return;
         const button = event.target.closest('button');

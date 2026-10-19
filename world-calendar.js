@@ -55,19 +55,40 @@ export function upcomingWorldEvents(today, max=5) {
 }
 
 // v0.2: small, deterministic holiday catalog. Suggestions are NOT assumed to be canon.
+// v0.3: expanded offline suggestions; culturally relevant options, never imposed as canon.
+// Dates are month-day; floating holidays are calculated for the story year.
 const HOLIDAYS = {
-  russia: [['01-01','Новый год'],['01-07','Рождество (православная традиция)'],['03-08','Международный женский день'],['05-09','День Победы']],
-  europe: [['01-01','Новый год'],['12-25','Рождество (западная традиция)']],
-  usa: [['01-01','Новый год'],['07-04','День независимости США'],['10-31','Хэллоуин'],['12-25','Рождество']],
-  east: [['01-01','Новый год']],
+  russia: [['01-01','Новый год'],['01-07','Рождество (православная традиция)'],['02-23','День защитника Отечества'],['03-08','Международный женский день'],['05-01','Праздник Весны и Труда'],['05-09','День Победы'],['06-12','День России'],['09-01','День знаний'],['11-04','День народного единства'],['12-31','Новогодний вечер']],
+  europe: [['01-01','Новый год'],['02-14','День святого Валентина'],['05-01','Первомай (в ряде стран)'],['10-31','Хэллоуин (в некоторых странах)'],['12-24','Сочельник (в ряде стран)'],['12-25','Рождество (западная традиция)'],['12-26','Второй день Рождества (в ряде стран)'],['12-31','Новогодний вечер']],
+  usa: [['01-01','Новый год'],['02-14','День святого Валентина'],['03-17','День святого Патрика'],['06-19','День освобождения (Juneteenth)'],['07-04','День независимости США'],['10-31','Хэллоуин'],['11-11','День ветеранов'],['12-24','Сочельник'],['12-25','Рождество'],['12-31','Новогодний вечер']],
+  east: [['01-01','Новый год (по григорианскому календарю)'],['02-14','День святого Валентина (в некоторых странах)'],['12-25','Рождество (в некоторых странах)']],
   medieval: [], fantasy: [], custom: []
 };
+function nthWeekday(year, month, weekday, nth) {
+  const first = new Date(Date.UTC(year, month-1, 1)).getUTCDay();
+  return String(1 + (weekday-first+7)%7 + (nth-1)*7).padStart(2,'0');
+}
+function lastWeekday(year, month, weekday) {
+  const last = new Date(Date.UTC(year,month,0));
+  return String(last.getUTCDate()-(last.getUTCDay()-weekday+7)%7).padStart(2,'0');
+}
+function holidaysFor(culture,year) {
+  const base = [...(HOLIDAYS[culture]||[])];
+  if (culture==='usa') base.push(
+    [`01-${nthWeekday(year,1,1,3)}`,'День Мартина Лютера Кинга'],
+    [`02-${nthWeekday(year,2,1,3)}`,'День президентов'],
+    [`05-${lastWeekday(year,5,1)}`,'День памяти (Memorial Day)'],
+    [`09-${nthWeekday(year,9,1,1)}`,'День труда (Labor Day)'],
+    [`11-${nthWeekday(year,11,4,4)}`,'День благодарения']
+  );
+  return base.sort((a,b)=>a[0].localeCompare(b[0]));
+}
 export function inferredWorldCulture() {
   const c = data();
   if (c.culture !== 'auto') return c.culture;
   const place = c.place.toLowerCase();
   if (/росси|москв|петербург|питер|русь|сибир/.test(place)) return 'russia';
-  if (/америк|сша|нью.?йорк|лос.?анджелес|чикаго/.test(place)) return 'usa';
+  if (/америк|сша|нью.?йорк|лос.?анджелес|чикаго|аспен|колорад|бостон|сан.?франциск|вашингтон|майами|лас.?вегас|калифорни|флорид/.test(place)) return 'usa';
   if (/япони|коре|кита|токи|сеул|пекин/.test(place)) return 'east';
   if (/европ|герман|франци|итал|британ|англи/.test(place)) return 'europe';
   return 'auto';
@@ -81,7 +102,7 @@ export function suggestedWorldHolidays() {
   if (year < 1600 || culture === 'medieval' || culture === 'fantasy') return [];
   const existing = new Set(c.events.filter(e=>e.kind==='holiday').map(e=>`${e.date.slice(-5)}|${e.title.toLowerCase()}`));
   const dismissed = new Set(c.dismissedHolidays || []);
-  return HOLIDAYS[culture].filter(([md,title])=>!existing.has(`${md}|${title.toLowerCase()}`) && !dismissed.has(`${year}|${culture}|${md}`))
+  return holidaysFor(culture,year).filter(([md,title])=>!existing.has(`${md}|${title.toLowerCase()}`) && !dismissed.has(`${year}|${culture}|${md}`))
     .map(([md,title])=>({date:`${year}-${md}`,title,culture}));
 }
 export function dismissWorldHoliday(date) {
