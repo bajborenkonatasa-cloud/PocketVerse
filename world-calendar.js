@@ -156,3 +156,30 @@ export function worldCalendarInjectLine() {
   const items=[...active.map(e=>`today: ${e.title}`),...soon.map(e=>`${e.occurrence}: ${e.title}`)].slice(0,3);
   return `\n<story_calendar>RP date ${today}. Confirmed calendar events: ${items.join('; ')}. Mention preparations or celebrations ONLY if natural to the current scene, setting, characters and their beliefs. Do not force actions, repeat reminders or assume attendance.</story_calendar>`;
 }
+
+// v0.6: per-chat AI holiday proposals. Proposals are never canon until accepted.
+export function proposedWorldHolidays() { const c=data(); return Array.isArray(c.aiProposals)?c.aiProposals:[]; }
+export function setProposedWorldHolidays(items) {
+ const c=data(), year=Number(worldDate()?.split('-')[0]);
+ c.aiProposals=(Array.isArray(items)?items:[]).slice(0,8).map((x,i)=>{
+   const title=String(x?.title||'').trim().slice(0,90);
+   const md=String(x?.monthDay||'').trim();
+   const description=String(x?.description||'').trim().slice(0,160);
+   if(!title||! /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(md)) return null;
+   const month=Number(md.slice(0,2)), day=Number(md.slice(3));
+   if(day>new Date(Date.UTC(2000,month,0)).getUTCDate())return null;
+   return {id:`ai_${i}_${md}`,title,monthDay:md,description,year:Number.isInteger(year)?year:0};
+ }).filter(Boolean); saveMeta();return c.aiProposals;
+}
+export function acceptProposedWorldHoliday(id) {
+ const c=data(), proposal=proposedWorldHolidays().find(x=>x.id===id);
+ if(!proposal)return false;
+ const year=Number(worldDate()?.split('-')[0]);
+ const date=`${Number.isInteger(year)?year:proposal.year}-${proposal.monthDay}`;
+ const exists=c.events.some(e=>e.kind==='holiday'&&e.date.slice(-5)===proposal.monthDay&&e.title.toLowerCase()===proposal.title.toLowerCase());
+ if(!exists)addWorldEvent({title:proposal.title,date,kind:'holiday',yearly:true});
+ c.aiProposals=c.aiProposals.filter(x=>x.id!==id);saveMeta();return true;
+}
+export function rejectProposedWorldHoliday(id) {
+ const c=data();c.aiProposals=proposedWorldHolidays().filter(x=>x.id!==id);saveMeta();
+}

@@ -61,7 +61,7 @@ import {
     setPlanVisible, reschedulePlan, getPlanSuggestions, acceptPlanSuggestion, dismissPlanSuggestion,
     fmtPlanDate, rpToday, PLAN_WHO, monthGrid, monthOf, shiftMonth, plansByDate, daysBetween,
 } from './plans.js';
-import { CULTURES, worldCalendar, worldDate, setWorldSetting, addWorldEvent, removeWorldEvent, eventsForDate, upcomingWorldEvents, suggestedWorldHolidays, dismissWorldHoliday, inferredWorldCulture, worldSettingHint } from './world-calendar.js';
+import { CULTURES, worldCalendar, worldDate, setWorldSetting, addWorldEvent, removeWorldEvent, eventsForDate, upcomingWorldEvents, suggestedWorldHolidays, dismissWorldHoliday, inferredWorldCulture, worldSettingHint, proposedWorldHolidays, setProposedWorldHolidays, acceptProposedWorldHoliday, rejectProposedWorldHoliday } from './world-calendar.js';
 import { tr, trDom, lang, DAYS_I18N, MONTHS_I18N } from './i18n.js';
 import { logAct, logOk, logFail } from './debug-log.js';
 
@@ -6166,7 +6166,7 @@ function renderPlans(screen) {
                 <div class="gp-cal-grid">${grid}</div>
             </div>
             <section class="gp-world-cal" aria-label="События мира">
-                <div class="gp-world-cal-title">✦ Живой мир <span>v0.5.1 · без доп. запросов</span></div>
+                <div class="gp-world-cal-title">✦ Живой мир <span>v0.6 · ИИ по кнопке</span></div>
                 <div class="gp-world-cal-date">${storyToday ? `📅 ${esc(fmtPlanDate(storyToday))} · сюжетное время` : '📅 Сюжетная дата пока не определена'}</div>
                 <div class="gp-world-cal-hint">🔎 Мир: ${esc(CULTURES[worldHint.culture]||'не определён')} · ${esc(worldHint.source||'укажи культуру или место')}${worldHint.confidence==='tentative'?' · предположение':''}</div>
                 <div class="gp-world-cal-settings">
@@ -6176,6 +6176,8 @@ function renderPlans(screen) {
                 <details class="gp-world-suggestions"><summary>🌍 Праздники мира · ${esc(CULTURES[worldHint.culture] || 'уточни место')} <small>(${suggestedWorldHolidays().length} предложений)</small></summary>
                 ${suggestedWorldHolidays().length ? suggestedWorldHolidays().slice(0,30).map(e=>`<div class="gp-world-event gp-world-suggestion"><span>✧ ${esc(fmtPlanDate(e.date))} · ${esc(e.title)} <small>предложение</small></span><button data-world-accept="${esc(e.date)}" data-world-title="${esc(e.title)}" title="Добавить праздник">＋</button><button data-world-dismiss="${esc(e.date)}" title="Не предлагать в этом году">×</button></div>`).join('') : '<div class="gp-world-cal-empty">Нет предложений. Укажи место или выбери культуру; для фэнтези праздники задаются по лору вручную.</div>'}
                 </details>
+                <div class="gp-world-ai"><div class="gp-world-ai-head"><b>✧ Традиции этого мира</b><button id="gp-world-ai-generate" title="Один запрос к текущей модели">✨ Придумать праздники</button></div><div class="gp-world-ai-note">Только по нажатию · один API-запрос · предложения не становятся каноном автоматически.</div>
+                ${proposedWorldHolidays().length?proposedWorldHolidays().map(e=>`<div class="gp-world-ai-item"><div><b>${esc(e.monthDay)} · ${esc(e.title)}</b><small>${esc(e.description)}</small></div><button data-world-ai-accept="${esc(e.id)}" title="Принять">✓</button><button data-world-ai-reject="${esc(e.id)}" title="Отклонить">×</button></div>`).join(''):'<div class="gp-world-ai-note">Предложений пока нет.</div>'}</div>
                 <div class="gp-world-cal-sub">✧ ${esc(fmtPlanDate(_planDay))} · праздники и события</div>
                 ${(eventsForDate(_planDay).length ? eventsForDate(_planDay).map(e=>`<div class="gp-world-event"><span>${e.kind==='birthday'?'🎂':e.kind==='holiday'?'🎉':e.kind==='meeting'?'💌':'✨'} ${esc(e.title)}${e.yearly?' ↻':''}</span><button data-world-remove="${esc(e.id)}" title="Удалить событие">×</button></div>`).join('') : '<div class="gp-world-cal-empty">Пока событий нет. Добавь день рождения, праздник или встречу.</div>')}
                 <div class="gp-world-cal-form">
@@ -6218,6 +6220,27 @@ function renderPlans(screen) {
         if (currentScreen !== 'notes' || _notesTab !== 'plans') return;
         const button = event.target.closest('button');
         if (!button || !screen.contains(button)) return;
+        if (button.hasAttribute('data-world-ai-accept')) {acceptProposedWorldHoliday(button.dataset.worldAiAccept);render(true);return;}
+        if (button.hasAttribute('data-world-ai-reject')) {rejectProposedWorldHoliday(button.dataset.worldAiReject);render(true);return;}
+        if (button.id === 'gp-world-ai-generate') {
+            button.disabled=true;button.textContent='⏳ Думаю…';
+            (async()=>{try{
+                const ctx=SillyTavern.getContext();
+                const ch=ctx?.characters?.[ctx?.characterId]||{};
+                const card=[ch.name,ch.description,ch.scenario,ch.personality,ch.first_mes].filter(x=>typeof x==='string').join('\n').slice(0,3000);
+                const recent=(ctx?.chat||[]).slice(-4).filter(m=>!m?.is_system).map(m=>String(m.mes||'').slice(0,500)).join('\n').slice(0,1600);
+                const hint=worldSettingHint();const wc=worldCalendar();
+                const prompt=`POCKETVERSE WORLD HOLIDAYS. Invent 5-7 culturally coherent, original annual festivals for this RP setting, unless existing canon traditions are explicitly mentioned. Do not assume real-world national holidays for fantasy worlds. No plot spoilers, no new named NPCs, no imposed religion. Use story year/date and location only as context, NOT real phone time.\nSETTING: ${hint.culture}; place: ${wc.place||'unknown'}; story date: ${worldDate()||'unknown'}.\nCHARACTER/LORE: ${card}\nRECENT STORY: ${recent}\nReturn ONLY a JSON array of 5-7 objects: [{"title":"Russian title","monthDay":"MM-DD","description":"One brief Russian sentence about customs"}]. Ensure dates are valid Gregorian month/day for display, even if fantasy calendar is approximate. No markdown.`;
+                const raw=await generateRaw({prompt,responseLength:1400,trimNames:false});
+                const txt=typeof raw==='string'?raw:JSON.stringify(raw);
+                const match=txt.match(/\[[\s\S]*\]/);
+                if(!match)throw new Error('Модель не вернула список JSON');
+                const list=JSON.parse(match[0]);
+                if(!Array.isArray(list)||!setProposedWorldHolidays(list).length)throw new Error('Не удалось разобрать даты праздников');
+                toast('Праздники предложены — выбери понравившиеся','fa-calendar');
+            }catch(err){console.warn('[PocketVerse] world AI holidays:',err);toast('Не получилось: '+String(err.message||err).slice(0,110),'fa-triangle-exclamation');}
+            finally{render(true);}})();return;
+        }
         if (button.hasAttribute('data-world-accept')) {
             addWorldEvent({title:button.dataset.worldTitle,date:button.dataset.worldAccept,kind:'holiday',yearly:true});render(true);return;
         }
