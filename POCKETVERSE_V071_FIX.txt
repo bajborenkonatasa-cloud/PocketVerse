@@ -1,0 +1,1 @@
+v0.7.1: Invitation decisions are marked delivered only after GENERATION_ENDED, not at GENERATION_STARTED. Prevents premature clearing before the model reads the response context. No additional API calls. Changed: index.js, manifest.json.
