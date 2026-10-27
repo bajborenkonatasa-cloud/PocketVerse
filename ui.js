@@ -2081,7 +2081,7 @@ function renderThread(screen) {
             bubbles += `<div class="gp-day"><span>${esc(storyDayLabel(m.time))}</span></div>`;
             previousStoryDay = storyDay;
         }
-        const bubbleClock = storyTimeLabel(m.time);
+        const bubbleClock = storyTimeLabel(m.displayTime || m.time);
         // Фото в смс: реальное (юзер приложила) или заглушка с описанием (ММС от персонажа)
         let media = '';
         if (m.img) {

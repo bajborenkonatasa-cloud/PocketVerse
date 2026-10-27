@@ -1290,6 +1290,38 @@ function scanChatUncached() {
             return a._stablePos - b._stablePos;
         });
     }
+    // Display-only conversational clock. ST often assigns one send_date to a
+    // whole generated batch, so its RP projection produces identical HH:mm.
+    // Spread ONLY colliding minute stamps backward in stable conversation order;
+    // never mutate the underlying RP date or the saved messages.
+    for (const thread of threads.values()) {
+        const messages = thread.messages;
+        let start = 0;
+        while (start < messages.length) {
+            const first = messages[start].time;
+            if (!(first instanceof Date) || !Number.isFinite(first.getTime())) { start++; continue; }
+            const day = `${first.getFullYear()}-${first.getMonth()}-${first.getDate()}`;
+            let end = start + 1;
+            while (end < messages.length) {
+                const d = messages[end].time;
+                if (!(d instanceof Date) || !Number.isFinite(d.getTime()) || `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` !== day) break;
+                end++;
+            }
+            // Preserve the final (latest) story-clock time. Earlier messages
+            // receive 2/3 minute gaps only when the source clocks collide.
+            let nextMinute = Infinity;
+            for (let j = end - 1; j >= start; j--) {
+                const d = messages[j].time;
+                const sourceMinute = d.getHours() * 60 + d.getMinutes();
+                const minute = Math.min(sourceMinute, nextMinute === Infinity ? sourceMinute : nextMinute - (j % 2 ? 3 : 2));
+                // Clamp at 00:00 rather than moving a message to a false day.
+                const safe = Math.max(0, minute);
+                messages[j].displayTime = new Date(d.getFullYear(), d.getMonth(), d.getDate(), Math.floor(safe / 60), safe % 60);
+                nextMinute = safe;
+            }
+            start = end;
+        }
+    }
     return { contacts, threads };
 }
 
@@ -1380,8 +1412,11 @@ export function getThreadList() {
         const incomingMsgs = msgs.filter(m => m.dir === 'in');
         const incoming = incomingMsgs.length;
         const read = meta.lastRead[k] || 0;
+        const seen = Array.isArray(meta.readSeen?.[k]) ? new Set(meta.readSeen[k]) : null;
         let unread;
-        if (typeof read === 'string' && /^\d+:\d+$/.test(read)) {
+        if (seen) {
+            unread = incomingMsgs.filter(m => !seen.has(String(m.eventId || `${m.idx}:${m.tagStart || 0}`))).length;
+        } else if (typeof read === 'string' && /^\d+:\d+$/.test(read)) {
             const [readIdx, readPos] = read.split(':').map(Number);
             unread = incomingMsgs.filter(m => m.idx > readIdx || (m.idx === readIdx && (m.tagStart || 0) > readPos)).length;
         } else {
@@ -1419,6 +1454,15 @@ export function markRead(key) {
     if (!t) return;
     const meta = getMeta();
     const incoming = t.messages.filter(m => m.dir === 'in');
+    // Store exact seen event IDs, not a numeric index: local SMS IDs and
+    // SillyTavern chat indexes belong to incompatible number ranges.
+    if (!meta.readSeen || typeof meta.readSeen !== 'object') meta.readSeen = {};
+    const ids = incoming.map(m => String(m.eventId || `${m.idx}:${m.tagStart || 0}`));
+    const oldIds = meta.readSeen[key];
+    if (!Array.isArray(oldIds) || oldIds.length !== ids.length || ids.some((id, i) => oldIds[i] !== id)) {
+        meta.readSeen[key] = ids;
+        saveMeta();
+    }
     const last = incoming[incoming.length - 1];
     const cursor = last ? `${last.idx}:${last.tagStart || 0}` : 0;
     if ((meta.lastRead[key] || 0) !== cursor) {
