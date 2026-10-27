@@ -4957,3 +4957,8 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 .gp-world-invite-parchment{background:linear-gradient(135deg,#392b2a,#201923);border-color:#d5aa67;box-shadow:0 8px 32px #000b,0 0 17px #d6a45c55}
 .gp-world-invite-parchment strong{color:#ffdfa1;text-shadow:0 0 10px #e4b95d99}
 .gp-world-invite-parchment button{background:#45352f;border-color:#c3a074}
+
+/* PocketVerse chronological story-clock SMS metadata */
+#gp-phone .gp-msg-clock { display:block; text-align:right; font-size:10px; line-height:1.1; opacity:.65; margin-top:5px; font-variant-numeric:tabular-nums; }
+#gp-phone .gp-day { margin:13px 0 9px; }
+#gp-phone .gp-day span { font-size:11px; padding:4px 13px; }

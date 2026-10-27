@@ -2068,11 +2068,20 @@ function renderThread(screen) {
     updateFabBadge();
 
     let bubbles = '';
+    let previousStoryDay = '';
+    const storyDayKey = (d) => d instanceof Date && Number.isFinite(d.getTime())
+        ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '';
+    const storyTimeLabel = (d) => d instanceof Date && Number.isFinite(d.getTime())
+        ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` : '';
+    const storyDayLabel = (d) => d.toLocaleDateString('ru-RU', { day:'numeric', month:'short' });
     for (let mi = 0; mi < t.messages.length; mi++) {
         const m = t.messages[mi];
-        // The RP date belongs to the phone/header timeline. Do not insert calendar-day
-        // separators inside the thread: they duplicate the RP timeline and waste space.
-        // Message metadata stays compact: time only.
+        const storyDay = storyDayKey(m.time);
+        if (storyDay && storyDay !== previousStoryDay) {
+            bubbles += `<div class="gp-day"><span>${esc(storyDayLabel(m.time))}</span></div>`;
+            previousStoryDay = storyDay;
+        }
+        const bubbleClock = storyTimeLabel(m.time);
         // Фото в смс: реальное (юзер приложила) или заглушка с описанием (ММС от персонажа)
         let media = '';
         if (m.img) {
@@ -2114,7 +2123,7 @@ function renderThread(screen) {
             <div class="gp-bubble-wrap ${m.dir === 'out' ? 'gp-out' : 'gp-in'}${reaction ? ' gp-has-react' : ''}${m.img ? ' gp-photo-wrap' : ''}">
                 ${m.dir === 'in' && bubbleAva ? `<div class="gp-msg-avatar-above">${bubbleAva}</div>` : ''}
                 ${picker}
-                <div class="gp-bubble${m.voice ? ' gp-bubble-voice' : ''}${m.img ? ' gp-photo-bubble' : ''}" data-bmi="${mi}">${senderLabel}${media}${shotHtml(m)}${body}${reactChip}</div>
+                <div class="gp-bubble${m.voice ? ' gp-bubble-voice' : ''}${m.img ? ' gp-photo-bubble' : ''}" data-bmi="${mi}">${senderLabel}${media}${shotHtml(m)}${body}${reactChip}${bubbleClock ? `<span class="gp-msg-clock">${esc(bubbleClock)}</span>` : ''}</div>
             </div>
         </div>`;
     }

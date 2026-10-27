@@ -1091,7 +1091,7 @@ function scanChatUncached() {
                 // полное описание остаётся в mes (для модели и саммари)
                 const displayBody = body.replace(/\*(?:фото|photo):[^*]*\*\s*/i, '').replace(/\*(?:фото|photo)\*\s*/i, '').trim();
                 const tagStart = text.indexOf(om[0]);
-                const entry = { dir: 'out', text: displayBody, idx: i, time, tagStart, tagEnd: tagStart + om[0].length, tagText: om[0] };
+                const entry = { dir: 'out', text: displayBody, idx: i, time, orderMs: realDate?.getTime() ?? null, tagStart, tagEnd: tagStart + om[0].length, tagText: om[0] };
                 if (isVoice) entry.voice = true;
                 if (j.react) entry.react = String(j.react);
                 // Фото: путь из маркера (надёжно — часть текста) ИЛИ из extra.media (ST-нативно)
@@ -1243,6 +1243,7 @@ function scanChatUncached() {
             idx: Number(m.idx || (1000000000 + n)),
             // Local phone records live on the RP clock too. New records store an exact
             // rpTime snapshot; legacy records are projected onto the current RP scale.
+            orderMs: Number(m.time) || null,
             time: m.rpTime ? new Date(m.rpTime) : (m.time ? realToRpDate(new Date(m.time)) : (() => {
                 const r = getRpDateTime();
                 return r ? new Date(r.year, r.month - 1, r.day, r.hours ?? 0, r.minutes ?? 0, 0, 0) : new Date();
@@ -1269,6 +1270,26 @@ function scanChatUncached() {
         }
     }
 
+    // Keep the conversation chronological across TWO storage layers: RP chat tags and
+    // PocketVerse-local SMS. The old code appended every local SMS after all chat tags,
+    // which made later replies jump ABOVE already displayed local messages.
+    for (const thread of threads.values()) {
+        thread.messages.forEach((m, pos) => {
+            if (m.orderMs == null && m.idx >= 0 && m.idx < chat.length) {
+                const dt = parseRealDate(chat[m.idx]?.send_date);
+                if (dt) m.orderMs = dt.getTime();
+            }
+            m._stablePos = pos;
+        });
+        thread.messages.sort((a, b) => {
+            if (Number.isFinite(a.orderMs) && Number.isFinite(b.orderMs)) {
+                const diff = a.orderMs - b.orderMs;
+                if (diff) return diff;
+            }
+            // Preserve original order for equal/unknown timestamps.
+            return a._stablePos - b._stablePos;
+        });
+    }
     return { contacts, threads };
 }
 
