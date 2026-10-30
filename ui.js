@@ -7828,15 +7828,36 @@ async function pvPersistCircleVideo(url){
     return result.path;
 }
 function pvOpenCirclePlayer(url){
-    if(!url)return;
+    if (!url) return;
     document.querySelector('.gp-circle-viewer')?.remove();
-    const modal=document.createElement('div');modal.className='gp-circle-viewer';
-    const close=()=>{modal.querySelector('video')?.pause();modal.remove();};
-    const video=document.createElement('video');video.src=url;video.playsInline=true;video.controls=true;video.loop=true;video.autoplay=true;
-    const button=document.createElement('button');button.type='button';button.textContent='✕';button.className='gp-circle-viewer-close';button.setAttribute('aria-label','Закрыть');button.onclick=close;
-    modal.append(video,button);modal.addEventListener('click',e=>{if(e.target===modal)close();});
-    document.body.appendChild(modal);video.play().catch(()=>{});
+    const modal = document.createElement('div');
+    modal.className = 'gp-circle-viewer';
+    modal.setAttribute('role','dialog');
+    modal.setAttribute('aria-label','Просмотр видеокружочка');
+    const stage = document.createElement('div'); stage.className='gp-circle-viewer-stage';
+    const video = document.createElement('video');
+    video.src=url; video.playsInline=true; video.loop=true; video.autoplay=true;
+    video.controls=false; video.preload='metadata';
+    const controls = document.createElement('div'); controls.className='gp-circle-viewer-controls';
+    const play=document.createElement('button'); play.type='button'; play.textContent='Ⅱ'; play.setAttribute('aria-label','Пауза или воспроизведение');
+    const replay=document.createElement('button'); replay.type='button'; replay.textContent='↻'; replay.setAttribute('aria-label','Воспроизвести сначала');
+    const closeButton=document.createElement('button'); closeButton.type='button'; closeButton.textContent='✕'; closeButton.className='gp-circle-viewer-close'; closeButton.setAttribute('aria-label','Закрыть');
+    const close=()=>{video.pause();modal.remove();document.removeEventListener('keydown',onKey);};
+    const onKey=e=>{if(e.key==='Escape')close();};
+    play.onclick=()=>{if(video.paused)video.play().catch(()=>{});else video.pause();};
+    replay.onclick=()=>{video.currentTime=0;video.play().catch(()=>{});};
+    video.addEventListener('play',()=>{play.textContent='Ⅱ';play.setAttribute('aria-label','Пауза');});
+    video.addEventListener('pause',()=>{play.textContent='▶';play.setAttribute('aria-label','Воспроизвести');});
+    closeButton.onclick=close;
+    controls.append(play,replay);
+    stage.append(video,controls);
+    modal.append(stage,closeButton);
+    modal.addEventListener('click',e=>{if(e.target===modal)close();});
+    document.body.appendChild(modal);
+    document.addEventListener('keydown',onKey);
+    video.play().catch(()=>{play.textContent='▶';});
 }
+
 function pvOpenVideoCircleSheet(screen, t, draft, direction='in') {
     screen.querySelector('.gp-video-circle-overlay')?.remove();
     const overlay=document.createElement('div'); overlay.className='gp-video-circle-overlay';

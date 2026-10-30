@@ -4972,3 +4972,21 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 .gp-circle-viewer{position:fixed;inset:0;z-index:2147483600;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:18px}
 .gp-circle-viewer video{width:min(92vw,70vh,520px);aspect-ratio:1;object-fit:cover;border-radius:50%;box-shadow:0 0 0 3px rgba(180,150,255,.7)}
 .gp-circle-viewer-close{position:absolute;top:max(18px,env(safe-area-inset-top));right:18px;border:1px solid #777;background:#24212d;color:white;border-radius:50%;width:42px;height:42px;font-size:24px}
+
+/* 0.7.5: centered enlarged circle; controls below the video, never over a face. */
+.gp-circle-viewer{
+  position:fixed!important; inset:0!important; width:100vw!important; height:100dvh!important;
+  display:flex!important; align-items:center!important; justify-content:center!important;
+  box-sizing:border-box!important; padding:calc(20px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom))!important;
+  overflow:hidden!important; z-index:2147483600!important;
+}
+.gp-circle-viewer-stage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;width:100%;max-height:100%;min-height:0;margin:auto;}
+.gp-circle-viewer-stage>video{
+  display:block!important;position:static!important;flex:0 1 auto!important;
+  width:min(86vw,56dvh,480px)!important;height:min(86vw,56dvh,480px)!important;
+  aspect-ratio:1!important;object-fit:cover!important;border-radius:50%!important;
+  max-width:100%!important;max-height:calc(100dvh - 180px)!important;
+}
+.gp-circle-viewer-controls{display:flex!important;position:static!important;align-items:center;justify-content:center;gap:18px;flex-shrink:0;min-height:48px;}
+.gp-circle-viewer-controls button{appearance:none;border:1px solid rgba(178,150,255,.6);background:#28213b;color:#d5bcff;border-radius:50%;width:48px;height:48px;min-width:48px;font-size:25px;line-height:1;display:grid;place-items:center;cursor:pointer;}
+.gp-circle-viewer .gp-circle-viewer-close{position:absolute!important;top:calc(16px + env(safe-area-inset-top))!important;right:16px!important;z-index:2;}
