@@ -2190,7 +2190,7 @@ function renderThread(screen) {
             <button class="gp-iconbtn${_smsDraftVoice ? ' gp-voice-armed' : ''}" id="gp-voice-toggle" title="Голосовое сообщение">${ic('fa-microphone')}</button>
             <button class="gp-iconbtn gp-video-circle-btn" id="gp-video-circle" title="Подготовить кружочек">⭕</button>
             <textarea id="gp-input" rows="1" placeholder="${_smsDraftVoice ? 'Расшифровка голосового...' : 'Сообщение...'}"></textarea>
-            <button class="gp-send" id="gp-send" title="Добавить в лесенку" ${sending ? 'disabled' : ''}>${ic('fa-paper-plane')}</button><button class="gp-send gp-send-ai" id="gp-send-ai" title="Отправить лесенку персонажу" ${(sending || !pvHasPending(t.key)) ? 'disabled' : ''}>${ic('fa-wand-magic-sparkles')}</button>
+            <button class="gp-send" id="gp-send" title="Добавить в лесенку" ${sending ? 'disabled' : ''}>${ic('fa-paper-plane')}</button><button class="gp-send gp-send-ai" id="gp-send-ai" title="Отправить сообщения или открыть медиа" ${sending ? 'disabled' : ''}>${ic('fa-wand-magic-sparkles')}</button>
         </div>`;
 
     const msgs = screen.querySelector('#gp-msgs');
@@ -2462,17 +2462,9 @@ function renderThread(screen) {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); queueCurrent(); }
     });
     sendBtn?.addEventListener('click', queueCurrent);
-    // Tap ✨ = send queued text as before. Long press ✨ = compose my own generated selfie.
+    // Media menu on ✨. Keep the previous queued-message workflow available.
     const sendAiBtn=screen.querySelector('#gp-send-ai');
-    if(sendAiBtn){
-        let holdTimer=null, held=false;
-        const openSelfie=(e)=>{ e?.preventDefault?.(); held=true; pvOpenOwnSelfieSheet(screen,t); };
-        sendAiBtn.addEventListener('touchstart',()=>{held=false; holdTimer=setTimeout(openSelfie,520);},{passive:true});
-        sendAiBtn.addEventListener('touchend',()=>{if(holdTimer)clearTimeout(holdTimer);});
-        sendAiBtn.addEventListener('touchmove',()=>{if(holdTimer)clearTimeout(holdTimer);});
-        sendAiBtn.addEventListener('contextmenu',openSelfie);
-        sendAiBtn.addEventListener('click',(e)=>{if(held){e.preventDefault();held=false;return;} flushPending(t.key);});
-    }
+    sendAiBtn?.addEventListener('click',()=>pvOpenMyMediaMenu(screen,t));
     screen.querySelector('#gp-regen')?.addEventListener('click', () => doRegen(t.key));
     // Медиа от персонажа резолвится после первого рендера; это не делает второй LLM-запрос.
     setTimeout(() => autoResolveIncomingMedia(t), 0);
@@ -7790,12 +7782,12 @@ async function pvGenerateVeoCircle(key,draft,refs){
 // It reads the Gemini key from its own saved connection profile; PocketVerse never copies it.
 async function pvGenerateGeminiCircle(key,draft,refs,onStatus){
     const bridge=globalThis.SillyImagesPlusVideo;
-    if (!bridge?.generateVeoVideoFromImage) throw new Error('Обнови Silly Images Plus: не найден видеодвижок Gemini.');
-    // The current shared Veo engine uses the first reference as its source image.
-    // Additional cast identity is retained in the text prompt, not falsely promised as image refs.
+    if (!bridge?.generateOmniVideoFromImage) throw new Error('В Silly Images Plus не найден Gemini Omni 1.1 Flash. Обнови Silly Images Plus.');
+    // Gemini Omni accepts the primary image and up to four additional references.
     if (!refs.length) throw new Error('Не найден референс для видеокружочка');
-    const result=await bridge.generateVeoVideoFromImage(refs[0].dataUrl,{
-        model:'veo-3.1-fast-generate-preview',duration:8,resolution:'720p',aspectRatio:'9:16',
+    const result=await bridge.generateOmniVideoFromImage(refs[0].dataUrl,{
+        duration:8,resolution:'720p',aspectRatio:'9:16',
+        referenceImages:refs.slice(1,5).map(r=>r.dataUrl),
         prompt:pvCirclePrompt(draft,draft._thread)
     },onStatus);
     if(!result?.url) throw new Error('Gemini не вернул готовое видео');
@@ -7829,7 +7821,7 @@ function pvOpenCirclePlayer(url){
     modal.append(video,button);modal.addEventListener('click',e=>{if(e.target===modal)close();});
     document.body.appendChild(modal);video.play().catch(()=>{});
 }
-function pvOpenVideoCircleSheet(screen, t, draft) {
+function pvOpenVideoCircleSheet(screen, t, draft, direction='in') {
     screen.querySelector('.gp-video-circle-overlay')?.remove();
     const overlay=document.createElement('div'); overlay.className='gp-video-circle-overlay';
     overlay.innerHTML=`<div class="gp-video-circle-sheet">
@@ -7839,17 +7831,17 @@ function pvOpenVideoCircleSheet(screen, t, draft) {
       <label>Что говорит<textarea data-vc-speech rows="3">${esc(draft.speech)}</textarea></label>
       <label>Что видно в видео<textarea data-vc-scene rows="5">${esc(draft.scene)}</textarea></label>
       <div class="gp-video-circle-cast"><b>В кадре:</b> ${draft.visibleCharacters.length ? draft.visibleCharacters.map(esc).join(', ') : esc(draft.speaker)}</div>
-      <div class="gp-video-circle-models"><button class="gp-primary" data-vc-model="grok">Grok Video</button><button class="gp-primary" data-vc-model="veo">Gemini Veo</button></div>
+      <div class="gp-video-circle-models"><button class="gp-primary" data-vc-model="grok">Grok Video</button><button class="gp-primary" data-vc-model="veo">Gemini Omni 1.1 Flash</button></div>
       <div class="gp-video-circle-confirm" hidden></div><div class="gp-video-circle-status">Выбери модель, когда черновик устраивает.</div>
     </div>`; screen.appendChild(overlay);
     const close=()=>overlay.remove(); overlay.querySelector('[data-vc-close]')?.addEventListener('click',close); overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
     const liveDraft=()=>({speaker:String(overlay.querySelector('[data-vc-speaker]')?.value||draft.speaker),speech:String(overlay.querySelector('[data-vc-speech]')?.value||''),scene:String(overlay.querySelector('[data-vc-scene]')?.value||''),visibleCharacters:draft.visibleCharacters,_thread:t});
     overlay.querySelectorAll('[data-vc-model]').forEach(btn=>btn.addEventListener('click',()=>{
         const provider=btn.dataset.vcModel; const st=getSettings(); const isV=provider==='veo'; const box=overlay.querySelector('.gp-video-circle-confirm');
-        box.hidden=false; box.innerHTML=`<b>${isV?'Gemini Veo 3.1 Fast · Silly Images Plus':'Grok Imagine Video 1.5'}</b><small>8 сек · 9:16 · 720p · со звуком</small><div class="gp-video-circle-audit" data-vc-audit>Собираю БЕСПЛАТНЫЙ предпросмотр запроса…</div><label>${isV?'Gemini API-ключ берётся из сохранённого профиля Silly Images Plus':'API key'}${isV?'':`<input type="password" data-vc-key autocomplete="off" placeholder="xAI API key" value="${esc(st.videoGrokApiKey||'')}">`}</label><label class="gp-video-circle-check"><input type="checkbox" data-vc-check> Я проверила сцену, внешность и референс</label><button class="gp-primary gp-video-circle-go" data-vc-go disabled>Сгенерировать · платный запрос</button><small>Пока галочка не поставлена, платный API-вызов технически заблокирован.</small>`;
+        box.hidden=false; box.innerHTML=`<b>${isV?'Gemini Omni 1.1 Flash · Silly Images Plus':'Grok Imagine Video 1.5'}</b><small>8 сек · 9:16 · 720p · со звуком</small><div class="gp-video-circle-audit" data-vc-audit>Собираю БЕСПЛАТНЫЙ предпросмотр запроса…</div><label>${isV?'Gemini API-ключ берётся из сохранённого профиля Silly Images Plus':'API key'}${isV?'':`<input type="password" data-vc-key autocomplete="off" placeholder="xAI API key" value="${esc(st.videoGrokApiKey||'')}">`}</label><label class="gp-video-circle-check"><input type="checkbox" data-vc-check> Я проверила сцену, внешность и референс</label><button class="gp-primary gp-video-circle-go" data-vc-go disabled>Сгенерировать · платный запрос</button><small>Пока галочка не поставлена, платный API-вызов технически заблокирован.</small>`;
         const go=box.querySelector('[data-vc-go]'); const check=box.querySelector('[data-vc-check]'); const audit=box.querySelector('[data-vc-audit]');
         let auditedRefs=[];
-        (async()=>{ try{ const d=liveDraft(); auditedRefs=await pvCircleRefs(t,d); const prompt=pvCirclePrompt(d,t); if(!auditedRefs.length){audit.innerHTML='<b>⛔ Референс не найден.</b><br>Платная генерация заблокирована.'; check.disabled=true; return;} audit.innerHTML=`<b>🎬 Что реально уйдёт в ${isV?'Veo':'Grok'}</b><div class="gp-video-circle-refrow">${auditedRefs.map(r=>`<div><img src="${esc(r.dataUrl)}"><small>${esc(r.name)}</small></div>`).join('')}</div><b>Сцена:</b><div>${esc(d.scene)}</div><b>Речь:</b><div>${esc(d.speech)}</div><details><summary>Финальный video prompt</summary><pre>${esc(prompt)}</pre></details>`; }catch(e){audit.textContent='Ошибка предпросмотра: '+String(e?.message||e); check.disabled=true;} })();
+        (async()=>{ try{ const d=liveDraft(); auditedRefs=await pvCircleRefs(t,d); const prompt=pvCirclePrompt(d,t); if(!auditedRefs.length){audit.innerHTML='<b>⛔ Референс не найден.</b><br>Платная генерация заблокирована.'; check.disabled=true; return;} audit.innerHTML=`<b>🎬 Что реально уйдёт в ${isV?'Omni':'Grok'}</b><div class="gp-video-circle-refrow">${auditedRefs.map(r=>`<div><img src="${esc(r.dataUrl)}"><small>${esc(r.name)}</small></div>`).join('')}</div><b>Сцена:</b><div>${esc(d.scene)}</div><b>Речь:</b><div>${esc(d.speech)}</div><details><summary>Финальный video prompt</summary><pre>${esc(prompt)}</pre></details>`; }catch(e){audit.textContent='Ошибка предпросмотра: '+String(e?.message||e); check.disabled=true;} })();
         check?.addEventListener('change',()=>{go.disabled=!(check.checked&&auditedRefs.length);});
         go?.addEventListener('click',async()=>{
             const key=String(box.querySelector('[data-vc-key]')?.value||'').trim(); if(!isV && !key){toast('Вставь API key выбранного видеопровайдера','fa-key');return;}
@@ -7862,13 +7854,48 @@ function pvOpenVideoCircleSheet(screen, t, draft) {
                 status.textContent='Видео готово. Сохраняю MP4 в SillyTavern…';
                 const permanentUrl=await pvPersistCircleVideo(url);
                 status.innerHTML=`<b>Готово 🎉</b><div class="gp-video-circle-preview"><video src="${esc(permanentUrl)}" controls autoplay playsinline></video></div><small>Кружочек добавлен в переписку.</small>`;
-                addLocalSms({dir:'in', name:d.speaker||t.name, from:d.speaker||t.name, chat:t.isGroup?t.name:'', text:'', videoCircle:permanentUrl});
+                addLocalSms({dir:direction, name:direction==='out'?t.name:(d.speaker||t.name), from:d.speaker||t.name, chat:t.isGroup?t.name:'', text:'', videoCircle:permanentUrl});
+                updatePhoneInjection();
                 setTimeout(()=>{ try{ overlay.remove(); render(); }catch(_){} },900);
+                if(direction==='out'){
+                    // The character reacts to the user's *description* of the video, not the MP4 pixels.
+                    // No automatic paid video call: the user already confirmed generation.
+                    if(sending){toast('Кружочек отправлен. Дождись завершения текущего ответа.','fa-video');return;}
+                    sending=true;typingKey=t.key;render();
+                    try{
+                        setPhoneTurnActive(true);
+                        const items=[`Video circle from ${d.speaker}: ${d.scene}`,`Spoken words in the video: ${d.speech||'(no speech)'}`, 'React naturally to the received video message.'];
+                        const rawReply=await pvGeneratePhoneReply(t,items,!!t.isGroup);
+                        if(rawReply?.trim()) await insertGhostReply(t.name,rawReply.trim(),t.isGroup?t.name:'');
+                    }catch(err){console.error('[PocketVerse] video circle reaction failed',err);toast('Видео отправлено, но ответ персонажа не получен','fa-triangle-exclamation');}
+                    finally{setPhoneTurnActive(false);sending=false;typingKey=null;render();updateFabBadge();applyChatHiding();}
+                }
             }catch(e){console.error('[PocketVerse] video circle generation failed',e); status.textContent=`Ошибка видео: ${String(e?.message||e).slice(0,220)}`; go.disabled=false;}
         });
     }));
 }
 
+
+function pvOpenMyMediaMenu(screen,t){
+    screen.querySelector('.gp-own-selfie-overlay')?.remove();
+    const overlay=document.createElement('div');overlay.className='gp-own-selfie-overlay';
+    overlay.innerHTML=`<div class="gp-own-selfie-sheet"><div class="gp-video-circle-head"><b>✨ Мои сообщения и медиа</b><button class="gp-iconbtn" data-close>✕</button></div>
+      <small>Выбери действие. Генерация видео платная только после проверки и подтверждения.</small>
+      <button class="gp-primary" data-my-selfie>🤳 Моё селфи</button>
+      <button class="gp-primary" data-my-circle>⭕ Мой видеокружочек</button>
+      ${pvHasPending(t.key)?'<button class="gp-primary" data-my-queue>✉️ Отправить подготовленные сообщения</button>':''}
+    </div>`;
+    screen.appendChild(overlay);
+    const close=()=>overlay.remove();
+    overlay.querySelector('[data-close]')?.addEventListener('click',close);
+    overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
+    overlay.querySelector('[data-my-selfie]')?.addEventListener('click',()=>{close();pvOpenOwnSelfieSheet(screen,t);});
+    overlay.querySelector('[data-my-circle]')?.addEventListener('click',()=>{
+        close();const user=getUserName();
+        pvOpenVideoCircleSheet(screen,t,{speaker:user,speech:'',scene:'',visibleCharacters:[user]},'out');
+    });
+    overlay.querySelector('[data-my-queue]')?.addEventListener('click',()=>{close();flushPending(t.key);});
+}
 
 function pvOpenOwnSelfieSheet(screen, t) {
     screen.querySelector('.gp-own-selfie-overlay')?.remove();
