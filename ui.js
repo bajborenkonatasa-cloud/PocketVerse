@@ -2307,15 +2307,16 @@ function renderThread(screen) {
     screen.addEventListener('click', e => {
         const play=e.target.closest('[data-pv-circle-play]');
         const expand=e.target.closest('[data-pv-circle-expand]');
-        if (!play && !expand) return;
+        const surface=e.target.closest('[data-pv-circle] video');
+        if (!play && !expand && !surface) return;
         const bubble=e.target.closest('[data-pv-circle]');
         const video=bubble?.querySelector('video'); if(!video) return;
         e.preventDefault(); e.stopPropagation();
         if (expand) { pvOpenCirclePlayer(video.currentSrc || video.src); return; }
         if(video.paused) { video.play().catch(()=>{}); } else video.pause();
     });
-    screen.addEventListener('play', e => { if(e.target.matches?.('[data-pv-circle] video')) { const b=e.target.closest('[data-pv-circle]'); if(b) b.querySelector('[data-pv-circle-play]').textContent='Ⅱ'; } }, true);
-    screen.addEventListener('pause', e => { if(e.target.matches?.('[data-pv-circle] video')) { const b=e.target.closest('[data-pv-circle]'); if(b) b.querySelector('[data-pv-circle-play]').textContent='▶'; } }, true);
+    screen.addEventListener('play', e => { if(e.target.matches?.('[data-pv-circle] video')) { const b=e.target.closest('[data-pv-circle]'); if(b) { b.querySelector('[data-pv-circle-play]').textContent='Ⅱ'; b.classList.add('gp-circle-playing'); } } }, true);
+    screen.addEventListener('pause', e => { if(e.target.matches?.('[data-pv-circle] video')) { const b=e.target.closest('[data-pv-circle]'); if(b) { b.querySelector('[data-pv-circle-play]').textContent='▶'; b.classList.remove('gp-circle-playing'); } } }, true);
     screen.addEventListener('timeupdate', e => { if(e.target.matches?.('[data-pv-circle] video')) { const b=e.target.closest('[data-pv-circle]'); const bar=b?.querySelector('.gp-circle-progress'); if(bar && e.target.duration) bar.style.setProperty('--pv-progress',`${100*e.target.currentTime/e.target.duration}%`); } }, true);
     screen.querySelector('#gp-video-circle')?.addEventListener('click', async () => {
         const btn=screen.querySelector('#gp-video-circle');
@@ -7853,6 +7854,7 @@ function pvOpenCirclePlayer(url){
     stage.append(video,controls);
     modal.append(stage,closeButton);
     modal.addEventListener('click',e=>{if(e.target===modal)close();});
+    video.addEventListener('click',()=>{if(video.paused)video.play().catch(()=>{});else video.pause();});
     document.body.appendChild(modal);
     document.addEventListener('keydown',onKey);
     video.play().catch(()=>{play.textContent='▶';});

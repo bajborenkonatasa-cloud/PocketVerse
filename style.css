@@ -4990,3 +4990,14 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 .gp-circle-viewer-controls{display:flex!important;position:static!important;align-items:center;justify-content:center;gap:18px;flex-shrink:0;min-height:48px;}
 .gp-circle-viewer-controls button{appearance:none;border:1px solid rgba(178,150,255,.6);background:#28213b;color:#d5bcff;border-radius:50%;width:48px;height:48px;min-width:48px;font-size:25px;line-height:1;display:grid;place-items:center;cursor:pointer;}
 .gp-circle-viewer .gp-circle-viewer-close{position:absolute!important;top:calc(16px + env(safe-area-inset-top))!important;right:16px!important;z-index:2;}
+
+/* 0.7.6: inline circle controls fade completely during playback; tap video to pause. */
+#gp-phone .gp-video-circle-bubble.gp-circle-playing .gp-circle-play{opacity:0!important;visibility:hidden!important;pointer-events:none!important;}
+#gp-phone .gp-video-circle-bubble .gp-circle-play{transition:opacity .16s ease,visibility .16s ease;z-index:2;}
+#gp-phone .gp-video-circle-bubble video{cursor:pointer;}
+#gp-phone .gp-video-circle-bubble .gp-circle-expand{z-index:3;}
+/* Enlarged video floats above the conversation without hiding it or taking over the screen. */
+.gp-circle-viewer{background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;pointer-events:none!important;padding:12px!important;}
+.gp-circle-viewer-stage{pointer-events:auto!important;width:max-content!important;max-width:94vw!important;margin:auto!important;padding:12px 14px 10px!important;border-radius:24px!important;background:rgba(20,17,32,.84)!important;border:1px solid rgba(175,145,255,.45)!important;box-shadow:0 14px 45px rgba(0,0,0,.45)!important;gap:12px!important;}
+.gp-circle-viewer-stage>video{width:min(76vw,42dvh,380px)!important;height:min(76vw,42dvh,380px)!important;cursor:pointer!important;}
+.gp-circle-viewer .gp-circle-viewer-close{pointer-events:auto!important;top:calc(10px + env(safe-area-inset-top))!important;right:10px!important;}
