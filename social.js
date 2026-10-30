@@ -2597,30 +2597,44 @@ export async function generateCommentAvatar(comment) {
 export async function searchGiphyMeme(query, kind = 'gif') {
     const key = String(getSettings().giphyApiKey || '').trim();
     if (!key) throw new Error('GIPHY API key не задан');
-    const q = String(query || '').trim().slice(0, 50);
-    if (!q) throw new Error('Пустой запрос медиа');
+    const original = String(query || '').trim().slice(0, 50);
+    if (!original) throw new Error('Пустой запрос медиа');
     const resource = kind === 'sticker' ? 'stickers' : 'gifs';
-    const u = new URL(`https://api.giphy.com/v1/${resource}/search`);
-    u.searchParams.set('api_key', key);
-    u.searchParams.set('q', q);
-    u.searchParams.set('limit', '12');
-    u.searchParams.set('rating', 'pg-13');
-    u.searchParams.set('bundle', 'messaging_non_clips');
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6500);
-    let r;
-    try { r = await fetch(u.toString(), { signal:controller.signal }); }
-    finally { clearTimeout(timer); }
-    if (!r.ok) throw new Error(`GIPHY HTTP ${r.status}`);
-    const j = await r.json();
-    const a = Array.isArray(j?.data) ? j.data : [];
-    if (!a.length) throw new Error('GIPHY ничего не нашёл');
-    // Не всегда брать один и тот же первый GIF: выбираем среди первых результатов.
-    const it = a[Math.floor(Math.random() * Math.min(5, a.length))];
-    const images = it?.images || {};
-    const url = images.fixed_width?.url || images.downsized?.url || images.original?.url || '';
-    if (!url) throw new Error('У результата GIPHY нет GIF URL');
-    return { url, page: it.url || '', title: it.title || q, id: it.id || '', kind: resource === 'stickers' ? 'sticker' : 'gif' };
+    // Some GIPHY bundles omit image renditions. Do not restrict the API response.
+    // Search a few progressively broader terms, without extra LLM calls.
+    const attempts = [original];
+    const simplified = original.replace(/[^a-zA-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (simplified && simplified !== original) attempts.push(simplified);
+    const words = simplified.split(' ').filter(Boolean);
+    if (words.length > 2) attempts.push(words.slice(0, 2).join(' '));
+    attempts.push(kind === 'sticker' ? 'cute reaction' : 'funny reaction');
+    let lastError = null;
+    for (const q of [...new Set(attempts)].slice(0, 4)) {
+        const u = new URL(`https://api.giphy.com/v1/${resource}/search`);
+        u.searchParams.set('api_key', key);
+        u.searchParams.set('q', q);
+        u.searchParams.set('limit', '25');
+        u.searchParams.set('rating', 'pg-13');
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 12000);
+        try {
+            const r = await fetch(u.toString(), { signal: controller.signal });
+            if (!r.ok) throw new Error(`GIPHY HTTP ${r.status}`);
+            const j = await r.json();
+            const results = (Array.isArray(j?.data) ? j.data : []).map(it => {
+                const images = it?.images || {};
+                const url = images.fixed_width?.url || images.downsized_medium?.url || images.downsized?.url || images.original?.url || '';
+                return url ? { url, page: it.url || '', title: it.title || q, id: it.id || '', kind: resource === 'stickers' ? 'sticker' : 'gif' } : null;
+            }).filter(Boolean);
+            if (results.length) return results[Math.floor(Math.random() * Math.min(10, results.length))];
+            lastError = new Error('GIPHY не нашёл медиа: ' + q);
+        } catch (e) {
+            lastError = e;
+            // Invalid key, quota or permission won't be solved by changing keywords.
+            if (/HTTP (400|401|403|429)/.test(String(e?.message || ''))) break;
+        } finally { clearTimeout(timer); }
+    }
+    throw lastError || new Error('GIPHY не вернул подходящий GIF');
 }
 
 export async function searchGiphyChoices(query, kind = 'gif', limit = 12) {

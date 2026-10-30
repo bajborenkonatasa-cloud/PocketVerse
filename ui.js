@@ -2035,7 +2035,7 @@ async function autoResolveIncomingMedia(t) {
             return; // по одному медиа за цикл, чтобы не запускать пачку генераций одновременно
         }
         // Мем/стикер/GIF: одна попытка на сообщение, без повторной генерации LLM.
-        if (st.phoneMemes && st.autoIncomingMemes !== false && st.giphyApiKey && m.memeQuery && !m.gifUrl && !m.memeFailed && !_pvMediaFailedSession.has(key)) {
+        if (st.phoneMemes && st.autoIncomingMemes !== false && st.giphyApiKey && m.memeQuery && !m.gifUrl && !_pvMediaFailedSession.has(key)) {
             _pvAutoMediaBusy.add(key);
             _pvMediaFailedSession.add(key); // protect even when tag rewrite fails
             try {
@@ -2048,12 +2048,8 @@ async function autoResolveIncomingMedia(t) {
                 else throw new Error('Не удалось сохранить медиа');
             } catch (e) {
                 console.warn('[PocketVerse] GIPHY skipped (no retry):', e);
-                m.memeFailed = true;
-                // Save the failure, including after app restart. No empty card is displayed.
-                try {
-                    if (m.localId) updateLocalSms(m.localId, { memeFailed:true });
-                    else await rewriteSmsTag(m, t, j => { j.memeFailed = true; });
-                } catch (_) { /* session guard still prevents retries */ }
+                // Do not persist a permanent failure: network/API hiccups can recover after reload.
+                // Session guard prevents infinite retry loops during this session.
             } finally { _pvAutoMediaBusy.delete(key); if (!_pvThreadRenderFrozen) render(); }
             return;
         }
@@ -2100,7 +2096,7 @@ function renderThread(screen) {
         }
         if (m.gifUrl) {
             media += `<div class="gp-bubble-img gp-giphy${m.mediaKind === 'sticker' ? ' gp-sticker' : ''}"><img src="${esc(m.gifUrl)}" alt="${esc(m.memeQuery || 'GIF')}" data-zoom><small>Powered by GIPHY</small></div>`;
-        } else if (m.memeQuery && !m.memeFailed && st.phoneMemes && st.autoIncomingMemes !== false && st.giphyApiKey) {
+        } else if (m.memeQuery && !_pvMediaFailedSession.has(m.eventId || `${m.idx}:${m.tagStart}`) && st.phoneMemes && st.autoIncomingMemes !== false && st.giphyApiKey) {
             media += `<div class="gp-bubble-img gp-bubble-img-gen gp-meme-wait"><span>${ic('fa-face-laugh-squint')}</span><i>${esc(m.memeQuery)}</i></div>`;
         }
         // В группе подписываем отправителя входящих — КАЖДОМУ свой цвет
