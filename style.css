@@ -4962,3 +4962,13 @@ dialog.gp-echo-modal .gp-echo-close{position:absolute!important;top:10px!importa
 #gp-phone .gp-msg-clock { display:block; text-align:right; font-size:10px; line-height:1.1; opacity:.65; margin-top:5px; font-variant-numeric:tabular-nums; }
 #gp-phone .gp-day { margin:13px 0 9px; }
 #gp-phone .gp-day span { font-size:11px; padding:4px 13px; }
+
+/* PocketVerse Telegram-like inline video circles, 0.7.2 */
+#gp-phone .gp-video-circle-bubble{position:relative;width:min(65vw,260px);height:auto;aspect-ratio:1;border-radius:50%;overflow:hidden;background:#090a11;box-shadow:0 0 0 2px rgba(154,124,246,.5),0 6px 22px rgba(0,0,0,.35)}
+#gp-phone .gp-video-circle-bubble video{width:100%;height:100%;object-fit:cover;display:block;border-radius:50%}
+#gp-phone .gp-circle-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:0;border-radius:50%;width:42px;height:42px;background:rgba(0,0,0,.44);color:white;font-size:20px;cursor:pointer;opacity:.86}
+#gp-phone .gp-circle-expand{position:absolute;right:12%;bottom:13%;border:0;border-radius:50%;width:34px;height:34px;background:rgba(0,0,0,.66);color:white;font-size:21px;cursor:pointer}
+#gp-phone .gp-circle-progress{position:absolute;inset:0;border-radius:50%;pointer-events:none;background:conic-gradient(rgba(169,139,255,.9) var(--pv-progress,0%),transparent 0);mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px))}
+.gp-circle-viewer{position:fixed;inset:0;z-index:2147483600;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:18px}
+.gp-circle-viewer video{width:min(92vw,70vh,520px);aspect-ratio:1;object-fit:cover;border-radius:50%;box-shadow:0 0 0 3px rgba(180,150,255,.7)}
+.gp-circle-viewer-close{position:absolute;top:max(18px,env(safe-area-inset-top));right:18px;border:1px solid #777;background:#24212d;color:white;border-radius:50%;width:42px;height:42px;font-size:24px}

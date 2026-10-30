@@ -2096,7 +2096,7 @@ function renderThread(screen) {
             media = `<div class="gp-bubble-img gp-bubble-img-gen" style="${avatarStyle((m.from || t.name) + m.photoDesc)}"><span>${ic('fa-image')}</span><i data-mmsdesc="${esc(genKey)}">${esc(m.photoDesc)}</i><button class="gp-mms-gen" data-mmsgen="${mi}" title="Сгенерировать фото" ${busy ? 'disabled' : ''}>${ic(busy ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles')}</button>${busy ? stopGenBtn(genKey) : ''}</div>`;
         }
         if (m.videoCircle) {
-            media += `<div class="gp-video-circle-bubble"><video src="${esc(m.videoCircle)}" controls playsinline preload="metadata"></video></div>`;
+            media += `<div class="gp-video-circle-bubble" data-pv-circle><video src="${esc(m.videoCircle)}" playsinline preload="metadata" loop></video><button type="button" class="gp-circle-play" data-pv-circle-play aria-label="Воспроизвести или поставить на паузу">▶</button><button type="button" class="gp-circle-expand" data-pv-circle-expand aria-label="Увеличить кружочек">⤢</button><span class="gp-circle-progress"></span></div>`;
         }
         if (m.gifUrl) {
             media += `<div class="gp-bubble-img gp-giphy${m.mediaKind === 'sticker' ? ' gp-sticker' : ''}"><img src="${esc(m.gifUrl)}" alt="${esc(m.memeQuery || 'GIF')}" data-zoom><small>Powered by GIPHY</small></div>`;
@@ -2303,6 +2303,20 @@ function renderThread(screen) {
     });
 
     // Кружочек: сначала только бесплатный текстовый черновик. Видео API здесь не вызывается.
+    // Delegated controls survive thread re-renders. One listener per screen.
+    screen.addEventListener('click', e => {
+        const play=e.target.closest('[data-pv-circle-play]');
+        const expand=e.target.closest('[data-pv-circle-expand]');
+        if (!play && !expand) return;
+        const bubble=e.target.closest('[data-pv-circle]');
+        const video=bubble?.querySelector('video'); if(!video) return;
+        e.preventDefault(); e.stopPropagation();
+        if (expand) { pvOpenCirclePlayer(video.currentSrc || video.src); return; }
+        if(video.paused) { video.play().catch(()=>{}); } else video.pause();
+    });
+    screen.addEventListener('play', e => { if(e.target.matches?.('[data-pv-circle] video')) { const b=e.target.closest('[data-pv-circle]'); if(b) b.querySelector('[data-pv-circle-play]').textContent='Ⅱ'; } }, true);
+    screen.addEventListener('pause', e => { if(e.target.matches?.('[data-pv-circle] video')) { const b=e.target.closest('[data-pv-circle]'); if(b) b.querySelector('[data-pv-circle-play]').textContent='▶'; } }, true);
+    screen.addEventListener('timeupdate', e => { if(e.target.matches?.('[data-pv-circle] video')) { const b=e.target.closest('[data-pv-circle]'); const bar=b?.querySelector('.gp-circle-progress'); if(bar && e.target.duration) bar.style.setProperty('--pv-progress',`${100*e.target.currentTime/e.target.duration}%`); } }, true);
     screen.querySelector('#gp-video-circle')?.addEventListener('click', async () => {
         const btn=screen.querySelector('#gp-video-circle');
         if (btn?.disabled) return;
@@ -7772,6 +7786,49 @@ async function pvGenerateVeoCircle(key,draft,refs){
     const uri=done?.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri; if(!uri) throw new Error('Veo не вернул видео');
     const vr=await fetch(uri,{headers:{'x-goog-api-key':key}}); if(!vr.ok) throw new Error(`Veo download HTTP ${vr.status}`); return URL.createObjectURL(await vr.blob());
 }
+// Reuse the video engine already installed with Silly Images Plus.
+// It reads the Gemini key from its own saved connection profile; PocketVerse never copies it.
+async function pvGenerateGeminiCircle(key,draft,refs,onStatus){
+    const bridge=globalThis.SillyImagesPlusVideo;
+    if (!bridge?.generateVeoVideoFromImage) throw new Error('Обнови Silly Images Plus: не найден видеодвижок Gemini.');
+    // The current shared Veo engine uses the first reference as its source image.
+    // Additional cast identity is retained in the text prompt, not falsely promised as image refs.
+    if (!refs.length) throw new Error('Не найден референс для видеокружочка');
+    const result=await bridge.generateVeoVideoFromImage(refs[0].dataUrl,{
+        model:'veo-3.1-fast-generate-preview',duration:8,resolution:'720p',aspectRatio:'9:16',
+        prompt:pvCirclePrompt(draft,draft._thread)
+    },onStatus);
+    if(!result?.url) throw new Error('Gemini не вернул готовое видео');
+    return result.url;
+}
+async function pvPersistCircleVideo(url){
+    const response=await fetch(url,{cache:'no-store'});
+    if(!response.ok) throw new Error(`Не удалось прочитать готовый MP4: HTTP ${response.status}`);
+    const blob=await response.blob();
+    if(!blob.size) throw new Error('Готовый видеофайл пуст');
+    const bytes=new Uint8Array(await blob.arrayBuffer());
+    const chunks=[];
+    for(let i=0;i<bytes.length;i+=32768) chunks.push(String.fromCharCode(...bytes.subarray(i,i+32768)));
+    const ctx=SillyTavern.getContext();
+    const r=await fetch('/api/files/upload',{
+        method:'POST',headers:ctx.getRequestHeaders(),
+        body:JSON.stringify({name:`pocketverse_circle_${Date.now()}.mp4`,data:btoa(chunks.join(''))})
+    });
+    if(!r.ok) throw new Error(`Видео создано, но сервер не сохранил MP4 (HTTP ${r.status}). Не закрывай окно.`);
+    const result=await r.json();
+    if(!result?.path) throw new Error('Сервер не вернул путь к сохранённому MP4');
+    return result.path;
+}
+function pvOpenCirclePlayer(url){
+    if(!url)return;
+    document.querySelector('.gp-circle-viewer')?.remove();
+    const modal=document.createElement('div');modal.className='gp-circle-viewer';
+    const close=()=>{modal.querySelector('video')?.pause();modal.remove();};
+    const video=document.createElement('video');video.src=url;video.playsInline=true;video.controls=true;video.loop=true;video.autoplay=true;
+    const button=document.createElement('button');button.type='button';button.textContent='✕';button.className='gp-circle-viewer-close';button.setAttribute('aria-label','Закрыть');button.onclick=close;
+    modal.append(video,button);modal.addEventListener('click',e=>{if(e.target===modal)close();});
+    document.body.appendChild(modal);video.play().catch(()=>{});
+}
 function pvOpenVideoCircleSheet(screen, t, draft) {
     screen.querySelector('.gp-video-circle-overlay')?.remove();
     const overlay=document.createElement('div'); overlay.className='gp-video-circle-overlay';
@@ -7789,21 +7846,23 @@ function pvOpenVideoCircleSheet(screen, t, draft) {
     const liveDraft=()=>({speaker:String(overlay.querySelector('[data-vc-speaker]')?.value||draft.speaker),speech:String(overlay.querySelector('[data-vc-speech]')?.value||''),scene:String(overlay.querySelector('[data-vc-scene]')?.value||''),visibleCharacters:draft.visibleCharacters,_thread:t});
     overlay.querySelectorAll('[data-vc-model]').forEach(btn=>btn.addEventListener('click',()=>{
         const provider=btn.dataset.vcModel; const st=getSettings(); const isV=provider==='veo'; const box=overlay.querySelector('.gp-video-circle-confirm');
-        box.hidden=false; box.innerHTML=`<b>${isV?'Gemini Veo 3.1 Fast':'Grok Imagine Video 1.5'}</b><small>8 сек · 9:16 · 720p · со звуком</small><div class="gp-video-circle-audit" data-vc-audit>Собираю БЕСПЛАТНЫЙ предпросмотр запроса…</div><label>API key<input type="password" data-vc-key autocomplete="off" placeholder="${isV?'Gemini API key':'xAI API key'}" value="${esc(isV?(st.videoGeminiApiKey||''):(st.videoGrokApiKey||''))}"></label><label class="gp-video-circle-check"><input type="checkbox" data-vc-check> Я проверила сцену, внешность и референс</label><button class="gp-primary gp-video-circle-go" data-vc-go disabled>Сгенерировать · платный запрос</button><small>Пока галочка не поставлена, платный API-вызов технически заблокирован.</small>`;
+        box.hidden=false; box.innerHTML=`<b>${isV?'Gemini Veo 3.1 Fast · Silly Images Plus':'Grok Imagine Video 1.5'}</b><small>8 сек · 9:16 · 720p · со звуком</small><div class="gp-video-circle-audit" data-vc-audit>Собираю БЕСПЛАТНЫЙ предпросмотр запроса…</div><label>${isV?'Gemini API-ключ берётся из сохранённого профиля Silly Images Plus':'API key'}${isV?'':`<input type="password" data-vc-key autocomplete="off" placeholder="xAI API key" value="${esc(st.videoGrokApiKey||'')}">`}</label><label class="gp-video-circle-check"><input type="checkbox" data-vc-check> Я проверила сцену, внешность и референс</label><button class="gp-primary gp-video-circle-go" data-vc-go disabled>Сгенерировать · платный запрос</button><small>Пока галочка не поставлена, платный API-вызов технически заблокирован.</small>`;
         const go=box.querySelector('[data-vc-go]'); const check=box.querySelector('[data-vc-check]'); const audit=box.querySelector('[data-vc-audit]');
         let auditedRefs=[];
         (async()=>{ try{ const d=liveDraft(); auditedRefs=await pvCircleRefs(t,d); const prompt=pvCirclePrompt(d,t); if(!auditedRefs.length){audit.innerHTML='<b>⛔ Референс не найден.</b><br>Платная генерация заблокирована.'; check.disabled=true; return;} audit.innerHTML=`<b>🎬 Что реально уйдёт в ${isV?'Veo':'Grok'}</b><div class="gp-video-circle-refrow">${auditedRefs.map(r=>`<div><img src="${esc(r.dataUrl)}"><small>${esc(r.name)}</small></div>`).join('')}</div><b>Сцена:</b><div>${esc(d.scene)}</div><b>Речь:</b><div>${esc(d.speech)}</div><details><summary>Финальный video prompt</summary><pre>${esc(prompt)}</pre></details>`; }catch(e){audit.textContent='Ошибка предпросмотра: '+String(e?.message||e); check.disabled=true;} })();
         check?.addEventListener('change',()=>{go.disabled=!(check.checked&&auditedRefs.length);});
         go?.addEventListener('click',async()=>{
-            const key=String(box.querySelector('[data-vc-key]')?.value||'').trim(); if(!key){toast('Вставь API key выбранного видеопровайдера','fa-key');return;}
+            const key=String(box.querySelector('[data-vc-key]')?.value||'').trim(); if(!isV && !key){toast('Вставь API key выбранного видеопровайдера','fa-key');return;}
             if(!check?.checked||!auditedRefs.length){toast('Сначала проверь бесплатный предпросмотр и поставь галочку','fa-shield-halved');return;}
-            if(isV) st.videoGeminiApiKey=key; else st.videoGrokApiKey=key; saveSettingsDebounced();
+            if(!isV){st.videoGrokApiKey=key;saveSettingsDebounced();}
             go.disabled=true; const status=overlay.querySelector('.gp-video-circle-status');
             try{
                 const d=liveDraft(); const refs=await pvCircleRefs(t,d); if(!refs.length) throw new Error('Референс исчез — платный запрос отменён'); status.textContent=`Проверено. Референсов: ${refs.length}. Генерирую видео…`;
-                const url=isV?await pvGenerateVeoCircle(key,d,refs):await pvGenerateGrokCircle(key,d,refs);
-                status.innerHTML=`<b>Готово 🎉</b><div class="gp-video-circle-preview"><video src="${esc(url)}" controls autoplay playsinline></video></div><small>Кружочек добавлен в переписку.</small>`;
-                addLocalSms({dir:'in', name:d.speaker||t.name, from:d.speaker||t.name, chat:t.isGroup?t.name:'', text:'', videoCircle:url});
+                const url=isV?await pvGenerateGeminiCircle(key,d,refs,(msg)=>{status.textContent=msg;}):await pvGenerateGrokCircle(key,d,refs);
+                status.textContent='Видео готово. Сохраняю MP4 в SillyTavern…';
+                const permanentUrl=await pvPersistCircleVideo(url);
+                status.innerHTML=`<b>Готово 🎉</b><div class="gp-video-circle-preview"><video src="${esc(permanentUrl)}" controls autoplay playsinline></video></div><small>Кружочек добавлен в переписку.</small>`;
+                addLocalSms({dir:'in', name:d.speaker||t.name, from:d.speaker||t.name, chat:t.isGroup?t.name:'', text:'', videoCircle:permanentUrl});
                 setTimeout(()=>{ try{ overlay.remove(); render(); }catch(_){} },900);
             }catch(e){console.error('[PocketVerse] video circle generation failed',e); status.textContent=`Ошибка видео: ${String(e?.message||e).slice(0,220)}`; go.disabled=false;}
         });

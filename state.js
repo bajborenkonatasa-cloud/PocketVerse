@@ -1256,6 +1256,7 @@ function scanChatUncached() {
         if (m.photo) entry.photoDesc = String(m.photo).slice(0, 600);
         if (m.media && typeof m.media === 'object') entry.mediaIntent = m.media;
         if (m.img) entry.img = m.img;
+        if (m.videoCircle) entry.videoCircle = String(m.videoCircle);
         if (m.meme) entry.memeQuery = String(m.meme).slice(0, 120);
         if (m.memeFailed) entry.memeFailed = true;
         if (m.gif) entry.gifUrl = String(m.gif).slice(0, 1600);
