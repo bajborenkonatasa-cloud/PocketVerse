@@ -7524,6 +7524,22 @@ async function sendUserGiphy(key, g) {
     render(); updateFabBadge();
 }
 
+// Compact, read-only story context. Never change SillyTavern chat[] or summary data.
+function pvPhoneStoryContext(ctx) {
+    const clean = v => String(v ?? '').replace(/<!--[^]*?-->/g, ' ').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    const chat = Array.isArray(ctx?.chat) ? ctx.chat : [];
+    const recent = chat.filter(m => m && !m.is_system && !/<!--\s*tel:log/i.test(String(m.mes||''))).slice(-4)
+        .map(m => `${m.is_user ? (ctx.name1 || 'User') : (m.name || ctx.name2 || 'Character')}: ${clean(m.mes).slice(-1600)}`).join('\n');
+    const meta = ctx?.chatMetadata || ctx?.chat_metadata || {};
+    // Summarize stores differ between installs. Only consume actual saved text.
+    const candidates = [meta.summary, meta.summarize?.summary, meta.summarize?.text,
+        meta.summarization?.summary, meta.memory?.summary, meta['chat-summary']?.summary];
+    const summary = candidates.find(v => typeof v === 'string' && v.trim());
+    const memories = (getMemories() || []).filter(m => m?.text).slice(0,6)
+        .map(m => clean(m.text).slice(0,350)).join('\n');
+    return {recent, summary:clean(summary).slice(-4500), memories};
+}
+
 function pvPhoneRawPrompt(t, items, isGroup = false) {
     const st = getSettings();
     const mode = String(st.brainMode || 'balanced');
@@ -7543,15 +7559,14 @@ function pvPhoneRawPrompt(t, items, isGroup = false) {
     } catch(e) {}
 
     const cfg = mode === 'lite'
-        ? { card: 1400, rpMsgs: 0, rpEach: 0, sms: 8, smsChars: 1800, out: 1100 }
+        ? { card: 1400, sms: 8, smsChars: 1800, out: 1100 }
         : mode === 'deep'
-            ? { card: 9000, rpMsgs: 10, rpEach: 1100, sms: 24, smsChars: 5200, out: 1400 }
-            : { card: 5000, rpMsgs: 5, rpEach: 900, sms: 14, smsChars: 3400, out: 1200 };
+            ? { card: 9000, sms: 24, smsChars: 5200, out: 1400 }
+            : { card: 5000, sms: 14, smsChars: 3400, out: 1200 };
 
     card = card.slice(0, cfg.card);
-    const rp = cfg.rpMsgs ? (Array.isArray(ctx.chat) ? ctx.chat.slice(-cfg.rpMsgs) : [])
-        .map(m => `${m?.is_user ? user : (ctx?.name2 || charName)}: ${esc(m?.mes).slice(0,cfg.rpEach)}`)
-        .join('\n') : '';
+    const story = pvPhoneStoryContext(ctx);
+    const rp = story.recent;
     const sms = (Array.isArray(t?.messages) ? t.messages.slice(-cfg.sms) : [])
         .map(m => `${m?.dir === 'out' ? user : (m?.from || charName)}: ${esc(m?.text || m?.memeQuery || (m?.gifUrl ? '[GIF]' : ''))}`)
         .join('\n').slice(-cfg.smsChars);
@@ -7586,7 +7601,9 @@ function pvPhoneRawPrompt(t, items, isGroup = false) {
     const prompt = `PRIVATE PHONE GENERATION. This is an isolated PocketVerse request, not prose RP.\n`+
         `User: ${user}\nContact: ${charName}${isGroup ? `\nGroup members: ${(t?.members||[]).join(', ')}` : ''}\n`+
         (card ? `\nCHARACTER CARD EXCERPT:\n${card}\n` : '')+
-        (rp ? `\nRECENT RELEVANT RP EXCERPT:\n${rp}\n` : '')+
+        (story.summary ? `\nSAVED STORY SUMMARY (background, not necessarily current location):\n${story.summary}\n` : '')+
+        (story.memories ? `\nPOCKETVERSE SAVED MEMORIES:\n${story.memories}\n` : '')+
+        (rp ? `\nLATEST FOUR RP MESSAGES (authoritative for CURRENT location and actions; newer events override older summary):\n${rp}\n` : '')+
         (sms ? `\nRECENT PHONE CHAT:\n${sms}\n` : '')+
         `\nNEW ITEMS FROM ${user}:\n${incoming}\n\n`+
         `Reply naturally in character like real texting. Usually 1-3 short bubbles; maximum 4. No narration. `+
@@ -8085,6 +8102,7 @@ async function doSend(key, opts = {}) {
                 const combo = await generateSmsPhotoReply({
                     contactName: name, isGroup, members: t?.members || [],
                     userText: text, image: draftImg,
+                    storyContext: pvPhoneStoryContext(SillyTavern.getContext?.() || {}),
                 });
                 if (combo) {
                     // Keep the visual description locally; never rewrite an RP message.
@@ -8102,7 +8120,10 @@ async function doSend(key, opts = {}) {
                 console.warn('[PocketVerse] isolated photo reply failed:', e);
             }
         }
-        if (photoHandled) return; // finally всё приберёт
+        if (draftImg) {
+            if (!photoHandled) toast('Фото отправлено, но модель не смогла его просмотреть. Проверь vision-профиль и попробуй снова.', 'fa-circle-exclamation');
+            return; // Never silently substitute a text-only response to an image.
+        }
 
         applyChatHiding(); // спрятать свою смс из ленты сразу
         typingKey = key;

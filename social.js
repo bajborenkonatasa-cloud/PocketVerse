@@ -1247,7 +1247,7 @@ async function socialGen(prompt, { maxTokens = 1024, image = null, prefill = '' 
     if (image) {
         const vis = await currentApiVision(messages, image, maxTokens);
         if (vis !== null) return finish(vis);
-        console.warn('[GlassPhone] vision: прямой канал не сработал — запрос уйдёт БЕЗ фото');
+        throw new Error('Vision API не принял фото; текстовый запрос без изображения запрещён.');
     }
 
     // Путь 3: текущий chat-completion API. При включённом префилле сначала
@@ -1356,7 +1356,7 @@ async function _describePostImageInner(post) {
 // Экономия: раньше картинка уходила в API дважды (describe + ответ), а фолбэк
 // через quietImage гнал полный контекст с пресетом (10к+ токенов) и пресет
 // перехватывал задачу. Возвращает {desc, replies:[{from,text}]} или null.
-export async function generateSmsPhotoReply({ contactName, isGroup = false, members = [], userText = '', image }) {
+export async function generateSmsPhotoReply({ contactName, isGroup = false, members = [], userText = '', image, storyContext = {} }) {
     if (!image) return null;
     const target = isGroup
         ? `the group chat «${contactName}» (members: ${members.join(', ') || '?'})`
@@ -1364,6 +1364,8 @@ export async function generateSmsPhotoReply({ contactName, isGroup = false, memb
     const prompt = `${await taskHeader(`reply to an SMS that ${getUserName()} just sent from ${getUserName()}'s phone, and describe the attached photo.`)}
 ${getUserName()} texted ${target}: "${userText || '(only the photo, no text)'}"
 Their PHOTO is ATTACHED to this request — LOOK at it and react to what you actually see.
+${storyContext.summary ? `SAVED STORY SUMMARY (background):\n${storyContext.summary}\n` : ''}${storyContext.memories ? `SAVED MEMORIES:\n${storyContext.memories}\n` : ''}${storyContext.recent ? `LATEST FOUR RP MESSAGES (current scene takes precedence):\n${storyContext.recent}\n` : ''}
+Do not assume older scenes are still happening when newer RP messages change location.
 
 Output STRICT JSON object ONLY — no markdown, no backticks, no <think>, no HTML comments:
 {"photo_description":"detailed description of the attached photo in Russian, one cohesive paragraph: who/what is in the frame, pose, facial expression, clothes, setting, lighting, mood, small details","replies":[{"from":"SenderName","text":"reply text"}]}
