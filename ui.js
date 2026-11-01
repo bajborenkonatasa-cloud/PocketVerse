@@ -2449,6 +2449,12 @@ function renderThread(screen) {
     input?.addEventListener('input', autoGrow);
     const queueCurrent = () => {
         const text = (input?.value || '').trim();
+        // Attached image is an MMS, not a queued text bubble. The previous path
+        // queued only text, leaving the photo stuck in the composer indefinitely.
+        if (_smsDraftImage) {
+            void doSend(t.key, { text });
+            return;
+        }
         if (!text) return;
         pvQueue(t.key, text);
         input.value = '';
@@ -7528,16 +7534,33 @@ async function sendUserGiphy(key, g) {
 function pvPhoneStoryContext(ctx) {
     const clean = v => String(v ?? '').replace(/<!--[^]*?-->/g, ' ').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     const chat = Array.isArray(ctx?.chat) ? ctx.chat : [];
-    const recent = chat.filter(m => m && !m.is_system && !/<!--\s*tel:log/i.test(String(m.mes||''))).slice(-4)
-        .map(m => `${m.is_user ? (ctx.name1 || 'User') : (m.name || ctx.name2 || 'Character')}: ${clean(m.mes).slice(-1600)}`).join('\n');
+    // Four complete, visible RP turns; do not confuse phone/system logs with RP.
+    const selected = chat.filter(m => m && !m.is_system && !m.is_hidden &&
+        !m.extra?.isHidden && !/<!--\s*tel:(?:log|out|sms)/i.test(String(m.mes||'')) && clean(m.mes));
+    const lastFour = selected.slice(-4);
+    const recent = lastFour.map((m,i) => `#${selected.length-lastFour.length+i+1} ${m.is_user ? (ctx.name1 || 'User') : (m.name || ctx.name2 || 'Character')}: ${clean(m.mes).slice(-3500)}`).join('\n');
     const meta = ctx?.chatMetadata || ctx?.chat_metadata || {};
-    // Summarize stores differ between installs. Only consume actual saved text.
     const candidates = [meta.summary, meta.summarize?.summary, meta.summarize?.text,
         meta.summarization?.summary, meta.memory?.summary, meta['chat-summary']?.summary];
-    const summary = candidates.find(v => typeof v === 'string' && v.trim());
+    const generic = candidates.find(v => typeof v === 'string' && v.trim());
+    // SillyTavern-Memory-Thread stores its memory in chatMetadata.memory_thread,
+    // not in the generic Summarize fields. Read-only; never mutate its archive.
+    const mt = meta.memory_thread;
+    const valid = x => Array.isArray(x?.sources) && x.sources.length && x.sources.every(src => {
+        const msg = chat.find(m => m?.extra?.memoryThreadId === src.id);
+        return !!msg; // ID match: don't assume old indexes are stable.
+    });
+    const overview = Array.isArray(mt?.overviews) ? [...mt.overviews].reverse().find(valid) : null;
+    const scene = Array.isArray(mt?.batches) ? [...mt.batches].reverse().find(valid) : null;
+    const memoryText = [overview?.text ? `Общий сюжет: ${clean(overview.text).slice(-2600)}` : '',
+        scene?.scene ? `Последняя сохранённая сцена: ${clean(scene.scene).slice(-1300)}` : '',
+        scene?.summary ? `Краткая сводка: ${clean(scene.summary).slice(-800)}` : ''].filter(Boolean).join('\n');
+    const summary = memoryText || clean(generic).slice(-4500);
     const memories = (getMemories() || []).filter(m => m?.text).slice(0,6)
         .map(m => clean(m.text).slice(0,350)).join('\n');
-    return {recent, summary:clean(summary).slice(-4500), memories};
+    console.info('[PocketVerse] phone RP context', {rpMessages:lastFour.length, rpChars:recent.length,
+        memoryThread:!!memoryText, summaryChars:summary.length, phoneMemories:memories.length});
+    return {recent, summary, memories};
 }
 
 function pvPhoneRawPrompt(t, items, isGroup = false) {
@@ -8115,13 +8138,14 @@ async function doSend(key, opts = {}) {
                         }
                     }
                     photoHandled = true;
+                    console.info('[PocketVerse] attached SMS photo processed', { descriptionChars:combo.desc?.length||0, replies:combo.replies?.length||0 });
                 }
             } catch (e) {
                 console.warn('[PocketVerse] isolated photo reply failed:', e);
             }
         }
         if (draftImg) {
-            if (!photoHandled) toast('Фото отправлено, но модель не смогла его просмотреть. Проверь vision-профиль и попробуй снова.', 'fa-circle-exclamation');
+            if (!photoHandled) toast('Фото в переписке сохранено, но vision-модель не смогла его прочитать. Проверь API/профиль и журнал ошибок.', 'fa-circle-exclamation');
             return; // Never silently substitute a text-only response to an image.
         }
 

@@ -1191,7 +1191,7 @@ async function socialGen(prompt, { maxTokens = 1024, image = null, prefill = '' 
             if (dataUrl) {
                 requestMessages = attachImageToMessages(messages, dataUrl);
             } else {
-                console.warn('[GlassPhone] vision: не удалось прочитать картинку — запрос без фото');
+                throw new Error('Не удалось преобразовать прикреплённое фото для vision API.');
             }
         }
         try {
