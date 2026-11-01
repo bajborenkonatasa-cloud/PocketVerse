@@ -7720,10 +7720,15 @@ async function pvImageToDataUrl(src){
     return await new Promise((ok,bad)=>{const fr=new FileReader();fr.onload=()=>ok(String(fr.result||''));fr.onerror=bad;fr.readAsDataURL(b);});
 }
 function pvDataParts(data){ const m=String(data||'').match(/^data:([^;]+);base64,(.+)$/); return m?{mime:m[1],data:m[2]}:null; }
-async function pvCircleRefs(t,draft,manualReference=''){
-    if(manualReference){
-        const dataUrl=await pvImageToDataUrl(manualReference);
-        if(dataUrl) return [{name:String(draft.speaker||'Мой референс'),dataUrl}];
+async function pvCircleRefs(t,draft,manualReference=[]){
+    if(manualReference?.length){
+        const selected=Array.isArray(manualReference)?manualReference:[manualReference];
+        const out=[];
+        for(const item of selected.slice(0,5)){
+            const dataUrl=await pvImageToDataUrl(typeof item==='string'?item:item.dataUrl);
+            if(dataUrl) out.push({name:typeof item==='string'?String(draft.speaker||'Референс'):String(item.name||'Референс'),dataUrl});
+        }
+        if(out.length) return out;
     }
     const ctx=SillyTavern.getContext?.()||{}; const user=String(ctx?.name1||'User'); const out=[];
     for(const n0 of (draft.visibleCharacters||[]).slice(0,3)){
@@ -7866,25 +7871,35 @@ function pvOpenVideoCircleSheet(screen, t, draft, direction='in') {
       <label>Что говорит<textarea data-vc-speech rows="3">${esc(draft.speech)}</textarea></label>
       <label>Что видно в видео<textarea data-vc-scene rows="5">${esc(draft.scene)}</textarea></label>
       <div class="gp-video-circle-cast"><b>В кадре:</b> ${draft.visibleCharacters.length ? draft.visibleCharacters.map(esc).join(', ') : esc(draft.speaker)}</div>
-      <label>🖼️ Референс внешности (необязательно, если аватар найден автоматически)<input type="file" data-vc-ref accept="image/png,image/jpeg,image/webp"><small data-vc-ref-name>Можно выбрать изображение вручную — оно используется только для этого кружочка.</small></label>
+      <label>🖼️ Референс внешности (необязательно, если аватар найден автоматически)<input type="file" data-vc-ref accept="image/png,image/jpeg,image/webp" multiple><small data-vc-ref-name>Можно выбрать до 5 изображений сразу (удерживай при выборе). Они заменят автоматический аватар. Для добавления по одному используй кнопку ниже.</small><button type="button" class="gp-iconbtn" data-vc-ref-add>＋ Добавить ещё фото</button><div data-vc-ref-list style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0"></div></label>
       <div class="gp-video-circle-models"><button class="gp-primary" data-vc-model="grok">Grok Video</button><button class="gp-primary" data-vc-model="veo">Gemini Omni 1.1 Flash</button></div>
       <div class="gp-video-circle-confirm" hidden></div><div class="gp-video-circle-status">Выбери модель, когда черновик устраивает.</div>
     </div>`; screen.appendChild(overlay);
     const close=()=>overlay.remove(); overlay.querySelector('[data-vc-close]')?.addEventListener('click',close); overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
-    let manualCircleRef='';
+    let manualCircleRef=[];
     const refInput=overlay.querySelector('[data-vc-ref]');
+    const refList=overlay.querySelector('[data-vc-ref-list]');
+    const updateRefUI=()=>{
+        refList.innerHTML=manualCircleRef.map((r,i)=>`<div style="position:relative;width:72px"><img src="${esc(r.dataUrl)}" style="width:72px;height:72px;object-fit:cover;border-radius:8px"><button type="button" data-vc-remove="${i}" style="position:absolute;right:0;top:0;background:#29172e;color:white;border-radius:50%;padding:2px 7px">×</button><small style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</small></div>`).join('');
+        overlay.querySelector('[data-vc-ref-name]').textContent=`Выбрано ${manualCircleRef.length}/5 фото. ${manualCircleRef.length?'Нажми видеодвижок, чтобы проверить все референсы.':'Если фото не выбраны, используем найденный аватар.'}`;
+        overlay.querySelector('.gp-video-circle-confirm').hidden=true;
+        refList.querySelectorAll('[data-vc-remove]').forEach(b=>b.addEventListener('click',()=>{manualCircleRef.splice(Number(b.dataset.vcRemove),1);updateRefUI();}));
+    };
+    overlay.querySelector('[data-vc-ref-add]')?.addEventListener('click',()=>refInput?.click());
     refInput?.addEventListener('change',async()=>{
-        const file=refInput.files?.[0]; manualCircleRef='';
-        if(!file) return;
-        if(!/^image\/(png|jpeg|webp)$/.test(file.type)){toast('Выбери PNG, JPG или WebP','fa-image');return;}
-        if(file.size>12*1024*1024){toast('Изображение больше 12 МБ','fa-image');return;}
-        try{
-            manualCircleRef=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=reject;r.readAsDataURL(file);});
-            overlay.querySelector('[data-vc-ref-name]').textContent='✓ '+file.name+' — нажми видеодвижок для обновления предпросмотра';
-            overlay.querySelector('.gp-video-circle-confirm').hidden=true;
-            overlay.querySelector('.gp-video-circle-status').textContent='Референс выбран. Снова нажми Grok или Gemini Omni для проверки.';
-        }catch(e){toast('Не удалось прочитать изображение','fa-triangle-exclamation');}
+        const files=Array.from(refInput.files||[]);refInput.value='';
+        for(const file of files){
+            if(manualCircleRef.length>=5){toast('Максимум 5 референсов','fa-image');break;}
+            if(!/^image\/(png|jpeg|webp)$/.test(file.type)){toast('Выбери PNG, JPG или WebP','fa-image');continue;}
+            if(file.size>12*1024*1024){toast('Изображение больше 12 МБ','fa-image');continue;}
+            try{
+                const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=reject;r.readAsDataURL(file);});
+                manualCircleRef.push({name:file.name,dataUrl});
+            }catch(e){toast('Не удалось прочитать изображение','fa-triangle-exclamation');}
+        }
+        updateRefUI();
     });
+    overlay.querySelectorAll('[data-vc-speaker],[data-vc-speech],[data-vc-scene]').forEach(el=>el.addEventListener('input',()=>{overlay.querySelector('.gp-video-circle-confirm').hidden=true;}));
     const liveDraft=()=>({speaker:String(overlay.querySelector('[data-vc-speaker]')?.value||draft.speaker),speech:String(overlay.querySelector('[data-vc-speech]')?.value||''),scene:String(overlay.querySelector('[data-vc-scene]')?.value||''),visibleCharacters:draft.visibleCharacters,_thread:t});
     overlay.querySelectorAll('[data-vc-model]').forEach(btn=>btn.addEventListener('click',()=>{
         const provider=btn.dataset.vcModel; const st=getSettings(); const isV=provider==='veo'; const box=overlay.querySelector('.gp-video-circle-confirm');
