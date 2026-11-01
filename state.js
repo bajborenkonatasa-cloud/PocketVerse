@@ -5,7 +5,7 @@ import { extension_settings, saveMetadataDebounced } from '../../../extensions.j
 export const EXT_NAME = 'pocketverse_foundation';
 // Версия для сверки инстансов (ПК ↔ айфон): видна в настройках и в консоли.
 // БАМПАТЬ при каждом коммите вместе с manifest.json!
-export const GP_VERSION = '2.35.0-pocketverse.44';
+export const GP_VERSION = '2.35.0-pocketverse.45';
 const META_KEY = 'pocketverse_foundation';
 
 // ── Глобальные настройки ──
@@ -23,6 +23,10 @@ const defaultSettings = () => ({
     // Профиль подключения для генерации соцсетей ('' = текущий API через generateRaw,
     // изолированно от пресета). Отдельный профиль дополнительно включает вижн.
     socialProfileId: '',
+    // Independent phone API (optional). Credentials are saved in extension settings; not encrypted.
+    phoneApiEnabled: false,
+    phoneApiSelected: '',
+    phoneApiProfiles: [],
     // Префилл ответа: отдельное финальное assistant-сообщение с началом JSON.
     // Для несовместимых text-completion путей используется безопасная эмуляция.
     usePrefill: false,

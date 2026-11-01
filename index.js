@@ -1,3 +1,4 @@
+import { phoneApiRequest, selectedPhoneApi } from './phone-api.js';
 import { scanStoryInvitations, storyInvitations, resolveStoryInvitation, invitationTheme, markInvitationDecisionsDelivered } from './world-invitations.js';
 
 import { eventSource, event_types, saveSettingsDebounced } from '../../../../script.js';
@@ -50,6 +51,17 @@ function setupSettingsPanel() {
                 <label class="gp-settings-field"><span>Глубина инжекта</span><input type="number" id="gp-set-depth" class="text_pole gp-settings-number" min="0" max="100" step="1" value="${Math.max(0, Number(s.injectDepth) || 0)}"><small>0 — перед последним ходом</small></label>
                 <label class="gp-settings-field"><span>Макс. длина ответа</span><input type="number" id="gp-set-maxtokens" class="text_pole gp-settings-number" min="0" max="32000" step="256" value="${s.socialMaxTokens || 0}"><small>0 = авто</small></label>
                 <label class="gp-settings-field gp-settings-wide"><span>Профиль для соцсетей</span><span class="gp-settings-control-row"><select id="gp-set-profile" class="text_pole"></select><button class="menu_button gp-settings-icon-button" id="gp-profile-test" type="button" title="Проверить профиль (маленький запрос)" aria-label="Проверить профиль (маленький запрос)"><i class="fa-solid fa-plug-circle-check"></i></button></span></label>
+                <div class="gp-settings-field gp-settings-wide" style="border:1px solid #76619c;border-radius:12px;padding:12px;display:grid;gap:8px">
+                    <b>📱 Отдельный API для телефона (не меняет основную ролевую)</b>
+                    <label><input id="gp-phone-api-enabled" type="checkbox" ${s.phoneApiEnabled?'checked':''}> Использовать отдельный API для SMS и фото</label>
+                    <label>Сохранённые подключения <select id="gp-phone-api-select" class="text_pole"></select></label>
+                    <label>Название <input id="gp-phone-api-name" class="text_pole" placeholder="Мой Gemini / OpenRouter"></label>
+                    <label>URL (полный HTTPS endpoint /chat/completions) <input id="gp-phone-api-url" class="text_pole" type="url" autocomplete="off" placeholder="https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"></label>
+                    <label>Модель (точный ID провайдера) <input id="gp-phone-api-model" class="text_pole" autocomplete="off" placeholder="введи идентификатор модели"></label>
+                    <label>API ключ <input id="gp-phone-api-key" class="text_pole" type="password" autocomplete="off" placeholder="ключ сохраняется в настройках расширения"></label>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px"><button id="gp-phone-api-save" type="button" class="menu_button">💾 Сохранить / обновить</button><button id="gp-phone-api-new" type="button" class="menu_button">＋ Новый</button><button id="gp-phone-api-delete" type="button" class="menu_button">Удалить</button><button id="gp-phone-api-test" type="button" class="menu_button">Проверить</button></div>
+                    <small>Выключено = прежний путь SillyTavern. Поддерживается OpenAI-совместимый Chat Completions API, в том числе совместимый endpoint Google AI Studio. Не Vertex OAuth/Service Account. Ключ хранится в настройках SillyTavern без шифрования: не делись экспортом настроек.</small>
+                </div>
                 <label class="gp-settings-field"><span>Контекст соцсетей</span><select id="gp-set-ctxmode" class="text_pole"><option value="rich" ${s.socialContextMode !== 'lite' ? 'selected' : ''}>История + лорбук + карточка бота</option><option value="lite" ${s.socialContextMode === 'lite' ? 'selected' : ''}>Изолированно (только срез чата)</option></select></label>
                 <label class="gp-settings-field"><span>Твой ник (@)</span><input type="text" id="gp-set-handle" class="text_pole" maxlength="21" placeholder="авто из имени"></label>
                 <label class="gp-settings-field"><span>Узнать автора анонимки</span><input type="number" id="gp-set-anonprice" class="text_pole gp-settings-number" min="0" step="100" value="${Number(s.anonRevealPrice) || 2500}"><small>цена первого имени, дальше растёт</small></label>
@@ -371,6 +383,53 @@ function setupSettingsPanel() {
             fab.style.bottom = 'auto';
         }
         toast('Кнопка возвращена на место', 'fa-mobile-screen-button');
+    });
+
+    // PocketVerse independent phone profiles: save before switching; no credentials in logs.
+    const phoneSettings = getSettings();
+    const phoneSelect = $('#gp-phone-api-select');
+    function phoneFill() {
+        const profiles = phoneSettings.phoneApiProfiles || [];
+        phoneSelect.empty().append($('<option>').val('').text('Выбери профиль'));
+        profiles.forEach(p => phoneSelect.append($('<option>').val(p.id).text(p.name || p.model || 'Без имени')));
+        phoneSelect.val(phoneSettings.phoneApiSelected || '');
+        phoneLoad();
+    }
+    function phoneLoad() {
+        const p = (phoneSettings.phoneApiProfiles || []).find(p => p.id === phoneSelect.val());
+        $('#gp-phone-api-name').val(p?.name || '');
+        $('#gp-phone-api-url').val(p?.url || '');
+        $('#gp-phone-api-model').val(p?.model || '');
+        $('#gp-phone-api-key').val(p?.key || '');
+    }
+    phoneFill();
+    $('#gp-phone-api-enabled').on('change',function(){phoneSettings.phoneApiEnabled=this.checked;saveSettingsDebounced();});
+    phoneSelect.on('change',function(){phoneSettings.phoneApiSelected=this.value;saveSettingsDebounced();phoneLoad();});
+    $('#gp-phone-api-new').on('click',function(){phoneSettings.phoneApiSelected='';phoneSelect.val('');phoneLoad();});
+    $('#gp-phone-api-save').on('click',function(){
+        const name=String($('#gp-phone-api-name').val()||'').trim();
+        const url=String($('#gp-phone-api-url').val()||'').trim();
+        const model=String($('#gp-phone-api-model').val()||'').trim();
+        const key=String($('#gp-phone-api-key').val()||'').trim();
+        if (!name || !/^https:\/\//i.test(url) || !model || !key) {toast('Укажи название, HTTPS URL, модель и ключ','fa-circle-exclamation');return;}
+        if (!Array.isArray(phoneSettings.phoneApiProfiles)) phoneSettings.phoneApiProfiles=[];
+        let id=phoneSettings.phoneApiSelected;
+        if (!id || !phoneSettings.phoneApiProfiles.some(p=>p.id===id)) id=`phone_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+        const p={id,name,url,model,key};
+        const i=phoneSettings.phoneApiProfiles.findIndex(p=>p.id===id);
+        if (i>=0) phoneSettings.phoneApiProfiles[i]=p;else phoneSettings.phoneApiProfiles.push(p);
+        phoneSettings.phoneApiSelected=id;saveSettingsDebounced();phoneFill();toast('Профиль телефона сохранён','fa-check');
+    });
+    $('#gp-phone-api-delete').on('click',function(){
+        const id=phoneSettings.phoneApiSelected;if(!id)return;
+        if(!confirm('Удалить выбранное подключение PocketVerse?'))return;
+        phoneSettings.phoneApiProfiles=(phoneSettings.phoneApiProfiles||[]).filter(p=>p.id!==id);
+        phoneSettings.phoneApiSelected='';saveSettingsDebounced();phoneFill();
+    });
+    $('#gp-phone-api-test').on('click',async function(){
+        if (!selectedPhoneApi()) {toast('Сначала включи отдельный API и сохрани профиль','fa-circle-exclamation');return;}
+        try {await phoneApiRequest('Reply with exactly: OK',{maxTokens:40});toast('Телефонный API отвечает','fa-check');}
+        catch(e){console.warn('[PocketVerse] phone API test failed:',String(e?.message||e));toast(String(e?.message||e).slice(0,170),'fa-circle-exclamation');}
     });
 
     // Профиль подключения для соцсетей (из Connection Manager)

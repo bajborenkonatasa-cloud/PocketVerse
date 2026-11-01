@@ -1,3 +1,4 @@
+import { phoneApiRequest, selectedPhoneApi } from './phone-api.js';
 import { generateRaw, user_avatar, getThumbnailUrl, saveSettingsDebounced } from '../../../../script.js';
 import { saveBase64AsFile } from '../../../utils.js';
 import { extensionNames, extension_settings } from '../../../extensions.js';
@@ -1373,7 +1374,7 @@ Reply rules: 1-5 short messages in the character's own texting voice, in-charact
 ${uiLangLine()}`;
 
     try {
-        const raw = await socialGen(prompt, { maxTokens: 1500, image, prefill: '{"photo_description":"' });
+        const raw = selectedPhoneApi() ? await phoneApiRequest(prompt, { image: await toDataUrl(image), maxTokens: 1500 }) : await socialGen(prompt, { maxTokens: 1500, image, prefill: '{"photo_description":"' });
         const obj = parseJsonObject(raw);
         if (!obj) return null;
         const desc = String(obj.photo_description || '').trim().replace(/\s*\n+\s*/g, ' ').slice(0, 3000);

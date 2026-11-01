@@ -1,3 +1,4 @@
+import { phoneApiRequest, selectedPhoneApi } from './phone-api.js';
 
 import { sendMessageAsUser, Generate, generateQuietPrompt, generateRaw, saveSettingsDebounced, saveChatConditional } from '../../../../script.js';
 import { saveBase64AsFile } from '../../../utils.js';
@@ -7641,7 +7642,7 @@ function pvPhoneRawPrompt(t, items, isGroup = false) {
 async function pvGeneratePhoneReply(t, items, isGroup = false) {
     const req = pvPhoneRawPrompt(t, items, isGroup);
     console.info('[PocketVerse] controlled phone request', { mode:req.mode, chars:req.prompt.length, approxTokens:Math.round(req.prompt.length/4), responseLength:req.responseLength });
-    let raw = await generateRaw({ prompt:req.prompt, responseLength:req.responseLength, trimNames:false });
+    let raw = selectedPhoneApi() ? await phoneApiRequest(req.prompt,{maxTokens:req.responseLength}) : await generateRaw({ prompt:req.prompt, responseLength:req.responseLength, trimNames:false });
     // Gemini may consume much of responseLength as hidden thinking and truncate the
     // only tel:sms tag. Retry once with a compact repair request instead of showing
     // "phone reply not recognized" after the user waited for generation.
@@ -7660,7 +7661,7 @@ async function pvGeneratePhoneReply(t, items, isGroup = false) {
         const repair = `POCKETVERSE PHONE REPAIR. Output ONLY 1-3 complete <!--tel:sms:{...}--> tags. No analysis, markdown or prose. Sender=${name}; recipient=${user}. New user message: ${incoming}. `+
             (directPhoto ? `The user directly requested a selfie/photo: the reply MUST include photo plus media. For selfie use media={"type":"selfie","sender":"${name}","visible":["${name}"],"camera":"front camera selfie","location":"preserve current RP location","clothing":{"${name}":"preserve current clothing"},"action":"selfie action","pose":"natural selfie pose","expression":"in-character expression","gaze":"at phone camera","environment":"preserve established RP anchors","continuity":"do not move scene"}. ` : '')+
             `Close JSON and --> before stopping.`;
-        raw = await generateRaw({ prompt:repair, responseLength:1400, trimNames:false });
+        raw = selectedPhoneApi() ? await phoneApiRequest(repair,{maxTokens:1400}) : await generateRaw({ prompt:repair, responseLength:1400, trimNames:false });
     }
     return raw;
 }
