@@ -7533,11 +7533,24 @@ async function sendUserGiphy(key, g) {
 
 // Compact, read-only story context. Never change SillyTavern chat[] or summary data.
 function pvPhoneStoryContext(ctx) {
-    const clean = v => String(v ?? '').replace(/<!--[^]*?-->/g, ' ').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    const clean = v => String(v ?? '')
+        .replace(/<!--[^]*?-->/g, ' ')
+        // Other extensions sometimes append serialized social feeds as JSON.
+        // Strip self-contained objects/arrays with social-feed metadata, not RP prose.
+        .replace(/(?:\{[^{}]{0,14000}\}|\[[^\[\]]{0,14000}\])/g, chunk =>
+            /["'](?:retweets|avatar_emoji|verified|reply_to|likes|username)["']\s*:/.test(chunk) ? ' ' : chunk)
+        .replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    const isTechnicalFeed = v => {
+        const str = String(v || '');
+        return /["'](?:retweets|avatar_emoji|verified)["']\s*:/.test(str)
+            && /["'](?:username|likes|replies)["']\s*:/.test(str)
+            && str.length > 600;
+    };
     const chat = Array.isArray(ctx?.chat) ? ctx.chat : [];
     // Four complete, visible RP turns; do not confuse phone/system logs with RP.
     const selected = chat.filter(m => m && !m.is_system && !m.is_hidden &&
-        !m.extra?.isHidden && !/<!--\s*tel:(?:log|out|sms)/i.test(String(m.mes||'')) && clean(m.mes));
+        !m.extra?.isHidden && !/<!--\s*tel:(?:log|out|sms)/i.test(String(m.mes||''))
+        && !isTechnicalFeed(m.mes) && clean(m.mes));
     const lastFour = selected.slice(-4);
     const recent = lastFour.map((m,i) => `#${selected.length-lastFour.length+i+1} ${m.is_user ? (ctx.name1 || 'User') : (m.name || ctx.name2 || 'Character')}: ${clean(m.mes).slice(-3500)}`).join('\n');
     const meta = ctx?.chatMetadata || ctx?.chat_metadata || {};
@@ -8143,10 +8156,11 @@ async function doSend(key, opts = {}) {
                 }
             } catch (e) {
                 console.warn('[PocketVerse] isolated photo reply failed:', e);
+                toast(`Vision: ${String(e?.message || e).slice(0, 170)}`, 'fa-circle-exclamation');
             }
         }
         if (draftImg) {
-            if (!photoHandled) toast('Фото в переписке сохранено, но vision-модель не смогла его прочитать. Проверь API/профиль и журнал ошибок.', 'fa-circle-exclamation');
+            if (!photoHandled) console.warn('[PocketVerse Vision] No validated photo description; no text-only fallback.');
             return; // Never silently substitute a text-only response to an image.
         }
 

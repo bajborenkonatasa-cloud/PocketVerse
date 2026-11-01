@@ -1172,13 +1172,16 @@ async function socialGen(prompt, { maxTokens = 1024, image = null, prefill = '' 
     if (floor > 0) maxTokens = Math.max(maxTokens, floor);
     const usePrefill = !!(st.usePrefill && prefill) && !_noPrefill.has(profileId || '(current)');
     const useFigureSpaces = !!st.useFigureSpaces;
-    const messages = buildGenerationMessages(prompt, prefill, usePrefill, useFigureSpaces);
-    const fallbackPrompt = legacyPrompt(prompt, prefill, usePrefill, useFigureSpaces);
+    // Vision: do not append an assistant prefill after the multimodal user turn.
+    // Vertex/Gemini may reject it or treat the photo as belonging to an earlier turn.
+    const visionPrefill = image ? false : usePrefill;
+    const messages = buildGenerationMessages(prompt, prefill, visionPrefill, useFigureSpaces);
+    const fallbackPrompt = legacyPrompt(prompt, prefill, visionPrefill, useFigureSpaces);
 
     const finish = (raw) => {
         let out = cleanGenOutput(raw);
         if (useFigureSpaces) out = unfigureSpaces(out);
-        if (!usePrefill) return out;
+        if (!visionPrefill) return out;
         out = removeCommonPreamble(out);
         out = removeRepeatedPrefill(out, prefill);
         return prefill + out;
@@ -1374,9 +1377,18 @@ Reply rules: 1-5 short messages in the character's own texting voice, in-charact
 ${uiLangLine()}`;
 
     try {
-        const raw = selectedPhoneApi() ? await phoneApiRequest(prompt, { image: await toDataUrl(image), maxTokens: 1500 }) : await socialGen(prompt, { maxTokens: 1500, image, prefill: '{"photo_description":"' });
+        const dataUrl = await toDataUrl(image);
+        if (!/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(dataUrl || '')) {
+            throw new Error('Фотография не преобразована в поддерживаемый image data URL.');
+        }
+        console.info('[PocketVerse Vision] image prepared', { mime: dataUrl.slice(5, dataUrl.indexOf(';')), base64Chars: dataUrl.length - dataUrl.indexOf(',') - 1, route: selectedPhoneApi() ? 'custom' : 'SillyTavern' });
+        // A single multimodal user turn; no assistant JSON prefill for Vertex.
+        const raw = selectedPhoneApi() ? await phoneApiRequest(prompt, { image: dataUrl, maxTokens: 1800 }) : await socialGen(prompt, { maxTokens: 1800, image: dataUrl, prefill: '' });
         const obj = parseJsonObject(raw);
-        if (!obj) return null;
+        if (!obj) {
+            console.warn('[PocketVerse Vision] Model returned non-JSON response (first 250 chars):', String(raw || '').slice(0, 250));
+            throw new Error('Vision ответил, но не вернул JSON с описанием фотографии.');
+        }
         const desc = String(obj.photo_description || '').trim().replace(/\s*\n+\s*/g, ' ').slice(0, 3000);
         const replies = Array.isArray(obj.replies)
             ? obj.replies.filter(r => r && r.text).map(r => ({
@@ -1384,10 +1396,11 @@ ${uiLangLine()}`;
                 text: String(r.text).slice(0, 500),
             })).slice(0, 5)
             : [];
+        if (!desc || desc.length < 12) throw new Error('Vision не вернул осмысленного описания фото.');
         return { desc, replies };
     } catch (e) {
         console.warn('[GlassPhone] generateSmsPhotoReply failed:', e);
-        return null;
+        throw e; // Let UI show an actionable error instead of a silent fallback.
     }
 }
 
